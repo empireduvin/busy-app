@@ -1,0 +1,106 @@
+[
+  {
+    "venue": "Alexandria - Erskinville Bowling Club Limited",
+    "status": "updated",
+    "google_place_id": "ChIJC1s-B8uxEmsRih7fWneMyVU",
+    "google_name": "Alexandria Erskineville Bowling Club",
+    "via": "override"
+  },
+  {
+    "venue": "Buddy's Newtown",
+    "status": "updated",
+    "google_place_id": "ChIJDQcKTTOxEmsREi-sFwzcvTE",
+    "google_name": "Buddy's Bar Newtown",
+    "via": "override"
+  },
+  {
+    "venue": "Duke of Edinburgh Hotel",
+    "status": "updated",
+    "google_place_id": "ChIJu6X4QziwEmsRja9YB52kWVs",
+    "google_name": "The Duke of Enmore",
+    "via": "override"
+  },
+  {
+    "venue": "Erskineville Hotel",
+    "status": "updated",
+    "google_place_id": "ChIJ32-7XTSwEmsR19jxwhiHcAY",
+    "google_name": "The Erko Hotel",
+    "via": "override"
+  },
+  {
+    "venue": "Flightpath Wine Bar",
+    "status": "updated",
+    "google_place_id": "ChIJc-wU3gixEmsREvSA18FWb6k",
+    "google_name": "Flight Path Wine Bar",
+    "via": "override"
+  },
+  {
+    "venue": "Imperial Hotel - Erskineville",
+    "status": "updated",
+    "google_place_id": "ChIJn2KDQDSwEmsRqtyqeKSgUb8",
+    "google_name": "The Imperial Erskineville",
+    "via": "override"
+  },
+  {
+    "venue": "PC Bar Newtown",
+    "status": "needs_review",
+    "candidates": [
+      {
+        "id": "ChIJT04JjrqxEmsR7H9g9GpRu-4",
+        "name": "Bar Planet",
+        "address": "16 Enmore Rd, Newtown NSW 2042"
+      },
+      {
+        "id": "ChIJidQboiCxEmsR6hep9RQtahQ",
+        "name": "Pleasure Club",
+        "address": "6 Wilson St, Newtown NSW 2042"
+      },
+      {
+        "id": "ChIJI6pXTzGwEmsR2knXcm5PFtQ",
+        "name": "Corridor Newtown",
+        "address": "153A King St, Newtown NSW 2042"
+      },
+      {
+        "id": "ChIJDQcKTTOxEmsREi-sFwzcvTE",
+        "name": "Buddy's Bar Newtown",
+        "address": "391 King St, Newtown NSW 2042"
+      },
+      {
+        "id": "ChIJZWK_J6mxEmsR_3Tm_SORpeU",
+        "name": "UNCANNY Newtown",
+        "address": "349 King St, Newtown NSW 2042"
+      }
+    ]
+  },
+  {
+    "venue": "Stonewall",
+    "status": "updated",
+    "google_place_id": "ChIJZeDoCACxEmsR7gCwV_3vDTE",
+    "google_name": "Stonewall hotel newtown"
+  },
+  {
+    "venue": "The Enmore Theatre",
+    "status": "updated",
+    "google_place_id": "ChIJ-5XVOziwEmsRyX6Ja8Ke_nA",
+    "google_name": "Enmore Theatre"
+  },
+  {
+    "venue": "Union Hotel",
+    "status": "updated",
+    "google_place_id": "ChIJI9UPkUmwEmsREFFWgO86P6g",
+    "google_name": "Union Hotel"
+  },
+  {
+    "venue": "VANGUARD NEWTOWN",
+    "status": "updated",
+    "google_place_id": "ChIJq6rmTi2wEmsRkczijJVRNek",
+    "google_name": "The Vanguard",
+    "via": "override"
+  },
+  {
+    "venue": "Vasco Newtown",
+    "status": "updated",
+    "google_place_id": "ChIJmTe5uHWxEmsRzMijEyvQanE",
+    "google_name": "Vasco Newtown"
+  }
+]
