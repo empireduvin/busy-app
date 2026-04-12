@@ -7,6 +7,18 @@ function requiredEnv(name: string) {
   return v;
 }
 
+function getPublicSupabaseKey() {
+  return (
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||
+    (() => {
+      throw new Error(
+        "Missing env var: NEXT_PUBLIC_SUPABASE_ANON_KEY (or legacy NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY)"
+      );
+    })()
+  );
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
@@ -16,7 +28,7 @@ export async function GET(req: Request) {
 
     const sb = createClient(
       requiredEnv("NEXT_PUBLIC_SUPABASE_URL"),
-      requiredEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY"),
+      getPublicSupabaseKey(),
       { auth: { persistSession: false } }
     );
 

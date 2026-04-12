@@ -1,4 +1,7 @@
 import "./globals.css";
+import Link from "next/link";
+import FirstRoundLogo from "./components/FirstRoundLogo";
+import PublicNavLinks from "./components/PublicNavLinks";
 
 export default function RootLayout({
   children,
@@ -9,16 +12,13 @@ export default function RootLayout({
     <html lang="en">
       <body className="bg-black text-white">
         <div className="min-h-screen flex flex-col">
-          <header className="border-b border-white/10 px-6 py-4 flex justify-between items-center">
-            <div className="text-xl font-bold tracking-tight">First Round</div>
-            <nav className="flex gap-6 text-sm text-white/70">
-              <a href="/today" className="hover:text-white">
-                Today
-              </a>
-              <a href="/venues" className="hover:text-white">
-                Venues
-              </a>
-            </nav>
+          <header className="border-b border-white/10 bg-black text-white">
+            <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <Link href="/livenow" className="inline-flex items-center text-white transition hover:opacity-90">
+                <FirstRoundLogo compact />
+              </Link>
+              <PublicNavLinks />
+            </div>
           </header>
 
           <main className="flex-1">{children}</main>

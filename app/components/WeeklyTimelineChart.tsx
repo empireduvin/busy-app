@@ -4,21 +4,26 @@ import {
   DAY_KEYS,
   DAY_LABELS,
   getDisplayRows,
+  formatTimeForUi,
   type WeeklyHours,
 } from '@/lib/opening-hours';
+import type { ReactNode } from 'react';
 
 type Props = {
   openingHours: WeeklyHours | null | undefined;
   kitchenHours: WeeklyHours | null | undefined;
   happyHourHours: WeeklyHours | null | undefined;
+  bottleShopHours?: WeeklyHours | null | undefined;
   timezone?: string;
+  renderDayExtras?: (dayKey: (typeof DAY_KEYS)[number]) => ReactNode;
 };
 
-const WINDOW_START = 10 * 60; // 10:00
+const WINDOW_START = 8 * 60; // 08:00
 const WINDOW_END = 28 * 60; // 04:00 next day
 const WINDOW_TOTAL = WINDOW_END - WINDOW_START;
 
 const TICKS = [
+  { label: '8am', minute: 8 * 60 },
   { label: '10am', minute: 10 * 60 },
   { label: '12pm', minute: 12 * 60 },
   { label: '2pm', minute: 14 * 60 },
@@ -85,9 +90,16 @@ function getSegments(periods: Array<{ open: string; close: string }> | undefined
       return {
         left: toPercent(clampedStart),
         width: ((clampedEnd - clampedStart) / WINDOW_TOTAL) * 100,
+        timeRange: `${formatTimeForUi(period.open)} - ${formatTimeForUi(period.close)}`,
       };
     })
-    .filter(Boolean) as Array<{ left: number; width: number }>;
+    .filter(Boolean) as Array<{ left: number; width: number; timeRange: string }>;
+}
+
+function hasAnyHours(hours: WeeklyHours | null | undefined) {
+  if (!hours) return false;
+
+  return Object.values(hours).some((periods) => Array.isArray(periods) && periods.length > 0);
 }
 
 function Row({
@@ -108,11 +120,14 @@ function Row({
   const segments = getSegments(periods);
 
   return (
-    <div className="grid grid-cols-[70px_1fr] gap-4">
-      <div className="pt-1 text-sm text-white/75">{label}</div>
+    <div className="grid grid-cols-[64px_1fr] gap-3">
+      <div className="pt-6 text-sm text-white/75">{label}</div>
 
       <div>
-        <div className="mb-2 text-sm text-white">{text}</div>
+        <div className="mb-1.5 flex items-center justify-between gap-3 text-[11px] font-semibold text-white">
+          <span className="text-white/50">Hours</span>
+          <span className="text-right">{segments.length > 0 ? text : 'Closed'}</span>
+        </div>
 
         <div className="relative h-7 rounded-md border border-white/10 bg-white/[0.03]">
           {TICKS.slice(1, -1).map((tick) => (
@@ -126,7 +141,7 @@ function Row({
           {segments.map((segment, index) => (
             <div
               key={index}
-              className={`absolute top-1 bottom-1 rounded-md ${colorClass}`}
+              className={`absolute top-0 bottom-0 rounded-md ${colorClass}`}
               style={{
                 left: `${segment.left}%`,
                 width: `${segment.width}%`,
@@ -140,7 +155,7 @@ function Row({
               style={{ left: `${nowLeft}%` }}
             />
           ) : null}
-        </div>
+          </div>
       </div>
     </div>
   );
@@ -150,11 +165,14 @@ export default function WeeklyTimelineChart({
   openingHours,
   kitchenHours,
   happyHourHours,
+  bottleShopHours,
   timezone = 'Australia/Sydney',
+  renderDayExtras,
 }: Props) {
   const openingRows = getDisplayRows(openingHours, { emptyLabel: 'Closed' });
   const kitchenRows = getDisplayRows(kitchenHours, { emptyLabel: 'Closed' });
   const happyHourRows = getDisplayRows(happyHourHours, { emptyLabel: 'Closed' });
+  const bottleShopRows = getDisplayRows(bottleShopHours, { emptyLabel: 'Closed' });
 
   const today = getLocalDayName(timezone);
   const nowMinute = getNowMinute(timezone);
@@ -163,20 +181,21 @@ export default function WeeklyTimelineChart({
 
   return (
     <div className="mt-4 rounded-2xl border border-white/10 bg-gradient-to-r from-white/[0.04] to-white/[0.02] p-4">
-      <div className="mb-4 flex items-center justify-between gap-4">
+      <div className="mb-3 flex items-center justify-between gap-4">
         <div className="text-lg font-semibold text-white">Weekly Timeline</div>
 
         <div className="flex flex-wrap items-center gap-4 text-xs text-white/70">
-          <LegendDot className="bg-emerald-500" label="Open" />
-          <LegendDot className="bg-amber-500" label="Kitchen" />
-          <LegendDot className="bg-pink-500" label="Happy Hour" />
+          {hasAnyHours(openingHours) ? <LegendDot className="bg-emerald-500" label="Open" /> : null}
+          {hasAnyHours(kitchenHours) ? <LegendDot className="bg-amber-500" label="Kitchen" /> : null}
+          {hasAnyHours(happyHourHours) ? <LegendDot className="bg-pink-500" label="Happy Hour" /> : null}
+          {hasAnyHours(bottleShopHours) ? <LegendDot className="bg-sky-500" label="Bottle Shop" /> : null}
           <LegendDot className="bg-cyan-400" label="Now" />
         </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-[70px_1fr] gap-4">
+      <div className="mb-3 grid grid-cols-[64px_1fr] gap-3">
         <div />
-        <div className="relative h-5 text-xs text-white/50">
+        <div className="relative h-4 text-[11px] text-white/50">
           {TICKS.map((tick) => (
             <div
               key={tick.label}
@@ -189,21 +208,23 @@ export default function WeeklyTimelineChart({
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {DAY_KEYS.map((dayKey) => {
           const openingRow = openingRows.find((r) => r.day === dayKey);
           const kitchenRow = kitchenRows.find((r) => r.day === dayKey);
           const happyHourRow = happyHourRows.find((r) => r.day === dayKey);
+          const bottleShopRow = bottleShopRows.find((r) => r.day === dayKey);
+          const dayExtras = renderDayExtras?.(dayKey);
 
           const isToday = dayKey === today;
 
           return (
             <div
               key={dayKey}
-              className="rounded-2xl border border-white/10 bg-white/[0.02] p-4"
+              className="rounded-2xl border border-white/10 bg-white/[0.02] p-3.5"
             >
-              <div className="mb-4 flex items-center gap-3">
-                <div className="text-lg font-semibold text-white">{DAY_LABELS[dayKey]}</div>
+              <div className="mb-3 flex items-center gap-3">
+                <div className="text-base font-semibold text-white">{DAY_LABELS[dayKey]}</div>
                 {isToday ? (
                   <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-0.5 text-xs text-cyan-300">
                     Today
@@ -211,34 +232,53 @@ export default function WeeklyTimelineChart({
                 ) : null}
               </div>
 
-              <div className="space-y-5">
-                <Row
-                  label="Open"
-                  text={openingRow?.text ?? 'Closed'}
-                  periods={openingRow?.periods ?? []}
-                  colorClass="bg-emerald-500"
-                  showNow={isToday && showNow}
-                  nowLeft={isToday ? nowLeft : null}
-                />
+              <div className="space-y-4">
+                {hasAnyHours(openingHours) ? (
+                  <Row
+                    label="Open"
+                    text={openingRow?.text ?? 'Closed'}
+                    periods={openingRow?.periods ?? []}
+                    colorClass="bg-emerald-500"
+                    showNow={isToday && showNow}
+                    nowLeft={isToday ? nowLeft : null}
+                  />
+                ) : null}
 
-                <Row
-                  label="Kitchen"
-                  text={kitchenRow?.text ?? 'Closed'}
-                  periods={kitchenRow?.periods ?? []}
-                  colorClass="bg-amber-500"
-                  showNow={isToday && showNow}
-                  nowLeft={isToday ? nowLeft : null}
-                />
+                {hasAnyHours(kitchenHours) ? (
+                  <Row
+                    label="Kitchen"
+                    text={kitchenRow?.text ?? 'Closed'}
+                    periods={kitchenRow?.periods ?? []}
+                    colorClass="bg-amber-500"
+                    showNow={isToday && showNow}
+                    nowLeft={isToday ? nowLeft : null}
+                  />
+                ) : null}
 
-                <Row
-                  label="Happy Hour"
-                  text={happyHourRow?.text ?? 'Closed'}
-                  periods={happyHourRow?.periods ?? []}
-                  colorClass="bg-pink-500"
-                  showNow={isToday && showNow}
-                  nowLeft={isToday ? nowLeft : null}
-                />
+                {hasAnyHours(happyHourHours) ? (
+                  <Row
+                    label="Happy Hour"
+                    text={happyHourRow?.text ?? 'Closed'}
+                    periods={happyHourRow?.periods ?? []}
+                    colorClass="bg-pink-500"
+                    showNow={isToday && showNow}
+                    nowLeft={isToday ? nowLeft : null}
+                  />
+                ) : null}
+
+                {hasAnyHours(bottleShopHours) ? (
+                  <Row
+                    label="Bottle Shop"
+                    text={bottleShopRow?.text ?? 'Closed'}
+                    periods={bottleShopRow?.periods ?? []}
+                    colorClass="bg-sky-500"
+                    showNow={isToday && showNow}
+                    nowLeft={isToday ? nowLeft : null}
+                  />
+                ) : null}
               </div>
+
+              {dayExtras ? <div className="mt-3 border-t border-white/10 pt-3">{dayExtras}</div> : null}
             </div>
           );
         })}

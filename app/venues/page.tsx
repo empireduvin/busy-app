@@ -1,7 +1,10 @@
 'use client';
 
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
+import { isBottleShopVenueType } from '@/lib/venue-type-rules';
+import { PUBLIC_VENUE_SELECT, splitVenuesByLaunchArea } from '@/lib/public-venue-discovery';
 import {
+  formatTimeForUi,
   getClosingSoonText,
   getNextOpeningText,
   isOpenLate,
@@ -14,6 +17,7 @@ import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import GoogleMap from '../components/GoogleMap';
 import TodayHoursSummary from '../components/TodayHoursSummary';
 import WeeklyTimelineChart from '../components/WeeklyTimelineChart';
+import { useSearchParams } from 'next/navigation';
 
 type OpeningPeriod = {
   open: string;
@@ -43,6 +47,7 @@ type ScheduleType =
   | 'opening'
   | 'kitchen'
   | 'happy_hour'
+  | 'bottle_shop'
   | 'trivia'
   | 'live_music'
   | 'sport'
@@ -53,8 +58,8 @@ type ScheduleType =
 
 type VenueTypeLookup = {
   id: string;
-  label: string;
-  slug: string;
+  label?: string | null;
+  slug?: string | null;
 };
 
 type HappyHourPrice = {
@@ -84,6 +89,7 @@ type DisplayHappyHourItem = {
   subtitle: string | null;
   price: number | null;
   priceLabel: string | null;
+  description: string | null;
 };
 
 type VenueScheduleRule = {
@@ -125,6 +131,7 @@ type Venue = {
   price_level: string | null;
 
   shows_sport: boolean | null;
+  plays_with_sound?: boolean | null;
   sport_types: string | null;
 
   byo_allowed: boolean | null;
@@ -136,6 +143,7 @@ type Venue = {
   opening_hours: any | null;
   kitchen_hours: OpeningHours | null;
   happy_hour_hours: OpeningHours | null;
+  bottle_shop_hours?: OpeningHours | null;
 
   timezone: string | null;
   is_temporarily_closed: boolean | null;
@@ -167,8 +175,52 @@ const DAY_LABELS: Record<DayOfWeek, string> = {
   sunday: 'Sun',
 };
 
+const HAPPY_HOUR_CATEGORIES: Array<{
+  key: keyof Omit<HappyHourDetailJson, 'notes'>;
+  label: string;
+}> = [
+  { key: 'beer', label: '🍺 Beer' },
+  { key: 'wine', label: '🍷 Wine' },
+  { key: 'spirits', label: '🥃 Spirits' },
+  { key: 'cocktails', label: '🍸 Cocktails' },
+  { key: 'food', label: '🍔 Food' },
+];
+
+const EVENT_SCHEDULE_TYPES: ScheduleType[] = [
+  'trivia',
+  'live_music',
+  'sport',
+  'comedy',
+  'karaoke',
+  'dj',
+  'special_event',
+];
+
+const EVENT_FILTER_OPTIONS: Array<{ type: ScheduleType; label: string }> = [
+  { type: 'trivia', label: '❓ Trivia' },
+  { type: 'live_music', label: '🎸 Live Music' },
+  { type: 'sport', label: '🏟️ Sport Events' },
+  { type: 'comedy', label: '😂 Comedy' },
+  { type: 'karaoke', label: '🎤 Karaoke' },
+  { type: 'dj', label: '🎧 DJ' },
+  { type: 'special_event', label: '✨ Special Event' },
+];
+
+const DEFAULT_VENUE_TYPE_FILTERS = ['Cafe', 'Bottle Shop'];
+
 function hasText(v: string | null | undefined) {
   return Boolean(v && v.trim().length > 0);
+}
+
+function normalizeBooleanFlag(value: unknown) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', 't', '1', 'yes', 'y', 'on'].includes(normalized)) return true;
+    if (['false', 'f', '0', 'no', 'n', 'off', ''].includes(normalized)) return false;
+  }
+  if (typeof value === 'number') return value !== 0;
+  return false;
 }
 
 function hasValidCoords(lat: number | null, lng: number | null) {
@@ -180,14 +232,26 @@ function hasValidCoords(lat: number | null, lng: number | null) {
   );
 }
 
+function formatVenueTypeValue(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  return value
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function getVenueTypeLabel(venue: Venue): string | null {
-  if (!venue.venue_types) return null;
+  const fallback = formatVenueTypeValue(venue.venue_type_id);
+
+  if (!venue.venue_types) return fallback;
 
   if (Array.isArray(venue.venue_types)) {
-    return venue.venue_types[0]?.label ?? null;
+    const first = venue.venue_types[0];
+    return first?.label ?? formatVenueTypeValue(first?.slug) ?? fallback;
   }
 
-  return venue.venue_types.label ?? null;
+  return venue.venue_types.label ?? formatVenueTypeValue(venue.venue_types.slug) ?? fallback;
 }
 
 function formatReviewCount(value: number | null | undefined): string | null {
@@ -248,6 +312,20 @@ function matchesPriceLevel(
   return label === selected;
 }
 
+function matchesVenueTypeFilter(
+  selectedType: string,
+  venueTypeLabel: string,
+  bottleShopHours: OpeningHours | null | undefined
+): boolean {
+  if (selectedType === 'ALL') return true;
+
+  if (selectedType === 'Bottle Shop') {
+    return venueTypeLabel === 'Bottle Shop' || hasAnyHours(bottleShopHours);
+  }
+
+  return venueTypeLabel === selectedType;
+}
+
 function normalizeSearchValue(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase();
 }
@@ -259,14 +337,23 @@ function matchesSearchTerm(venue: Venue, searchTerm: string): boolean {
 
   const venueTypeLabel = getVenueTypeLabel(venue);
 
-  const searchableFields = [venue.name, venue.suburb, venue.address, venueTypeLabel];
+  const eventFields = (venue.venue_schedule_rules ?? [])
+    .filter(
+      (rule) =>
+        EVENT_SCHEDULE_TYPES.includes(rule.schedule_type) &&
+        rule.is_active === true &&
+        rule.status === 'published'
+    )
+    .flatMap((rule) => [rule.title, rule.description, rule.deal_text, rule.notes]);
+
+  const searchableFields = [venue.name, venue.suburb, venue.address, venueTypeLabel, ...eventFields];
 
   return searchableFields.some((field) => normalizeSearchValue(field).includes(term));
 }
 
 function formatRuleTime(value: string | null | undefined): string {
   if (!value) return '';
-  return value.slice(0, 5);
+  return formatTimeForUi(value.slice(0, 5));
 }
 
 function sortScheduleRules(rules: VenueScheduleRule[]): VenueScheduleRule[] {
@@ -281,15 +368,81 @@ function sortScheduleRules(rules: VenueScheduleRule[]): VenueScheduleRule[] {
   });
 }
 
-function getPublishedHappyHourRules(venue: Venue): VenueScheduleRule[] {
+function getPublishedRulesByType(
+  venue: Venue,
+  scheduleType: ScheduleType
+): VenueScheduleRule[] {
   return sortScheduleRules(
     (venue.venue_schedule_rules ?? []).filter(
       (rule) =>
-        rule.schedule_type === 'happy_hour' &&
+        rule.schedule_type === scheduleType &&
         rule.is_active === true &&
         rule.status === 'published'
     )
   );
+}
+
+function getPublishedEventRules(venue: Venue): VenueScheduleRule[] {
+  return sortScheduleRules(
+    (venue.venue_schedule_rules ?? []).filter(
+      (rule) =>
+        EVENT_SCHEDULE_TYPES.includes(rule.schedule_type) &&
+        rule.is_active === true &&
+        rule.status === 'published'
+    )
+  );
+}
+
+function buildHoursJsonFromRules(rules: VenueScheduleRule[]): OpeningHours | null {
+  const output: OpeningHours = {};
+
+  for (const day of DAY_ORDER) {
+    const matching = rules
+      .filter((rule) => rule.day_of_week === day)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      .map((rule) => ({
+        open: rule.start_time?.slice(0, 5) ?? '',
+        close: rule.end_time?.slice(0, 5) ?? '',
+      }))
+      .filter((period) => period.open && period.close);
+
+    if (matching.length > 0) {
+      output[day] = matching;
+    }
+  }
+
+  return Object.keys(output).length > 0 ? output : null;
+}
+
+function hasAnyHours(hours: OpeningHours | null | undefined) {
+  if (!hours) return false;
+
+  return DAY_ORDER.some((day) => Array.isArray(hours[day]) && (hours[day]?.length ?? 0) > 0);
+}
+
+function getEffectiveScheduleHours(venue: Venue, scheduleType: ScheduleType): OpeningHours | null {
+  const rules = getPublishedRulesByType(venue, scheduleType);
+  const ruleHours = buildHoursJsonFromRules(rules);
+  const venueTypeLabel = getVenueTypeLabel(venue);
+
+  if (ruleHours) return ruleHours;
+
+  if (scheduleType === 'kitchen') {
+    if (isBottleShopVenueType(venueTypeLabel)) {
+      return null;
+    }
+    return venue.kitchen_hours ?? null;
+  }
+
+  if (scheduleType === 'happy_hour') {
+    return venue.happy_hour_hours ?? null;
+  }
+
+  if (scheduleType === 'bottle_shop') {
+    return venue.bottle_shop_hours ?? null;
+  }
+
+  return null;
 }
 
 function getTodayDayOfWeek(timezone: string): DayOfWeek {
@@ -324,9 +477,45 @@ function getTodayHappyHourRules(
 function getHappyHourItems(
   detail: HappyHourDetailJson | null | undefined,
   category: keyof Omit<HappyHourDetailJson, 'notes'>
-): HappyHourItem[] {
+): HappyHourDetailItem[] {
   const items = detail?.[category];
   return Array.isArray(items) ? items.filter((item) => item && hasText(item.item)) : [];
+}
+
+function getDisplayHappyHourItems(
+  detail: HappyHourDetailJson | null | undefined,
+  category: keyof Omit<HappyHourDetailJson, 'notes'>
+): DisplayHappyHourItem[] {
+  return getHappyHourItems(detail, category)
+    .map((item) => {
+      const title = item.item?.trim() || item.name?.trim() || '';
+      if (!title) return null;
+
+      const firstPrice =
+        Array.isArray(item.prices) && item.prices.length > 0
+          ? item.prices.find((price) => typeof price.amount === 'number' && !Number.isNaN(price.amount))
+          : typeof item.price === 'number' && !Number.isNaN(item.price)
+            ? { label: null, amount: item.price }
+            : null;
+
+      return {
+        title,
+        subtitle: item.description?.trim() || null,
+        price: firstPrice?.amount ?? null,
+        priceLabel: firstPrice?.label ?? null,
+        description: item.description?.trim() || null,
+      };
+    })
+    .filter(Boolean) as DisplayHappyHourItem[];
+}
+
+function formatHappyHourPrice(
+  price: number | null,
+  priceLabel: string | null
+): string | null {
+  if (price == null) return null;
+  const amount = `$${price}`;
+  return priceLabel ? `${amount} ${priceLabel}` : amount;
 }
 
 function hasHappyHourItems(
@@ -378,11 +567,12 @@ function matchesMaxPrice(value: number | null, selected: string): boolean {
 }
 
 export default function VenuesPage() {
+  const searchParams = useSearchParams();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>(() => searchParams.get('search') ?? '');
   const [suburb, setSuburb] = useState<string>('ALL');
   const [venueType, setVenueType] = useState<string>('ALL');
 
@@ -395,6 +585,16 @@ export default function VenuesPage() {
   const [filterBYO, setFilterBYO] = useState(false);
   const [filterDog, setFilterDog] = useState(false);
   const [filterKid, setFilterKid] = useState(false);
+  const [eventsOnly, setEventsOnly] = useState(false);
+  const [eventFilters, setEventFilters] = useState<Record<string, boolean>>({
+    trivia: false,
+    live_music: false,
+    sport: false,
+    comedy: false,
+    karaoke: false,
+    dj: false,
+    special_event: false,
+  });
 
   const [hhWine, setHhWine] = useState(false);
   const [hhBeer, setHhBeer] = useState(false);
@@ -414,7 +614,12 @@ export default function VenuesPage() {
 
   const [expandedVenueIds, setExpandedVenueIds] = useState<Record<string, boolean>>({});
   const [showDesktopMap, setShowDesktopMap] = useState(true);
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
+
+  useEffect(() => {
+    const nextSearch = searchParams.get('search') ?? '';
+    setSearchTerm(nextSearch);
+  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -434,55 +639,7 @@ export default function VenuesPage() {
 
       const { data, error } = await supabase
         .from('venues')
-        .select(`
-          id,
-          name,
-          suburb,
-          venue_type_id,
-          venue_types (
-            id,
-            label,
-            slug
-          ),
-          address,
-          lat,
-          lng,
-          phone,
-          website_url,
-          booking_url,
-          google_maps_uri,
-          google_rating,
-          google_user_rating_count,
-          price_level,
-          shows_sport,
-          sport_types,
-          byo_allowed,
-          byo_notes,
-          dog_friendly,
-          kid_friendly,
-          opening_hours,
-          kitchen_hours,
-          happy_hour_hours,
-          timezone,
-          is_temporarily_closed,
-          status,
-          venue_schedule_rules (
-            id,
-            venue_id,
-            schedule_type,
-            day_of_week,
-            start_time,
-            end_time,
-            sort_order,
-            title,
-            description,
-            deal_text,
-            notes,
-            is_active,
-            status,
-            detail_json
-          )
-        `)
+        .select(PUBLIC_VENUE_SELECT)
         .order('name', { ascending: true });
 
       if (cancelled) return;
@@ -491,7 +648,7 @@ export default function VenuesPage() {
         setError(error.message);
         setVenues([]);
       } else {
-        setVenues(((data ?? []) as unknown) as Venue[]);
+        setVenues(splitVenuesByLaunchArea((((data ?? []) as unknown) as Venue[])).live);
       }
 
       setLoading(false);
@@ -505,15 +662,13 @@ export default function VenuesPage() {
   }, []);
 
   const suburbs = useMemo(() => {
-    const set = new Set<string>();
-    venues.forEach((v) => {
-      if (v.suburb) set.add(v.suburb);
-    });
-    return ['ALL', ...Array.from(set).sort((a, b) => a.localeCompare(b))];
-  }, [venues]);
+    return ['ALL', 'NEWTOWN', 'ENMORE', 'ERSKINEVILLE'];
+  }, []);
 
   const venueTypes = useMemo(() => {
     const set = new Set<string>();
+
+    DEFAULT_VENUE_TYPE_FILTERS.forEach((label) => set.add(label));
 
     venues.forEach((v) => {
       const label = getVenueTypeLabel(v);
@@ -523,11 +678,57 @@ export default function VenuesPage() {
     return ['ALL', ...Array.from(set).sort((a, b) => a.localeCompare(b))];
   }, [venues]);
 
+  const advancedFilterCount = useMemo(() => {
+    let count = 0;
+
+    if (suburb !== 'ALL') count += 1;
+    if (openLateOnly) count += 1;
+    if (minGoogleRating !== 'ALL') count += 1;
+    if (priceFilter !== 'ALL') count += 1;
+    if (hhWine) count += 1;
+    if (hhBeer) count += 1;
+    if (hhSpirits) count += 1;
+    if (hhCocktails) count += 1;
+    if (hhFood) count += 1;
+    if (beerMaxPrice !== 'ALL') count += 1;
+    if (wineMaxPrice !== 'ALL') count += 1;
+    if (cocktailMaxPrice !== 'ALL') count += 1;
+    if (foodMaxPrice !== 'ALL') count += 1;
+    if (overallHhMaxPrice !== 'ALL') count += 1;
+
+    Object.values(eventFilters).forEach((value) => {
+      if (value) count += 1;
+    });
+
+    return count;
+  }, [
+    suburb,
+    openLateOnly,
+    minGoogleRating,
+    priceFilter,
+    hhWine,
+    hhBeer,
+    hhSpirits,
+    hhCocktails,
+    hhFood,
+    beerMaxPrice,
+    wineMaxPrice,
+    cocktailMaxPrice,
+    foodMaxPrice,
+    overallHhMaxPrice,
+    eventFilters,
+  ]);
+
   const filtered = useMemo(() => {
     const result = venues.filter((v) => {
       const venueTypeLabel = getVenueTypeLabel(v) ?? '';
       const normalizedOpeningHours = convertGoogleOpeningHours(v.opening_hours);
-      const happyHourRules = getPublishedHappyHourRules(v);
+      const effectiveKitchenHours = getEffectiveScheduleHours(v, 'kitchen');
+      const effectiveHappyHourHours = getEffectiveScheduleHours(v, 'happy_hour');
+      const effectiveBottleShopHours = getEffectiveScheduleHours(v, 'bottle_shop');
+      const primaryHours = normalizedOpeningHours ?? effectiveBottleShopHours ?? null;
+      const happyHourRules = getPublishedRulesByType(v, 'happy_hour');
+      const eventRules = getPublishedEventRules(v);
 
       if (v.status && !['active', 'open', 'published'].includes(v.status.toLowerCase())) {
         return false;
@@ -535,12 +736,25 @@ export default function VenuesPage() {
 
       if (!matchesSearchTerm(v, searchTerm)) return false;
       if (suburb !== 'ALL' && (v.suburb ?? '') !== suburb) return false;
-      if (venueType !== 'ALL' && venueTypeLabel !== venueType) return false;
+      if (!matchesVenueTypeFilter(venueType, venueTypeLabel, effectiveBottleShopHours)) {
+        return false;
+      }
 
-      if (filterSport && !v.shows_sport) return false;
+      if (filterSport && !normalizeBooleanFlag(v.shows_sport)) return false;
       if (filterBYO && !v.byo_allowed) return false;
-      if (filterDog && !v.dog_friendly) return false;
-      if (filterKid && !v.kid_friendly) return false;
+      if (filterDog && !normalizeBooleanFlag(v.dog_friendly)) return false;
+      if (filterKid && !normalizeBooleanFlag(v.kid_friendly)) return false;
+      if (eventsOnly && eventRules.length === 0) return false;
+
+      const enabledEventFilters = Object.entries(eventFilters).filter(([, enabled]) => enabled);
+      if (
+        enabledEventFilters.length > 0 &&
+        !enabledEventFilters.every(([type]) =>
+          eventRules.some((rule) => rule.schedule_type === type)
+        )
+      ) {
+        return false;
+      }
 
       if (hhWine && !happyHourRules.some((rule) => hasHappyHourItems(rule.detail_json, 'wine'))) {
         return false;
@@ -593,7 +807,7 @@ export default function VenuesPage() {
       if (
         openNowOnly &&
         !isVenueOpenNow(
-          normalizedOpeningHours,
+          primaryHours,
           v.timezone ?? 'Australia/Sydney',
           v.is_temporarily_closed ?? false
         )
@@ -601,18 +815,18 @@ export default function VenuesPage() {
         return false;
       }
 
-      if (openLateOnly && !isOpenLate(normalizedOpeningHours, '02:00')) return false;
+      if (openLateOnly && !isOpenLate(primaryHours, '02:00')) return false;
 
       if (
         happyHourNowOnly &&
-        !isOpenNow(v.happy_hour_hours, v.timezone ?? 'Australia/Sydney')
+        !isOpenNow(effectiveHappyHourHours, v.timezone ?? 'Australia/Sydney')
       ) {
         return false;
       }
 
       if (
         kitchenOpenNowOnly &&
-        !isOpenNow(v.kitchen_hours, v.timezone ?? 'Australia/Sydney')
+        !isOpenNow(effectiveKitchenHours, v.timezone ?? 'Australia/Sydney')
       ) {
         return false;
       }
@@ -653,6 +867,8 @@ export default function VenuesPage() {
     filterBYO,
     filterDog,
     filterKid,
+    eventsOnly,
+    eventFilters,
     hhWine,
     hhBeer,
     hhSpirits,
@@ -688,6 +904,16 @@ export default function VenuesPage() {
     setFilterBYO(false);
     setFilterDog(false);
     setFilterKid(false);
+    setEventsOnly(false);
+    setEventFilters({
+      trivia: false,
+      live_music: false,
+      sport: false,
+      comedy: false,
+      karaoke: false,
+      dj: false,
+      special_event: false,
+    });
     setHhWine(false);
     setHhBeer(false);
     setHhSpirits(false);
@@ -712,53 +938,48 @@ export default function VenuesPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="mx-auto max-w-7xl px-4 py-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-4xl font-semibold">Venues</h1>
-            <p className="mt-2 text-white/70">First Round — Inner West</p>
-          </div>
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+        <div className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,128,32,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:p-7">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-orange-300/80">
+                  INNER WEST
+                </div>
+                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                  Explore the Inner West
+                </h1>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-white/68 sm:text-base">
+                  Browse pubs, bars, restaurants, and bottle shops across Newtown, Enmore, and
+                  Erskineville.
+                </p>
+              </div>
+            </div>
 
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setShowFilters((prev) => !prev)}
-              className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10"
-            >
-              {showFilters ? 'Collapse filters' : 'Show filters'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowDesktopMap((prev) => !prev)}
-              className="hidden rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10 lg:block"
-            >
-              {showDesktopMap ? 'Hide map' : 'Show map'}
-            </button>
+            <div className="grid grid-cols-2 gap-3 self-start lg:min-w-[320px]">
+              <div className="rounded-2xl border border-white/10 bg-black/35 p-4">
+                <div className="text-[11px] uppercase tracking-[0.22em] text-white/45">Live area</div>
+                <div className="mt-2 text-lg font-semibold text-white">Newtown, Enmore, Erskineville</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/35 p-4">
+                <div className="text-[11px] uppercase tracking-[0.22em] text-white/45">Explorer mode</div>
+                <div className="mt-2 text-lg font-semibold text-white">
+                  {showDesktopMap ? 'List + map' : 'List focus'}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="sticky top-0 z-50 mt-6 rounded-2xl border border-white/10 bg-black/90 p-3 backdrop-blur">
-          <div className="grid grid-cols-1 gap-2 lg:grid-cols-[minmax(220px,1.4fr)_repeat(5,minmax(110px,1fr))]">
+        <div className="z-50 mt-6 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.25)] backdrop-blur lg:sticky lg:top-0">
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(260px,1.5fr)_minmax(180px,0.95fr)_minmax(160px,0.9fr)_auto]">
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search venue, suburb or type"
+              placeholder="Search venue"
               className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white placeholder:text-white/35"
             />
-
-            <select
-              value={suburb}
-              onChange={(e) => setSuburb(e.target.value)}
-              className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
-            >
-              {suburbs.map((s) => (
-                <option key={s} value={s}>
-                  {s.toUpperCase()}
-                </option>
-              ))}
-            </select>
 
             <select
               value={venueType}
@@ -767,78 +988,164 @@ export default function VenuesPage() {
             >
               {venueTypes.map((t) => (
                 <option key={t} value={t}>
-                  {t.toUpperCase()}
+                  {t === 'ALL' ? 'All venue types' : t.toUpperCase()}
                 </option>
               ))}
             </select>
 
             <select
-              value={minGoogleRating}
-              onChange={(e) => setMinGoogleRating(e.target.value)}
-              className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="h-10 min-w-0 rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
             >
-              <option value="ALL">ALL RATINGS</option>
-              <option value="4">4.0+</option>
-              <option value="4.5">4.5+</option>
-              <option value="4.8">4.8+</option>
+              <option value="NAME">Venue</option>
+              <option value="RATING_DESC">Highest Rated</option>
+              <option value="REVIEWS_DESC">Most Reviews</option>
+              <option value="PRICE_ASC">Cheapest</option>
+              <option value="PRICE_DESC">Most Expensive</option>
             </select>
 
-            <select
-              value={priceFilter}
-              onChange={(e) => setPriceFilter(e.target.value)}
-              className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
-            >
-              <option value="ALL">ALL PRICES</option>
-              <option value="$">$</option>
-              <option value="$$">$$</option>
-              <option value="$$$">$$$</option>
-              <option value="$$$$">$$$$</option>
-            </select>
-
-            <div className="flex gap-2">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="h-10 min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setShowFilters((prev) => !prev)}
+                className="rounded-xl border border-orange-400/30 bg-orange-500/10 px-4 py-2 text-sm font-medium text-orange-100 hover:bg-orange-500/15"
               >
-                <option value="NAME">Name</option>
-                <option value="RATING_DESC">Highest Rated</option>
-                <option value="REVIEWS_DESC">Most Reviews</option>
-                <option value="PRICE_ASC">Cheapest</option>
-                <option value="PRICE_DESC">Most Expensive</option>
-              </select>
+                {showFilters ? 'Close filters' : 'Advanced filters'}
+                {advancedFilterCount > 0 ? ` (${advancedFilterCount})` : ''}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowDesktopMap((prev) => !prev)}
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10"
+              >
+                {showDesktopMap ? 'Hide map' : 'Show map'}
+              </button>
 
               <button
                 onClick={clearFilters}
-                className="h-10 shrink-0 rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white hover:bg-white/10"
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10"
               >
-                Clear
+                Clear all
               </button>
             </div>
           </div>
 
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <CompactToggle label="Open now" checked={openNowOnly} onChange={setOpenNowOnly} />
+            <CompactToggle label="Happy hour live" checked={happyHourNowOnly} onChange={setHappyHourNowOnly} />
+            <CompactToggle label="Kitchen open" checked={kitchenOpenNowOnly} onChange={setKitchenOpenNowOnly} />
+            <CompactToggle label="Sport" checked={filterSport} onChange={setFilterSport} />
+            <CompactToggle label="BYO" checked={filterBYO} onChange={setFilterBYO} />
+            <CompactToggle label="Dog" checked={filterDog} onChange={setFilterDog} />
+            <CompactToggle label="Kid" checked={filterKid} onChange={setFilterKid} />
+            <CompactToggle label="Events" checked={eventsOnly} onChange={setEventsOnly} />
+          </div>
+
           {showFilters ? (
-            <>
+            <div className="hidden">
+              <div className="mt-4 rounded-2xl border border-white/10 bg-black/35 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-300/75">
+                      Advanced filters
+                    </div>
+                    <div className="mt-1 text-sm text-white/55">
+                      Ratings, pricing, event subtypes, and detailed happy hour filters.
+                    </div>
+                  </div>
+                  <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/60">
+                    {advancedFilterCount} active
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-4">
+                <select
+                  value={suburb}
+                  onChange={(e) => setSuburb(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
+                >
+                  {suburbs.map((s) => (
+                    <option key={s} value={s}>
+                      {s.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={minGoogleRating}
+                  onChange={(e) => setMinGoogleRating(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
+                >
+                  <option value="ALL">All ratings</option>
+                  <option value="4">4.0+</option>
+                  <option value="4.5">4.5+</option>
+                  <option value="4.8">4.8+</option>
+                </select>
+
+                <select
+                  value={priceFilter}
+                  onChange={(e) => setPriceFilter(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
+                >
+                  <option value="ALL">All prices</option>
+                  <option value="$">$</option>
+                  <option value="$$">$$</option>
+                  <option value="$$$">$$$</option>
+                  <option value="$$$$">$$$$</option>
+                </select>
+
+                <div className="flex items-center rounded-xl border border-white/10 bg-black px-3 text-sm text-white/70">
+                  Inner West launch area only
+                </div>
+              </div>
+
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <CompactToggle label="🟢 OPEN NOW" checked={openNowOnly} onChange={setOpenNowOnly} />
-                <CompactToggle label="🌙 OPEN LATE" checked={openLateOnly} onChange={setOpenLateOnly} />
-                <CompactToggle label="🍸 HAPPY NOW" checked={happyHourNowOnly} onChange={setHappyHourNowOnly} />
-                <CompactToggle label="🍽️ KITCHEN" checked={kitchenOpenNowOnly} onChange={setKitchenOpenNowOnly} />
-                <CompactToggle label="🏉 SPORT" checked={filterSport} onChange={setFilterSport} />
-                <CompactToggle label="🍷 BYO" checked={filterBYO} onChange={setFilterBYO} />
-                <CompactToggle label="🐶 DOG" checked={filterDog} onChange={setFilterDog} />
-                <CompactToggle label="👶 KID" checked={filterKid} onChange={setFilterKid} />
+                <CompactToggle label="Open late" checked={openLateOnly} onChange={setOpenLateOnly} />
+              </div>
+
+              <div className="hidden">
+                <CompactToggle label="🟢 Open now" checked={openNowOnly} onChange={setOpenNowOnly} />
+                <CompactToggle label="🌙 Open late" checked={openLateOnly} onChange={setOpenLateOnly} />
+                <CompactToggle label="🍸 Happy hour live" checked={happyHourNowOnly} onChange={setHappyHourNowOnly} />
+                <CompactToggle label="🍽️ Kitchen open" checked={kitchenOpenNowOnly} onChange={setKitchenOpenNowOnly} />
+                <CompactToggle label="🏈 Sport" checked={filterSport} onChange={setFilterSport} />
+                <CompactToggle label="🍾 BYO" checked={filterBYO} onChange={setFilterBYO} />
+                <CompactToggle label="🐶 Dog" checked={filterDog} onChange={setFilterDog} />
+                <CompactToggle label="🧒 Kid" checked={filterKid} onChange={setFilterKid} />
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <div className="mr-1 text-[11px] font-medium uppercase tracking-wide text-white/45">
+                  Events
+                </div>
+                <CompactToggle label="🎉 Any Events" checked={eventsOnly} onChange={setEventsOnly} />
+                {EVENT_FILTER_OPTIONS.map((option) => (
+                  <CompactToggle
+                    key={option.type}
+                    label={option.label}
+                    checked={eventFilters[option.type] ?? false}
+                    onChange={(checked) =>
+                      setEventFilters((current) => ({
+                        ...current,
+                        [option.type]: checked,
+                      }))
+                    }
+                  />
+                ))}
               </div>
 
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <div className="mr-1 text-[11px] font-medium uppercase tracking-wide text-white/45">
                   Happy Hour
                 </div>
-                <CompactToggle label="🍷 WINE" checked={hhWine} onChange={setHhWine} />
-                <CompactToggle label="🍺 BEER" checked={hhBeer} onChange={setHhBeer} />
-                <CompactToggle label="🥃 SPIRITS" checked={hhSpirits} onChange={setHhSpirits} />
-                <CompactToggle label="🍸 COCKTAILS" checked={hhCocktails} onChange={setHhCocktails} />
-                <CompactToggle label="🍔 FOOD" checked={hhFood} onChange={setHhFood} />
+                <CompactToggle label="🍷 Wine" checked={hhWine} onChange={setHhWine} />
+                <CompactToggle label="🍺 Beer" checked={hhBeer} onChange={setHhBeer} />
+                <CompactToggle label="🥃 Spirits" checked={hhSpirits} onChange={setHhSpirits} />
+                <CompactToggle label="🍸 Cocktails" checked={hhCocktails} onChange={setHhCocktails} />
+                <CompactToggle label="🍔 Food" checked={hhFood} onChange={setHhFood} />
               </div>
 
               <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-5">
@@ -848,10 +1155,10 @@ export default function VenuesPage() {
                   className="h-9 rounded-xl border border-white/10 bg-black px-3 text-xs text-white"
                 >
                   <option value="ALL">Beer price</option>
-                  <option value="7">Beer ≤ $7</option>
-                  <option value="8">Beer ≤ $8</option>
-                  <option value="10">Beer ≤ $10</option>
-                  <option value="12">Beer ≤ $12</option>
+                  <option value="7">Beer &lt;= $7</option>
+                  <option value="8">Beer &lt;= $8</option>
+                  <option value="10">Beer &lt;= $10</option>
+                  <option value="12">Beer &lt;= $12</option>
                 </select>
 
                 <select
@@ -860,10 +1167,10 @@ export default function VenuesPage() {
                   className="h-9 rounded-xl border border-white/10 bg-black px-3 text-xs text-white"
                 >
                   <option value="ALL">Wine price</option>
-                  <option value="8">Wine ≤ $8</option>
-                  <option value="10">Wine ≤ $10</option>
-                  <option value="12">Wine ≤ $12</option>
-                  <option value="15">Wine ≤ $15</option>
+                  <option value="8">Wine &lt;= $8</option>
+                  <option value="10">Wine &lt;= $10</option>
+                  <option value="12">Wine &lt;= $12</option>
+                  <option value="15">Wine &lt;= $15</option>
                 </select>
 
                 <select
@@ -872,10 +1179,10 @@ export default function VenuesPage() {
                   className="h-9 rounded-xl border border-white/10 bg-black px-3 text-xs text-white"
                 >
                   <option value="ALL">Cocktail price</option>
-                  <option value="10">Cocktails ≤ $10</option>
-                  <option value="12">Cocktails ≤ $12</option>
-                  <option value="15">Cocktails ≤ $15</option>
-                  <option value="18">Cocktails ≤ $18</option>
+                  <option value="10">Cocktails &lt;= $10</option>
+                  <option value="12">Cocktails &lt;= $12</option>
+                  <option value="15">Cocktails &lt;= $15</option>
+                  <option value="18">Cocktails &lt;= $18</option>
                 </select>
 
                 <select
@@ -884,10 +1191,10 @@ export default function VenuesPage() {
                   className="h-9 rounded-xl border border-white/10 bg-black px-3 text-xs text-white"
                 >
                   <option value="ALL">Food price</option>
-                  <option value="8">Food ≤ $8</option>
-                  <option value="10">Food ≤ $10</option>
-                  <option value="15">Food ≤ $15</option>
-                  <option value="20">Food ≤ $20</option>
+                  <option value="8">Food &lt;= $8</option>
+                  <option value="10">Food &lt;= $10</option>
+                  <option value="15">Food &lt;= $15</option>
+                  <option value="20">Food &lt;= $20</option>
                 </select>
 
                 <select
@@ -896,36 +1203,36 @@ export default function VenuesPage() {
                   className="h-9 rounded-xl border border-white/10 bg-black px-3 text-xs text-white"
                 >
                   <option value="ALL">Any HH price</option>
-                  <option value="7">Any deal ≤ $7</option>
-                  <option value="10">Any deal ≤ $10</option>
-                  <option value="12">Any deal ≤ $12</option>
-                  <option value="15">Any deal ≤ $15</option>
+                  <option value="7">Any deal &lt;= $7</option>
+                  <option value="10">Any deal &lt;= $10</option>
+                  <option value="12">Any deal &lt;= $12</option>
+                  <option value="15">Any deal &lt;= $15</option>
                 </select>
               </div>
-            </>
+            </div>
           ) : null}
         </div>
 
         <div className="mt-8 lg:grid lg:grid-cols-12 lg:gap-6">
           <div className={showDesktopMap ? 'lg:col-span-7 xl:col-span-8' : 'lg:col-span-12'}>
-            {loading && <div className="text-white/70">Loading venues…</div>}
+            {loading && <div className="text-white/70">Loading venues...</div>}
 
             {!loading && error && (
               <div className="rounded-2xl border border-red-500/30 bg-red-950/30 p-6">
-                <div className="text-xl font-semibold">Couldn’t load venues</div>
+                <div className="text-xl font-semibold">Couldn&apos;t load venues</div>
                 <div className="mt-2 text-white/70">{error}</div>
               </div>
             )}
 
             {!loading && !error && filtered.length === 0 && (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-white/70">
-                No venues match your filters.
+              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] p-6 text-white/70">
+                Nothing matches this filter mix right now. Clear a few filters or open advanced filters to widen the search.
               </div>
             )}
 
             {!loading && !error && filtered.length > 0 && (
               <>
-                <div className="mb-4 text-sm text-white/60">
+                <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/60">
                   Showing {filtered.length} venue{filtered.length === 1 ? '' : 's'}
                   {searchTerm.trim() ? ` for "${searchTerm.trim()}"` : ''}
                 </div>
@@ -936,31 +1243,41 @@ export default function VenuesPage() {
                     const isExpanded = !!expandedVenueIds[v.id];
                     const venueTypeLabel = getVenueTypeLabel(v);
                     const normalizedOpeningHours = convertGoogleOpeningHours(v.opening_hours);
-                    const happyHourRules = getPublishedHappyHourRules(v);
-                    const todayHappyHourRules = getTodayHappyHourRules(happyHourRules, timezone);
+                    const effectiveKitchenHours = getEffectiveScheduleHours(v, 'kitchen');
+                    const effectiveHappyHourHours = getEffectiveScheduleHours(v, 'happy_hour');
+                    const effectiveBottleShopHours = getEffectiveScheduleHours(v, 'bottle_shop');
+                    const primaryHours =
+                      normalizedOpeningHours ??
+                      effectiveBottleShopHours ??
+                      null;
+                    const happyHourRules = getPublishedRulesByType(v, 'happy_hour');
+                    const eventRules = getPublishedEventRules(v);
+                    const todayHappyHourRules = getTodayRulesForType(happyHourRules, timezone);
+                    const todayEventRules = getTodayRulesForType(eventRules, timezone);
                     const todayLabel = DAY_LABELS[getTodayDayOfWeek(timezone)];
 
                     const openNow = isVenueOpenNow(
-                      normalizedOpeningHours,
+                      primaryHours,
                       timezone,
                       v.is_temporarily_closed ?? false
                     );
 
                     const closingSoonText = getClosingSoonText(
-                      normalizedOpeningHours,
+                      primaryHours,
                       timezone,
                       v.is_temporarily_closed ?? false
                     );
 
                     const nextOpeningText = getNextOpeningText(
-                      normalizedOpeningHours,
+                      primaryHours,
                       timezone,
                       v.is_temporarily_closed ?? false
                     );
 
-                    const happyHourNow = isOpenNow(v.happy_hour_hours, timezone, false);
-                    const kitchenOpenNow = isOpenNow(v.kitchen_hours, timezone, false);
-                    const openLate = isOpenLate(normalizedOpeningHours, '02:00');
+                    const happyHourNow = isOpenNow(effectiveHappyHourHours, timezone, false);
+                    const kitchenOpenNow = isOpenNow(effectiveKitchenHours, timezone, false);
+                    const bottleShopNow = isOpenNow(effectiveBottleShopHours, timezone, false);
+                    const openLate = isOpenLate(primaryHours, '02:00');
 
                     const ratingText = formatGoogleRating(v.google_rating);
                     const reviewCountText = formatReviewCount(v.google_user_rating_count);
@@ -984,7 +1301,7 @@ export default function VenuesPage() {
                             ) : null}
                             {ratingText ? (
                               <MetaChip>
-                                ⭐ {ratingText}
+                                Star {ratingText}
                                 {reviewCountText ? ` (${reviewCountText})` : ''}
                               </MetaChip>
                             ) : null}
@@ -998,7 +1315,7 @@ export default function VenuesPage() {
                               </StatusPill>
                             ) : openNow ? (
                               <StatusPill className="border-green-500/30 bg-green-500/15 text-green-200">
-                                Open now
+                                🟢 Open now
                               </StatusPill>
                             ) : (
                               <StatusPill className="border-white/15 bg-white/5 text-white/75">
@@ -1014,19 +1331,25 @@ export default function VenuesPage() {
 
                             {happyHourNow ? (
                               <StatusPill className="border-pink-500/30 bg-pink-500/15 text-pink-200">
-                                Happy hour now
+                                🍸 Happy hour live
                               </StatusPill>
                             ) : null}
 
                             {kitchenOpenNow ? (
                               <StatusPill className="border-orange-500/30 bg-orange-500/15 text-orange-200">
-                                Kitchen open now
+                                🍽️ Kitchen open
+                              </StatusPill>
+                            ) : null}
+
+                            {bottleShopNow ? (
+                              <StatusPill className="border-sky-500/30 bg-sky-500/15 text-sky-200">
+                                Bottle shop open now
                               </StatusPill>
                             ) : null}
 
                             {openLate ? (
                               <StatusPill className="border-indigo-500/30 bg-indigo-500/15 text-indigo-200">
-                                Open late
+                                🌙 Open late
                               </StatusPill>
                             ) : null}
                           </div>
@@ -1040,18 +1363,23 @@ export default function VenuesPage() {
                           ) : null}
 
                           <div className="flex flex-wrap gap-2 text-sm">
-                            {v.shows_sport ? <Pill>🏉 SPORT</Pill> : null}
-                            {v.byo_allowed ? <Pill>🍷 BYO</Pill> : null}
-                            {v.dog_friendly ? <Pill>🐶 DOG</Pill> : null}
-                            {v.kid_friendly ? <Pill>👶 KID</Pill> : null}
+                            {normalizeBooleanFlag(v.shows_sport) ? <Pill>🏈 Sport</Pill> : null}
+                            {normalizeBooleanFlag(v.shows_sport) &&
+                            normalizeBooleanFlag(v.plays_with_sound) ? (
+                              <Pill>🏈 Sound</Pill>
+                            ) : null}
+                            {v.byo_allowed ? <Pill>🍾 BYO</Pill> : null}
+                            {normalizeBooleanFlag(v.dog_friendly) ? <Pill>🐶 Dog</Pill> : null}
+                            {normalizeBooleanFlag(v.kid_friendly) ? <Pill>🧒 Kid</Pill> : null}
                           </div>
                         </div>
 
                         <div className="mt-4">
                           <TodayHoursSummary
                             openingHours={normalizedOpeningHours}
-                            kitchenHours={v.kitchen_hours}
-                            happyHourHours={v.happy_hour_hours}
+                            kitchenHours={effectiveKitchenHours}
+                            happyHourHours={effectiveHappyHourHours}
+                            bottleShopHours={effectiveBottleShopHours}
                             timezone={timezone}
                           />
                         </div>
@@ -1064,73 +1392,23 @@ export default function VenuesPage() {
 
                             <div className="mt-3 space-y-2">
                               {todayHappyHourRules.map((rule) => (
-                                <div
+                                <HappyHourRuleCard
                                   key={rule.id}
-                                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-                                >
-                                  <div className="text-xs uppercase tracking-wide text-white/45">
-                                    {todayLabel} · {formatRuleTime(rule.start_time)}–{formatRuleTime(rule.end_time)}
-                                  </div>
+                                  rule={rule}
+                                  dayLabel={todayLabel}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
 
-                                  {getHappyHourItems(rule.detail_json, 'beer').length > 0 ? (
-                                    <div className="mt-2">
-                                      <div className="text-xs uppercase tracking-wide text-white/45">Beer</div>
-                                      {getHappyHourItems(rule.detail_json, 'beer').map((item, index) => (
-                                        <div key={`beer-${index}`} className="mt-1 text-sm text-white/80">
-                                          {item.item}{item.price != null ? ` — $${item.price}` : ''}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : null}
+                        {todayEventRules.length > 0 ? (
+                          <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-4">
+                            <div className="text-sm font-semibold text-white/80">Events Today</div>
 
-                                  {getHappyHourItems(rule.detail_json, 'wine').length > 0 ? (
-                                    <div className="mt-2">
-                                      <div className="text-xs uppercase tracking-wide text-white/45">Wine</div>
-                                      {getHappyHourItems(rule.detail_json, 'wine').map((item, index) => (
-                                        <div key={`wine-${index}`} className="mt-1 text-sm text-white/80">
-                                          {item.item}{item.price != null ? ` — $${item.price}` : ''}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : null}
-
-                                  {getHappyHourItems(rule.detail_json, 'spirits').length > 0 ? (
-                                    <div className="mt-2">
-                                      <div className="text-xs uppercase tracking-wide text-white/45">Spirits</div>
-                                      {getHappyHourItems(rule.detail_json, 'spirits').map((item, index) => (
-                                        <div key={`spirits-${index}`} className="mt-1 text-sm text-white/80">
-                                          {item.item}{item.price != null ? ` — $${item.price}` : ''}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : null}
-
-                                  {getHappyHourItems(rule.detail_json, 'cocktails').length > 0 ? (
-                                    <div className="mt-2">
-                                      <div className="text-xs uppercase tracking-wide text-white/45">Cocktails</div>
-                                      {getHappyHourItems(rule.detail_json, 'cocktails').map((item, index) => (
-                                        <div key={`cocktails-${index}`} className="mt-1 text-sm text-white/80">
-                                          {item.item}{item.price != null ? ` — $${item.price}` : ''}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : null}
-
-                                  {getHappyHourItems(rule.detail_json, 'food').length > 0 ? (
-                                    <div className="mt-2">
-                                      <div className="text-xs uppercase tracking-wide text-white/45">Food</div>
-                                      {getHappyHourItems(rule.detail_json, 'food').map((item, index) => (
-                                        <div key={`food-${index}`} className="mt-1 text-sm text-white/80">
-                                          {item.item}{item.price != null ? ` — $${item.price}` : ''}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : null}
-
-                                  {hasText(rule.detail_json?.notes) ? (
-                                    <div className="mt-2 text-xs text-white/45">{rule.detail_json?.notes}</div>
-                                  ) : null}
-                                </div>
+                            <div className="mt-3 space-y-2">
+                              {todayEventRules.map((rule) => (
+                                <EventRuleCard key={rule.id} rule={rule} dayLabel={todayLabel} />
                               ))}
                             </div>
                           </div>
@@ -1159,111 +1437,52 @@ export default function VenuesPage() {
                           <div className="mt-4 space-y-4">
                             <WeeklyTimelineChart
                               openingHours={normalizedOpeningHours}
-                              kitchenHours={v.kitchen_hours}
-                              happyHourHours={v.happy_hour_hours}
+                              kitchenHours={effectiveKitchenHours}
+                              happyHourHours={effectiveHappyHourHours}
+                              bottleShopHours={effectiveBottleShopHours}
                               timezone={timezone}
+                              renderDayExtras={(dayKey) => {
+                                const dayHappyHourRules = happyHourRules.filter(
+                                  (rule) => rule.day_of_week === dayKey
+                                );
+                                const dayEventRules = eventRules.filter(
+                                  (rule) => rule.day_of_week === dayKey
+                                );
+
+                                if (dayHappyHourRules.length === 0 && dayEventRules.length === 0) {
+                                  return null;
+                                }
+
+                                return (
+                                  <div className="space-y-2">
+                                    {dayHappyHourRules.map((rule) => (
+                                      <HappyHourRuleCard
+                                        key={rule.id}
+                                        rule={rule}
+                                        dayLabel={undefined}
+                                      />
+                                    ))}
+                                    {dayEventRules.map((rule) => (
+                                      <EventRuleCard key={rule.id} rule={rule} dayLabel={undefined} />
+                                    ))}
+                                  </div>
+                                );
+                              }}
                             />
-
-                            {happyHourRules.length > 0 ? (
-                              <div className="rounded-xl border border-white/10 bg-black/30 p-4">
-                                <div className="text-sm font-semibold text-white/80">
-                                  Weekly Happy Hour Details
-                                </div>
-
-                                <div className="mt-3 space-y-3">
-                                  {DAY_ORDER.map((day) => {
-                                    const dayRules = happyHourRules.filter(
-                                      (rule) => rule.day_of_week === day
-                                    );
-                                    if (dayRules.length === 0) return null;
-
-                                    return (
-                                      <div key={day} className="grid grid-cols-[56px_1fr] gap-3">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-white/45">
-                                          {DAY_LABELS[day]}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                          {dayRules.map((rule) => (
-                                            <div
-                                              key={rule.id}
-                                              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-                                            >
-                                              <div className="text-xs text-white/45">
-                                                {formatRuleTime(rule.start_time)}–{formatRuleTime(rule.end_time)}
-                                              </div>
-
-                                              {getHappyHourItems(rule.detail_json, 'beer').length > 0 ? (
-                                                <div className="mt-2">
-                                                  <div className="text-xs uppercase tracking-wide text-white/45">Beer</div>
-                                                  {getHappyHourItems(rule.detail_json, 'beer').map((item, index) => (
-                                                    <div key={`beer-week-${index}`} className="mt-1 text-sm text-white/80">
-                                                      {item.item}{item.price != null ? ` — $${item.price}` : ''}
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              ) : null}
-
-                                              {getHappyHourItems(rule.detail_json, 'wine').length > 0 ? (
-                                                <div className="mt-2">
-                                                  <div className="text-xs uppercase tracking-wide text-white/45">Wine</div>
-                                                  {getHappyHourItems(rule.detail_json, 'wine').map((item, index) => (
-                                                    <div key={`wine-week-${index}`} className="mt-1 text-sm text-white/80">
-                                                      {item.item}{item.price != null ? ` — $${item.price}` : ''}
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              ) : null}
-
-                                              {getHappyHourItems(rule.detail_json, 'spirits').length > 0 ? (
-                                                <div className="mt-2">
-                                                  <div className="text-xs uppercase tracking-wide text-white/45">Spirits</div>
-                                                  {getHappyHourItems(rule.detail_json, 'spirits').map((item, index) => (
-                                                    <div key={`spirits-week-${index}`} className="mt-1 text-sm text-white/80">
-                                                      {item.item}{item.price != null ? ` — $${item.price}` : ''}
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              ) : null}
-
-                                              {getHappyHourItems(rule.detail_json, 'cocktails').length > 0 ? (
-                                                <div className="mt-2">
-                                                  <div className="text-xs uppercase tracking-wide text-white/45">Cocktails</div>
-                                                  {getHappyHourItems(rule.detail_json, 'cocktails').map((item, index) => (
-                                                    <div key={`cocktails-week-${index}`} className="mt-1 text-sm text-white/80">
-                                                      {item.item}{item.price != null ? ` — $${item.price}` : ''}
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              ) : null}
-
-                                              {getHappyHourItems(rule.detail_json, 'food').length > 0 ? (
-                                                <div className="mt-2">
-                                                  <div className="text-xs uppercase tracking-wide text-white/45">Food</div>
-                                                  {getHappyHourItems(rule.detail_json, 'food').map((item, index) => (
-                                                    <div key={`food-week-${index}`} className="mt-1 text-sm text-white/80">
-                                                      {item.item}{item.price != null ? ` — $${item.price}` : ''}
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              ) : null}
-
-                                              {hasText(rule.detail_json?.notes) ? (
-                                                <div className="mt-2 text-xs text-white/45">{rule.detail_json?.notes}</div>
-                                              ) : null}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            ) : null}
                           </div>
                         ) : null}
 
                         <div className="mt-4 flex flex-wrap gap-3 text-sm">
+                          {isExpanded ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleExpanded(v.id)}
+                              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
+                            >
+                              Hide weekly view
+                            </button>
+                          ) : null}
+
                           {v.booking_url ? (
                             <a
                               className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
@@ -1349,10 +1568,188 @@ export default function VenuesPage() {
           </div>
         ) : null}
 
+        {showFilters ? (
+          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center sm:p-6">
+            <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[28px] border border-white/10 bg-[#0b0b0d] shadow-[0_28px_100px_rgba(0,0,0,0.55)]">
+              <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,128,32,0.16),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] px-5 py-4 sm:px-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-semibold text-white">Advanced filters</h2>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/60">
+                      {advancedFilterCount} active
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowFilters(false)}
+                      className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="max-h-[calc(90vh-96px)] overflow-y-auto px-5 py-5 sm:px-6">
+                <div className="grid gap-5">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                      Area and venue details
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
+                      <select
+                        value={suburb}
+                        onChange={(e) => setSuburb(e.target.value)}
+                        className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
+                      >
+                        {suburbs.map((s) => (
+                          <option key={s} value={s}>
+                            {s === 'ALL' ? 'All suburbs' : s.toUpperCase()}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={minGoogleRating}
+                        onChange={(e) => setMinGoogleRating(e.target.value)}
+                        className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
+                      >
+                        <option value="ALL">All ratings</option>
+                        <option value="4">4.0+</option>
+                        <option value="4.5">4.5+</option>
+                        <option value="4.8">4.8+</option>
+                      </select>
+
+                      <select
+                        value={priceFilter}
+                        onChange={(e) => setPriceFilter(e.target.value)}
+                        className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
+                      >
+                        <option value="ALL">All prices</option>
+                        <option value="$">$</option>
+                        <option value="$$">$$</option>
+                        <option value="$$$">$$$</option>
+                        <option value="$$$$">$$$$</option>
+                      </select>
+
+                      <div className="flex items-center rounded-xl border border-white/10 bg-black px-3 text-sm text-white/70">
+                        Launch area
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <CompactToggle label="Open late" checked={openLateOnly} onChange={setOpenLateOnly} />
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                      Event filters
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <CompactToggle label="Any events" checked={eventsOnly} onChange={setEventsOnly} />
+                      {EVENT_FILTER_OPTIONS.map((option) => (
+                        <CompactToggle
+                          key={option.type}
+                          label={option.label}
+                          checked={eventFilters[option.type] ?? false}
+                          onChange={(checked) =>
+                            setEventFilters((current) => ({
+                              ...current,
+                              [option.type]: checked,
+                            }))
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                      Happy hour filters
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <CompactToggle label="Wine" checked={hhWine} onChange={setHhWine} />
+                      <CompactToggle label="Beer" checked={hhBeer} onChange={setHhBeer} />
+                      <CompactToggle label="Spirits" checked={hhSpirits} onChange={setHhSpirits} />
+                      <CompactToggle label="Cocktails" checked={hhCocktails} onChange={setHhCocktails} />
+                      <CompactToggle label="Food" checked={hhFood} onChange={setHhFood} />
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-5">
+                      <select
+                        value={beerMaxPrice}
+                        onChange={(e) => setBeerMaxPrice(e.target.value)}
+                        className="h-9 rounded-xl border border-white/10 bg-black px-3 text-xs text-white"
+                      >
+                        <option value="ALL">Beer price</option>
+                        <option value="7">Beer &lt;= $7</option>
+                        <option value="8">Beer &lt;= $8</option>
+                        <option value="10">Beer &lt;= $10</option>
+                        <option value="12">Beer &lt;= $12</option>
+                      </select>
+
+                      <select
+                        value={wineMaxPrice}
+                        onChange={(e) => setWineMaxPrice(e.target.value)}
+                        className="h-9 rounded-xl border border-white/10 bg-black px-3 text-xs text-white"
+                      >
+                        <option value="ALL">Wine price</option>
+                        <option value="8">Wine &lt;= $8</option>
+                        <option value="10">Wine &lt;= $10</option>
+                        <option value="12">Wine &lt;= $12</option>
+                        <option value="15">Wine &lt;= $15</option>
+                      </select>
+
+                      <select
+                        value={cocktailMaxPrice}
+                        onChange={(e) => setCocktailMaxPrice(e.target.value)}
+                        className="h-9 rounded-xl border border-white/10 bg-black px-3 text-xs text-white"
+                      >
+                        <option value="ALL">Cocktail price</option>
+                        <option value="10">Cocktails &lt;= $10</option>
+                        <option value="12">Cocktails &lt;= $12</option>
+                        <option value="15">Cocktails &lt;= $15</option>
+                        <option value="18">Cocktails &lt;= $18</option>
+                      </select>
+
+                      <select
+                        value={foodMaxPrice}
+                        onChange={(e) => setFoodMaxPrice(e.target.value)}
+                        className="h-9 rounded-xl border border-white/10 bg-black px-3 text-xs text-white"
+                      >
+                        <option value="ALL">Food price</option>
+                        <option value="8">Food &lt;= $8</option>
+                        <option value="10">Food &lt;= $10</option>
+                        <option value="15">Food &lt;= $15</option>
+                        <option value="20">Food &lt;= $20</option>
+                      </select>
+
+                      <select
+                        value={overallHhMaxPrice}
+                        onChange={(e) => setOverallHhMaxPrice(e.target.value)}
+                        className="h-9 rounded-xl border border-white/10 bg-black px-3 text-xs text-white"
+                      >
+                        <option value="ALL">Any HH price</option>
+                        <option value="7">Any deal &lt;= $7</option>
+                        <option value="10">Any deal &lt;= $10</option>
+                        <option value="12">Any deal &lt;= $12</option>
+                        <option value="15">Any deal &lt;= $15</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-10 text-xs text-white/40">
           Uses <code className="text-white">venue_types.label</code>, opening hours, kitchen
-          hours, happy hour hours, happy hour schedule rules, Google rating, review count,
-          price level and Maps link from Supabase.
+          hours, happy hour hours, bottle shop hours, schedule rules, Google rating, review
+          count, price level and Maps link from Supabase.
         </div>
       </div>
     </div>
@@ -1386,7 +1783,7 @@ function CompactToggle({
           checked ? 'border-white bg-white text-black' : 'border-white/30 bg-transparent',
         ].join(' ')}
       >
-        {checked ? '✓' : ''}
+        {checked ? 'x' : ''}
       </span>
       <span className="whitespace-nowrap select-none">{label}</span>
     </button>
@@ -1422,3 +1819,213 @@ function StatusPill({
     </span>
   );
 }
+
+function HappyHourRuleCard({
+  rule,
+  dayLabel,
+}: {
+  rule: VenueScheduleRule;
+  dayLabel?: string;
+}) {
+  const hasStructuredItems = HAPPY_HOUR_CATEGORIES.some(
+    (category) => getDisplayHappyHourItems(rule.detail_json, category.key).length > 0
+  );
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
+          {dayLabel ? `${dayLabel} | Happy Hour` : 'Happy Hour'}
+        </div>
+        <div className="rounded-full border border-pink-400/20 bg-pink-400/10 px-2.5 py-0.5 text-[11px] font-semibold text-pink-200">
+          {formatRuleTime(rule.start_time)} - {formatRuleTime(rule.end_time)}
+        </div>
+      </div>
+
+      <div className="mt-2.5 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        {HAPPY_HOUR_CATEGORIES.map((category) => {
+          const items = getDisplayHappyHourItems(rule.detail_json, category.key);
+          if (items.length === 0) return null;
+          const isFoodCategory = category.key === 'food';
+
+          return (
+            <div
+              key={category.key}
+              className={`rounded-md border border-white/10 bg-black/20 p-2.5 ${
+                isFoodCategory ? 'md:col-span-2 xl:col-span-3' : ''
+              }`}
+            >
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                {category.label}
+              </div>
+
+              <div className={`mt-1.5 ${isFoodCategory ? 'space-y-2' : 'space-y-1.5'}`}>
+                {items.map((item, index) => (
+                  <div
+                    key={`${category.key}-${index}-${item.title}`}
+                    className={`${
+                      isFoodCategory
+                        ? 'rounded-md border border-white/10 bg-white/[0.03] px-3 py-2'
+                        : ''
+                    }`}
+                  >
+                    {isFoodCategory ? (
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1 text-sm font-medium leading-5 text-white">
+                            {item.title}
+                          </div>
+                          {item.price != null ? (
+                            <div className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-amber-200">
+                              {formatHappyHourPrice(item.price, item.priceLabel)}
+                            </div>
+                          ) : null}
+                        </div>
+                        {item.description ? (
+                          <div className="text-[11px] leading-4 text-amber-100/90">
+                            {item.description}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium leading-5 text-white">{item.title}</div>
+                          {item.subtitle ? (
+                            <div className="mt-0.5 text-[11px] leading-4 text-white/55">{item.subtitle}</div>
+                          ) : null}
+                        </div>
+                        {item.price != null ? (
+                          <div className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-amber-200">
+                            {formatHappyHourPrice(item.price, item.priceLabel)}
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {!hasStructuredItems && (rule.deal_text?.trim() || rule.description?.trim()) ? (
+        <div className="mt-2.5 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/80">
+          {rule.deal_text?.trim() || rule.description?.trim()}
+        </div>
+      ) : null}
+
+      {hasText(rule.detail_json?.notes) ? (
+        <div className="mt-2.5 border-t border-white/10 pt-2.5 text-[11px] leading-4 text-white/45">
+          {rule.detail_json?.notes}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function EventRuleCard({
+  rule,
+  dayLabel,
+}: {
+  rule: VenueScheduleRule;
+  dayLabel?: string;
+}) {
+  const displayTitle = getMeaningfulEventTitle(rule);
+  const summary = formatEventRuleSummary(rule);
+
+  return (
+    <div className="rounded-xl border border-violet-400/20 bg-violet-500/10 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-violet-200/75">
+            {getScheduleTypeDisplayLabel(rule.schedule_type)}
+          </div>
+          {displayTitle ? (
+            <div className="mt-1 text-sm font-semibold text-white">{displayTitle}</div>
+          ) : null}
+        </div>
+
+        <span className="rounded-full border border-violet-300/25 bg-violet-400/10 px-2 py-0.5 text-[11px] font-semibold text-violet-100">
+          {dayLabel ? `${dayLabel} • ` : ''}
+          {formatRuleTime(rule.start_time)} - {formatRuleTime(rule.end_time)}
+        </span>
+      </div>
+
+      {summary ? <div className="mt-2 text-sm text-white/85">{summary}</div> : null}
+
+      {rule.notes?.trim() && rule.notes.trim() !== summary ? (
+        <div className="mt-2 text-xs text-white/60">{rule.notes.trim()}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function getScheduleTypeDisplayLabel(type: ScheduleType): string {
+  return {
+    opening: 'Opening Hours',
+    kitchen: 'Kitchen Hours',
+    happy_hour: 'Happy Hour',
+    bottle_shop: 'Bottle Shop Hours',
+    trivia: '❓ Trivia',
+    live_music: '🎸 Live Music',
+    sport: '🏟️ Sport Events',
+    comedy: '😂 Comedy',
+    karaoke: '🎤 Karaoke',
+    dj: '🎧 DJ',
+    special_event: '✨ Special Event',
+  }[type];
+}
+
+function getScheduleTypeBaseLabel(type: ScheduleType): string {
+  return {
+    opening: 'Opening Hours',
+    kitchen: 'Kitchen Hours',
+    happy_hour: 'Happy Hour',
+    bottle_shop: 'Bottle Shop Hours',
+    trivia: 'Trivia',
+    live_music: 'Live Music',
+    sport: 'Sport Events',
+    comedy: 'Comedy',
+    karaoke: 'Karaoke',
+    dj: 'DJ',
+    special_event: 'Special Event',
+  }[type];
+}
+
+function normalizeComparisonText(value: string | null | undefined) {
+  return (value ?? '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+}
+
+function getMeaningfulEventTitle(rule: VenueScheduleRule): string | null {
+  const trimmed = rule.title?.trim() ?? '';
+  if (!trimmed) return null;
+
+  const typeLabel = getScheduleTypeBaseLabel(rule.schedule_type);
+  return normalizeComparisonText(trimmed) === normalizeComparisonText(typeLabel)
+    ? null
+    : trimmed;
+}
+
+function formatEventRuleSummary(rule: VenueScheduleRule): string | null {
+  const parts = [
+    getMeaningfulEventTitle(rule),
+    rule.deal_text?.trim() || null,
+    rule.description?.trim() || null,
+  ].filter((value): value is string => Boolean(value));
+
+  if (parts.length > 0) return parts.join(' • ');
+  return rule.notes?.trim() || null;
+}
+
+function getTodayRulesForType(
+  rules: VenueScheduleRule[],
+  timezone: string
+): VenueScheduleRule[] {
+  const today = getTodayDayOfWeek(timezone);
+  return rules.filter((rule) => rule.day_of_week === today);
+}
+
+
+

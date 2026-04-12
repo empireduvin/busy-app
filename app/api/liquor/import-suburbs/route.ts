@@ -171,8 +171,9 @@ export async function POST(req: Request) {
 
         // store a small sample per suburb (first time we see it)
         for (const r of payload) {
-          if (!sampleRows[r.suburb]) sampleRows[r.suburb] = [];
-          if (sampleRows[r.suburb].length < 2) sampleRows[r.suburb].push(r);
+          const suburb = r.suburb ?? 'Unknown';
+          if (!sampleRows[suburb]) sampleRows[suburb] = [];
+          if (sampleRows[suburb].length < 2) sampleRows[suburb].push(r);
         }
       } catch (e: any) {
         // If one term fails, keep going (you still get partial success)

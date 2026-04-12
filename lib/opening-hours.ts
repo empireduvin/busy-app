@@ -45,8 +45,8 @@ export function formatTimeForUi(value: string): string {
   const suffix = hrs >= 12 ? 'pm' : 'am';
   const displayHour = hrs % 12 === 0 ? 12 : hrs % 12;
 
-  if (mins === 0) return `${displayHour}${suffix}`;
-  return `${displayHour}:${String(mins).padStart(2, '0')}${suffix}`;
+  if (mins === 0) return `${displayHour} ${suffix}`;
+  return `${displayHour}:${String(mins).padStart(2, '0')} ${suffix}`;
 }
 
 function minutesTo12Hour(minutes: number): string {
@@ -55,8 +55,8 @@ function minutesTo12Hour(minutes: number): string {
   const suffix = hrs >= 12 ? 'pm' : 'am';
   const displayHour = hrs % 12 === 0 ? 12 : hrs % 12;
 
-  if (mins === 0) return `${displayHour}${suffix}`;
-  return `${displayHour}:${String(mins).padStart(2, '0')}${suffix}`;
+  if (mins === 0) return `${displayHour} ${suffix}`;
+  return `${displayHour}:${String(mins).padStart(2, '0')} ${suffix}`;
 }
 
 function getNowParts(timezone = 'Australia/Sydney') {

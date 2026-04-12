@@ -1,19 +1,21 @@
 'use client';
 
-import { getTodayHoursText, type WeeklyHours } from '@/lib/opening-hours';
+import { getTodayHoursText, formatTimeForUi, type WeeklyHours } from '@/lib/opening-hours';
 
 type Props = {
   openingHours: WeeklyHours | null | undefined;
   kitchenHours: WeeklyHours | null | undefined;
   happyHourHours: WeeklyHours | null | undefined;
+  bottleShopHours?: WeeklyHours | null | undefined;
   timezone?: string;
 };
 
-const WINDOW_START = 10 * 60; // 10:00
+const WINDOW_START = 8 * 60; // 08:00
 const WINDOW_END = 28 * 60; // 04:00 next day
 const WINDOW_TOTAL = WINDOW_END - WINDOW_START;
 
 const TICKS = [
+  { label: '8am', minute: 8 * 60 },
   { label: '10am', minute: 10 * 60 },
   { label: '12pm', minute: 12 * 60 },
   { label: '2pm', minute: 14 * 60 },
@@ -86,9 +88,16 @@ function getSegments(
       return {
         left: toPercent(clampedStart),
         width: ((clampedEnd - clampedStart) / WINDOW_TOTAL) * 100,
+        timeRange: `${formatTimeForUi(period.open)} – ${formatTimeForUi(period.close)}`,
       };
     })
-    .filter(Boolean) as Array<{ left: number; width: number }>;
+    .filter(Boolean) as Array<{ left: number; width: number; timeRange: string }>;
+}
+
+function hasAnyHours(hours: WeeklyHours | null | undefined) {
+  if (!hours) return false;
+
+  return Object.values(hours).some((periods) => Array.isArray(periods) && periods.length > 0);
 }
 
 function TimelineRow({
@@ -114,36 +123,45 @@ function TimelineRow({
       <div className="pt-1 text-sm text-white/75">{label}</div>
 
       <div>
-        <div className="mb-2 text-sm text-white">
-          {text ?? 'Closed'}
-        </div>
+        <div className="relative" style={{ paddingTop: '20px' }}>
+          <div className="relative h-8 rounded-md border border-white/10 bg-white/[0.03]">
+            {TICKS.slice(1, -1).map((tick) => (
+              <div
+                key={tick.label}
+                className="absolute top-0 bottom-0 w-px bg-white/10"
+                style={{ left: `${toPercent(tick.minute)}%` }}
+              />
+            ))}
 
-        <div className="relative h-7 rounded-md border border-white/10 bg-white/[0.03]">
-          {TICKS.slice(1, -1).map((tick) => (
-            <div
-              key={tick.label}
-              className="absolute top-0 bottom-0 w-px bg-white/10"
-              style={{ left: `${toPercent(tick.minute)}%` }}
-            />
-          ))}
+            {segments.map((segment, index) => (
+              <div key={index} className="absolute inset-0">
+                <div
+                  className={`absolute top-0 bottom-0 rounded-md ${colorClass}`}
+                  style={{
+                    left: `${segment.left}%`,
+                    width: `${segment.width}%`,
+                  }}
+                />
+                <div
+                  className="absolute text-xs font-semibold text-white whitespace-nowrap"
+                  style={{
+                    left: `${segment.left + segment.width / 2}%`,
+                    top: `-18px`,
+                    transform: 'translateX(-50%)',
+                  }}
+                >
+                  {segment.timeRange}
+                </div>
+              </div>
+            ))}
 
-          {segments.map((segment, index) => (
-            <div
-              key={index}
-              className={`absolute top-1 bottom-1 rounded-md ${colorClass}`}
-              style={{
-                left: `${segment.left}%`,
-                width: `${segment.width}%`,
-              }}
-            />
-          ))}
-
-          {showNow ? (
-            <div
-              className="absolute top-0 bottom-0 z-20 w-[2px] bg-cyan-400"
-              style={{ left: `${nowLeft}%` }}
-            />
-          ) : null}
+            {showNow ? (
+              <div
+                className="absolute top-0 bottom-0 z-20 w-[2px] bg-cyan-400"
+                style={{ left: `${nowLeft}%` }}
+              />
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
@@ -154,11 +172,20 @@ export default function TodayHoursSummary({
   openingHours,
   kitchenHours,
   happyHourHours,
+  bottleShopHours,
   timezone = 'Australia/Sydney',
 }: Props) {
   const openText = getTodayHoursText(openingHours, timezone, { emptyLabel: 'Closed' });
   const kitchenText = getTodayHoursText(kitchenHours, timezone, { emptyLabel: 'Closed' });
   const happyHourText = getTodayHoursText(happyHourHours, timezone, { emptyLabel: 'Closed' });
+  const bottleShopText = getTodayHoursText(bottleShopHours, timezone, { emptyLabel: 'Closed' });
+
+  const rows = [
+    { label: 'Open', text: openText, hours: openingHours, colorClass: 'bg-emerald-500' },
+    { label: 'Kitchen', text: kitchenText, hours: kitchenHours, colorClass: 'bg-amber-500' },
+    { label: 'Happy Hour', text: happyHourText, hours: happyHourHours, colorClass: 'bg-pink-500' },
+    { label: 'Bottle Shop', text: bottleShopText, hours: bottleShopHours, colorClass: 'bg-sky-500' },
+  ].filter((row) => hasAnyHours(row.hours));
 
   return (
     <div className="mt-4 rounded-2xl border border-white/10 bg-gradient-to-r from-white/[0.04] to-white/[0.02] p-4">
@@ -166,9 +193,10 @@ export default function TodayHoursSummary({
         <div className="text-lg font-semibold text-white">Today</div>
 
         <div className="flex flex-wrap items-center gap-4 text-xs text-white/70">
-          <LegendDot className="bg-emerald-500" label="Open" />
-          <LegendDot className="bg-amber-500" label="Kitchen" />
-          <LegendDot className="bg-pink-500" label="Happy Hour" />
+          {hasAnyHours(openingHours) ? <LegendDot className="bg-emerald-500" label="Open" /> : null}
+          {hasAnyHours(kitchenHours) ? <LegendDot className="bg-amber-500" label="Kitchen" /> : null}
+          {hasAnyHours(happyHourHours) ? <LegendDot className="bg-pink-500" label="Happy Hour" /> : null}
+          {hasAnyHours(bottleShopHours) ? <LegendDot className="bg-sky-500" label="Bottle Shop" /> : null}
           <LegendDot className="bg-cyan-400" label="Now" />
         </div>
       </div>
@@ -189,29 +217,16 @@ export default function TodayHoursSummary({
       </div>
 
       <div className="space-y-6">
-        <TimelineRow
-          label="Open"
-          text={openText}
-          hours={openingHours}
-          timezone={timezone}
-          colorClass="bg-emerald-500"
-        />
-
-        <TimelineRow
-          label="Kitchen"
-          text={kitchenText}
-          hours={kitchenHours}
-          timezone={timezone}
-          colorClass="bg-amber-500"
-        />
-
-        <TimelineRow
-          label="Happy Hour"
-          text={happyHourText}
-          hours={happyHourHours}
-          timezone={timezone}
-          colorClass="bg-pink-500"
-        />
+        {rows.map((row) => (
+          <TimelineRow
+            key={row.label}
+            label={row.label}
+            text={row.text}
+            hours={row.hours}
+            timezone={timezone}
+            colorClass={row.colorClass}
+          />
+        ))}
       </div>
     </div>
   );

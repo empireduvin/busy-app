@@ -1,36 +1,147 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# First Round
 
-## Getting Started
+First Round is a venue discovery and admin platform focused on pubs, bars, restaurants, events, opening hours, specials, and venue attributes.
 
-First, run the development server:
+The repo currently contains three main product surfaces:
+- Public venue discovery website
+- Master admin for venue and schedule management
+- Venue manager portal for scoped venue updates
+
+## Tech stack
+- Next.js
+- TypeScript
+- Supabase
+- Vercel
+
+## Main routes
+- `/` - landing page
+- `/venues` - public venue discovery and filtering
+- `/today` - public today view
+- `/login` - Supabase login for admin and venue portal users
+- `/admin` - master admin
+- `/portal` - venue manager portal
+
+## Local development
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Start the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Type-check:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npx tsc --noEmit
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open:
 
-## Learn More
+```text
+http://localhost:3000
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Environment variables
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Use `.env.local` for local development. A sanitized example is in [.env.example](/c:/Users/nickn/busy-app/.env.example).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Required app variables:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
+- `NSW_API_KEY`
+- `NSW_API_SECRET`
+- `NSW_OAUTH_URL`
+- `NSW_LIQUOR_BASE_URL`
 
-## Deploy on Vercel
+Optional / compatibility:
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
+- `GOOGLE_MAPS_API_KEY`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Notes:
+- Browser-side Supabase uses the public URL + anon key.
+- Protected admin and portal routes use the service role key on the server.
+- Google Maps is used on the public venue page and in admin Google venue workflows.
+- NSW liquor endpoints rely on the NSW API credentials.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Supabase overview
+
+The codebase expects Supabase to provide:
+- venue data
+- venue schedule rules
+- venue types
+- auth users
+- admin access mapping
+- venue manager access mapping
+
+Key auth/access concepts in code:
+- `admin_users` identifies full admins
+- `venue_user_access` maps venue managers to one or more venues
+- browser auth is used for login/session handling
+- protected admin/portal writes are routed through server endpoints
+
+Important:
+- Not all schema and RLS setup is currently captured as committed migrations in this repo.
+- Some Supabase setup has been performed manually and should be formalized before launch.
+
+## Important files
+
+Core product areas:
+- [app/venues/page.tsx](/c:/Users/nickn/busy-app/app/venues/page.tsx)
+- [app/admin/schedules/page.tsx](/c:/Users/nickn/busy-app/app/admin/schedules/page.tsx)
+- [app/portal/page.tsx](/c:/Users/nickn/busy-app/app/portal/page.tsx)
+- [app/portal/venues/[id]/page.tsx](/c:/Users/nickn/busy-app/app/portal/venues/[id]/page.tsx)
+
+Auth and protected server routes:
+- [app/login/page.tsx](/c:/Users/nickn/busy-app/app/login/page.tsx)
+- [app/admin/layout.tsx](/c:/Users/nickn/busy-app/app/admin/layout.tsx)
+- [app/portal/layout.tsx](/c:/Users/nickn/busy-app/app/portal/layout.tsx)
+- [lib/admin-server.ts](/c:/Users/nickn/busy-app/lib/admin-server.ts)
+- [lib/portal-server.ts](/c:/Users/nickn/busy-app/lib/portal-server.ts)
+- [lib/supabaseServer.ts](/c:/Users/nickn/busy-app/lib/supabaseServer.ts)
+
+Supporting docs:
+- [AGENTS.md](/c:/Users/nickn/busy-app/AGENTS.md)
+- [docs/project-status.md](/c:/Users/nickn/busy-app/docs/project-status.md)
+- [docs/vercel-deployment.md](/c:/Users/nickn/busy-app/docs/vercel-deployment.md)
+
+## Deployment
+
+Deployment target:
+- Vercel
+
+Before going live:
+- set all required Vercel environment variables
+- confirm Supabase schema, seeded data, and RLS in the target project
+- verify admin login, portal login, venue editing, schedule editing, and public venue browsing
+
+Deployment checklist and blockers are documented in:
+- [docs/vercel-deployment.md](/c:/Users/nickn/busy-app/docs/vercel-deployment.md)
+
+## Current project notes
+
+What is already in place:
+- public venue discovery UI
+- admin venue and schedule management
+- venue manager portal
+- server-protected admin and portal writes
+
+What still needs attention:
+- formal Supabase migrations and setup docs
+- mobile responsiveness pass
+- text encoding cleanup
+- production hardening and automated checks
+
+## Working style for this repo
+
+Project-specific coding guidance lives in:
+- [AGENTS.md](/c:/Users/nickn/busy-app/AGENTS.md)
+
+That file should be treated as the project brief for future work.

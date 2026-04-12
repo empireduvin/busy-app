@@ -24,3 +24,17 @@ export function getSupabaseBrowserClient() {
 
   return browserClient;
 }
+
+export function getSupabaseBrowserClientResult() {
+  try {
+    return {
+      client: getSupabaseBrowserClient(),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      client: null,
+      error,
+    };
+  }
+}
