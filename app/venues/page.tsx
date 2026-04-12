@@ -12,7 +12,7 @@ import {
   isVenueOpenNow,
 } from '@/lib/opening-hours';
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import GoogleMap from '../components/GoogleMap';
 import TodayHoursSummary from '../components/TodayHoursSummary';
@@ -566,7 +566,7 @@ function matchesMaxPrice(value: number | null, selected: string): boolean {
   return value <= Number(selected);
 }
 
-export default function VenuesPage() {
+function VenuesPageContent() {
   const searchParams = useSearchParams();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1922,6 +1922,24 @@ function HappyHourRuleCard({
         </div>
       ) : null}
     </div>
+  );
+}
+
+export default function VenuesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-black text-white">
+          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-white/70">
+              Loading venues...
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <VenuesPageContent />
+    </Suspense>
   );
 }
 
