@@ -41,6 +41,7 @@ export default function PublicHappyHourRuleCard({
           {HAPPY_HOUR_CATEGORIES.map((category) => {
             const items = getDisplayHappyHourItems(rule.detail_json, category.key);
             if (items.length === 0) return null;
+            const isFoodCategory = category.key === 'food';
 
             return (
               <div
@@ -51,21 +52,52 @@ export default function PublicHappyHourRuleCard({
                   {category.label}
                 </div>
                 <div className="mt-2 space-y-2">
-                  {items.map((item, index) => (
-                    <div key={`${category.key}-${index}-${item.title}`} className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium leading-5 text-white">{item.title}</div>
-                        {item.subtitle ? (
-                          <div className="mt-0.5 text-[11px] leading-4 text-white/55">{item.subtitle}</div>
+                  {items.map((item, index) =>
+                    isFoodCategory ? (
+                      <div
+                        key={`${category.key}-${index}-${item.title}`}
+                        className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2"
+                      >
+                        <div className="space-y-2">
+                          <div className="text-sm font-medium leading-5 text-white [overflow-wrap:anywhere] break-words">
+                            {item.title}
+                          </div>
+                          {item.price != null ? (
+                            <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-amber-200">
+                              {`$${item.price}`}
+                            </div>
+                          ) : null}
+                        </div>
+                        {item.priceLabel ? (
+                          <div className="mt-1 text-[11px] leading-4 text-amber-200/90 [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
+                            {item.priceLabel}
+                          </div>
+                        ) : null}
+                        {item.description ? (
+                          <div className="mt-1 text-[11px] leading-4 text-amber-100/90 [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
+                            {item.description}
+                          </div>
                         ) : null}
                       </div>
-                      {item.price != null ? (
-                        <div className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-amber-200">
-                          {formatHappyHourPrice(item.price, item.priceLabel)}
+                    ) : (
+                      <div
+                        key={`${category.key}-${index}-${item.title}`}
+                        className="flex items-start justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium leading-5 text-white">{item.title}</div>
+                          {item.subtitle ? (
+                            <div className="mt-0.5 text-[11px] leading-4 text-white/55">{item.subtitle}</div>
+                          ) : null}
                         </div>
-                      ) : null}
-                    </div>
-                  ))}
+                        {item.price != null ? (
+                          <div className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-amber-200">
+                            {formatHappyHourPrice(item.price, item.priceLabel)}
+                          </div>
+                        ) : null}
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
             );
