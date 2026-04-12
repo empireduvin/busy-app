@@ -18,23 +18,26 @@ declare global {
 let googleMapsScriptPromise: Promise<void> | null = null;
 
 function loadGoogleMaps(apiKey: string) {
+  if (window.google?.maps) {
+    return Promise.resolve();
+  }
+
   if (googleMapsScriptPromise) return googleMapsScriptPromise;
 
   googleMapsScriptPromise = new Promise<void>((resolve, reject) => {
-    if (window.google?.maps) {
-      resolve();
-      return;
-    }
-
     const existing = document.querySelector<HTMLScriptElement>(
       'script[data-google-maps="true"]'
     );
 
     if (existing) {
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () =>
-        reject(new Error("Google Maps script failed"))
-      );
+      const handleLoad = () => resolve();
+      const handleError = () => {
+        googleMapsScriptPromise = null;
+        reject(new Error("Google Maps script failed to load"));
+      };
+
+      existing.addEventListener("load", handleLoad, { once: true });
+      existing.addEventListener("error", handleError, { once: true });
       return;
     }
 
@@ -47,8 +50,10 @@ function loadGoogleMaps(apiKey: string) {
     )}&v=weekly&libraries=places`;
 
     script.onload = () => resolve();
-    script.onerror = () =>
+    script.onerror = () => {
+      googleMapsScriptPromise = null;
       reject(new Error("Google Maps script failed to load"));
+    };
 
     document.head.appendChild(script);
   });
@@ -62,13 +67,18 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
   const markersRef = useRef<any[]>([]);
   const infoRef = useRef<any>(null);
 
-  const [status, setStatus] = useState<string>("Loading map…");
+  const [status, setStatus] = useState<string>("Loading map...");
 
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (window.google?.maps) {
+      setStatus("");
+      return;
+    }
+
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim();
 
     if (!apiKey) {
-      setStatus("Missing NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in .env.local");
+      setStatus("Map unavailable right now.");
       return;
     }
 
@@ -76,7 +86,7 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
 
     (async () => {
       try {
-        setStatus("Loading Google Maps…");
+        setStatus("Loading Google Maps...");
         await loadGoogleMaps(apiKey);
         if (cancelled) return;
 
@@ -100,9 +110,9 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
         }
 
         setStatus("");
-      } catch (e: any) {
+      } catch (e) {
         console.error(e);
-        setStatus(e?.message ?? "Failed to load Google Maps");
+        setStatus("Map unavailable right now.");
       }
     })();
 

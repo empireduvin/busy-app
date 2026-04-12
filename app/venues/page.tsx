@@ -518,6 +518,11 @@ function formatHappyHourPrice(
   return priceLabel ? `${amount} ${priceLabel}` : amount;
 }
 
+function formatHappyHourAmount(price: number | null): string | null {
+  if (price == null) return null;
+  return `$${price}`;
+}
+
 function hasHappyHourItems(
   detail: HappyHourDetailJson | null | undefined,
   category: keyof Omit<HappyHourDetailJson, 'notes'>
@@ -982,13 +987,13 @@ function VenuesPageContent() {
             />
 
             <select
-              value={venueType}
-              onChange={(e) => setVenueType(e.target.value)}
+              value={suburb}
+              onChange={(e) => setSuburb(e.target.value)}
               className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
             >
-              {venueTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t === 'ALL' ? 'All venue types' : t.toUpperCase()}
+              {suburbs.map((s) => (
+                <option key={s} value={s}>
+                  {s === 'ALL' ? 'All suburbs' : s.toUpperCase()}
                 </option>
               ))}
             </select>
@@ -998,7 +1003,7 @@ function VenuesPageContent() {
               onChange={(e) => setSortBy(e.target.value)}
               className="h-10 min-w-0 rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
             >
-              <option value="NAME">Venue</option>
+              <option value="NAME">Sort by venue</option>
               <option value="RATING_DESC">Highest Rated</option>
               <option value="REVIEWS_DESC">Most Reviews</option>
               <option value="PRICE_ASC">Cheapest</option>
@@ -1600,13 +1605,13 @@ function VenuesPageContent() {
                     </div>
                     <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
                       <select
-                        value={suburb}
-                        onChange={(e) => setSuburb(e.target.value)}
+                        value={venueType}
+                        onChange={(e) => setVenueType(e.target.value)}
                         className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
                       >
-                        {suburbs.map((s) => (
-                          <option key={s} value={s}>
-                            {s === 'ALL' ? 'All suburbs' : s.toUpperCase()}
+                        {venueTypes.map((t) => (
+                          <option key={t} value={t}>
+                            {t === 'ALL' ? 'All venue types' : t.toUpperCase()}
                           </option>
                         ))}
                       </select>
@@ -1635,7 +1640,7 @@ function VenuesPageContent() {
                       </select>
 
                       <div className="flex items-center rounded-xl border border-white/10 bg-black px-3 text-sm text-white/70">
-                        Launch area
+                        Inner West
                       </div>
                     </div>
 
@@ -1871,18 +1876,23 @@ function HappyHourRuleCard({
                   >
                     {isFoodCategory ? (
                       <div className="space-y-1">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1 text-sm font-medium leading-5 text-white">
+                        <div className="space-y-2">
+                          <div className="text-sm font-medium leading-5 text-white break-words">
                             {item.title}
                           </div>
                           {item.price != null ? (
-                            <div className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-amber-200">
-                              {formatHappyHourPrice(item.price, item.priceLabel)}
+                            <div className="inline-flex max-w-full rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-amber-200">
+                              {formatHappyHourAmount(item.price)}
                             </div>
                           ) : null}
                         </div>
+                        {item.priceLabel ? (
+                          <div className="text-[11px] leading-4 text-amber-200/90 break-words">
+                            {item.priceLabel}
+                          </div>
+                        ) : null}
                         {item.description ? (
-                          <div className="text-[11px] leading-4 text-amber-100/90">
+                          <div className="text-[11px] leading-4 text-amber-100/90 break-words whitespace-pre-wrap">
                             {item.description}
                           </div>
                         ) : null}
