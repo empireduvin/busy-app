@@ -68,10 +68,12 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
   const infoRef = useRef<any>(null);
 
   const [status, setStatus] = useState<string>("Loading map...");
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     if (window.google?.maps) {
       setStatus("");
+      setMapReady(true);
       return;
     }
 
@@ -100,6 +102,7 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
             center: { lat: -33.883, lng: 151.18 },
             zoom: 13,
             mapTypeControl: false,
+            zoomControl: true,
             streetViewControl: false,
             fullscreenControl: true,
             clickableIcons: false,
@@ -110,9 +113,11 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
         }
 
         setStatus("");
+        setMapReady(true);
       } catch (e) {
         console.error(e);
         setStatus("Map unavailable right now.");
+        setMapReady(false);
       }
     })();
 
@@ -123,7 +128,7 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !window.google?.maps) return;
+    if (!map || !window.google?.maps || !mapReady) return;
 
     markersRef.current.forEach((marker) => marker.setMap(null));
     markersRef.current = [];
@@ -171,7 +176,7 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
       map.setZoom(15);
       map.setCenter({ lat: withCoords[0].lat!, lng: withCoords[0].lng! });
     }
-  }, [venues]);
+  }, [mapReady, venues]);
 
   useEffect(() => {
     const map = mapRef.current;

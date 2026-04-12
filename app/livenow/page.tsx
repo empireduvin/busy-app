@@ -1,5 +1,6 @@
 'use client';
 
+import GoogleMap from '@/app/components/GoogleMap';
 import PublicEventRuleCard from '@/app/components/PublicEventRuleCard';
 import PublicHappyHourRuleCard from '@/app/components/PublicHappyHourRuleCard';
 import PublicVenueCard from '@/app/components/PublicVenueCard';
@@ -14,25 +15,25 @@ import {
   type Venue,
   type VenueScheduleRule,
 } from '@/lib/public-venue-discovery';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 type LiveNowFilter =
   | 'all'
   | 'happy_hour'
-  | 'sport'
+  | 'events'
   | 'trivia'
   | 'live_music'
   | 'comedy'
   | 'ends_soon';
 
 type TimeFilter = 'any' | 'afternoon' | 'evening' | 'late_night';
-
+type SectionKind = 'happy_hour' | 'events' | 'mixed';
 type LiveNowRow = ReturnType<typeof buildLiveNowRow>;
 
 const LIVE_NOW_FILTERS: Array<{ value: LiveNowFilter; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'happy_hour', label: 'Happy Hour' },
-  { value: 'sport', label: 'Sport' },
+  { value: 'events', label: 'Events' },
   { value: 'trivia', label: 'Trivia' },
   { value: 'live_music', label: 'Live Music' },
   { value: 'comedy', label: 'Comedy' },
@@ -51,82 +52,109 @@ export default function LiveNowPage() {
   const [activeFilter, setActiveFilter] = useState<LiveNowFilter>('all');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('any');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showMap, setShowMap] = useState(false);
+  const mapSectionRef = useRef<HTMLElement | null>(null);
 
   const liveRows = useMemo(() => {
     return liveVenues
       .map((venue) => buildLiveNowRow(venue))
       .filter((row) => row.isLiveNow)
       .filter((row) => matchesLiveFilter(row, activeFilter))
-      .filter((row) => matchesTimeFilter(row.timeAnchorMinutes, timeFilter))
+      .filter((row) => matchesTimeFilter(row.primaryStartMinutes, timeFilter))
       .filter((row) => matchesSearchText(row, searchTerm))
       .sort(
         (a, b) =>
+          a.primaryStartMinutes - b.primaryStartMinutes ||
           b.urgencyScore - a.urgencyScore ||
           (a.venue.name ?? '').localeCompare(b.venue.name ?? '')
       );
   }, [activeFilter, liveVenues, searchTerm, timeFilter]);
 
   const sections = useMemo(() => {
-    if (activeFilter !== 'all') {
+    if (activeFilter === 'all') {
       return [
         {
-          id: 'live-matches',
-          title: 'Live matches',
-          description: 'Filtered picks happening now.',
-          rows: liveRows,
+          id: 'happy-hour-live',
+          title: 'Happy hour live',
+          description: 'Deals already running right now.',
+          kind: 'happy_hour' as SectionKind,
+          rows: liveRows.filter((row) => row.liveHappyHourRules.length > 0),
         },
-      ];
+        {
+          id: 'events-live',
+          title: 'Events live',
+          description: 'Trivia, music, comedy, and live sessions already underway.',
+          kind: 'events' as SectionKind,
+          rows: liveRows.filter((row) => row.liveEventRules.length > 0),
+        },
+      ].filter((section) => section.rows.length > 0);
     }
 
     return [
       {
-        id: 'live-now',
-        title: 'Live now',
-        description: 'On now. Go now.',
+        id: 'live-matches',
+        title: getFilterHeading(activeFilter),
+        description: 'Filtered picks happening now.',
+        kind: getFilterSectionKind(activeFilter),
         rows: liveRows,
       },
-      {
-        id: 'happy-hour-live',
-        title: 'Happy hour live',
-        description: 'Deals already pouring.',
-        rows: liveRows.filter((row) => row.liveHappyHourRules.length > 0),
-      },
-      {
-        id: 'sport-live',
-        title: 'Sport live',
-        description: 'Sport on now, with current venue context.',
-        rows: liveRows.filter((row) => row.sportLive),
-      },
-      {
-        id: 'events-live',
-        title: 'Events live',
-        description: 'Trivia, music, comedy, and other sessions happening now.',
-        rows: liveRows.filter((row) => row.liveEventRules.length > 0),
-      },
-    ].filter((section) => section.rows.length > 0);
+    ];
   }, [activeFilter, liveRows]);
 
   const headlineStats = useMemo(
     () => [
-      { label: 'Live now', value: liveRows.length, sectionId: 'live-now' },
       {
         label: 'Happy hour live',
         value: liveRows.filter((row) => row.liveHappyHourRules.length > 0).length,
-        sectionId: 'happy-hour-live',
-      },
-      {
-        label: 'Sport live',
-        value: liveRows.filter((row) => row.sportLive).length,
-        sectionId: 'sport-live',
+        sectionId: activeFilter === 'all' ? 'happy-hour-live' : 'live-matches',
       },
       {
         label: 'Events live',
         value: liveRows.filter((row) => row.liveEventRules.length > 0).length,
-        sectionId: 'events-live',
+        sectionId: activeFilter === 'all' ? 'events-live' : 'live-matches',
+      },
+      {
+        label: 'Ending soon',
+        value: liveRows.filter((row) => row.endsSoon).length,
+        sectionId: 'live-matches',
       },
     ],
-    [liveRows]
+    [activeFilter, liveRows]
   );
+
+  const mapVenues = useMemo(() => {
+    const seen = new Set<string>();
+
+    return liveRows
+      .filter(
+        (row) =>
+          typeof row.venue.lat === 'number' &&
+          !Number.isNaN(row.venue.lat) &&
+          typeof row.venue.lng === 'number' &&
+          !Number.isNaN(row.venue.lng)
+      )
+      .filter((row) => {
+        if (seen.has(row.venue.id)) return false;
+        seen.add(row.venue.id);
+        return true;
+      })
+      .map((row) => ({
+        id: row.venue.id,
+        name: row.venue.name,
+        lat: row.venue.lat,
+        lng: row.venue.lng,
+      }));
+  }, [liveRows]);
+
+  useEffect(() => {
+    if (!showMap) return;
+
+    const timeout = window.setTimeout(() => {
+      mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+
+    return () => window.clearTimeout(timeout);
+  }, [showMap]);
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -141,11 +169,11 @@ export default function LiveNowPage() {
                 What&apos;s on right now
               </h1>
               <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-                Happy hours, sport, and live events happening now across Newtown, Enmore, and
+                Happy hours and live events happening now across Newtown, Enmore, and
                 Erskineville.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-3 gap-2">
               {headlineStats.map((stat) =>
                 stat.value > 0 ? (
                   <a
@@ -154,7 +182,9 @@ export default function LiveNowPage() {
                     className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 transition hover:border-orange-300/35 hover:bg-orange-500/10"
                   >
                     <div className="text-lg font-semibold text-white">{stat.value}</div>
-                    <div className="text-xs uppercase tracking-[0.18em] text-white/45">{stat.label}</div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-white/45">
+                      {stat.label}
+                    </div>
                   </a>
                 ) : (
                   <div
@@ -162,7 +192,9 @@ export default function LiveNowPage() {
                     className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 opacity-60"
                   >
                     <div className="text-lg font-semibold text-white">{stat.value}</div>
-                    <div className="text-xs uppercase tracking-[0.18em] text-white/45">{stat.label}</div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-white/45">
+                      {stat.label}
+                    </div>
                   </div>
                 )
               )}
@@ -176,7 +208,7 @@ export default function LiveNowPage() {
               type="text"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search venue, suburb, or what&apos;s on"
+              placeholder="Search venue, suburb, or what's on"
               className="h-11 rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white placeholder:text-white/35"
             />
 
@@ -199,6 +231,18 @@ export default function LiveNowPage() {
                   </button>
                 );
               })}
+              <button
+                type="button"
+                onClick={() => setShowMap((current) => !current)}
+                className={[
+                  'rounded-full border px-3 py-1.5 text-xs transition',
+                  showMap
+                    ? 'border-orange-400/30 bg-orange-500/12 text-orange-100'
+                    : 'border-white/10 bg-black/20 text-white/60 hover:bg-white/10',
+                ].join(' ')}
+              >
+                {showMap ? 'Hide map' : 'Show map'}
+              </button>
             </div>
           </div>
 
@@ -223,6 +267,35 @@ export default function LiveNowPage() {
             })}
           </div>
         </section>
+
+        {showMap ? (
+          <section
+            ref={mapSectionRef}
+            className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-4 sm:p-5"
+          >
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-300/70">
+                  Map view
+                </div>
+                <h2 className="mt-1 text-xl font-semibold text-white">What&apos;s live now</h2>
+              </div>
+              <div className="text-xs uppercase tracking-[0.18em] text-white/35">
+                {mapVenues.length} venue{mapVenues.length === 1 ? '' : 's'}
+              </div>
+            </div>
+            {mapVenues.length > 0 ? (
+              <div className="mt-4">
+                <GoogleMap venues={mapVenues} />
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-white/65">
+                No mapped venues match this live filter yet. Try another filter or widen the time
+                window.
+              </div>
+            )}
+          </section>
+        ) : null}
 
         <section className="mt-5">
           {loading ? <div className="text-white/65">Loading live venues...</div> : null}
@@ -257,81 +330,83 @@ export default function LiveNowPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-4">
-                    {section.rows.map((row) => (
-                      <PublicVenueCard
-                        key={`${section.id}-${row.venue.id}`}
-                        venue={row.venue}
-                        eyebrow={row.cardEyebrow}
-                        badges={row.badges}
-                        compact
-                        tone="live"
-                        heroBadge={
-                          row.endsSoon ? (
-                            <TopBadge className="border-red-400/30 bg-red-500/15 text-red-100">
-                              Ends Soon
-                            </TopBadge>
-                          ) : row.liveHappyHourRules.length > 0 ? (
-                            <TopBadge className="border-pink-400/30 bg-pink-500/15 text-pink-100">
-                              Live
-                            </TopBadge>
-                          ) : row.liveEventRules.length > 0 ? (
-                            <TopBadge className="border-orange-400/30 bg-orange-500/15 text-orange-100">
-                              Now
-                            </TopBadge>
-                          ) : null
-                        }
-                        summary={
-                          <div className="space-y-2">
-                            <div className="flex flex-wrap gap-2">
-                              {row.liveHappyHourRules.length > 0 ? (
-                                <StatusPill className="border-pink-400/30 bg-pink-500/15 text-pink-100">
-                                  Happy hour live
-                                </StatusPill>
-                              ) : null}
-                              {row.liveEventRules.length > 0 ? (
-                                <StatusPill className="border-orange-400/30 bg-orange-500/15 text-orange-100">
-                                  Live now
-                                </StatusPill>
-                              ) : null}
-                              {row.sportLive ? (
-                                <StatusPill className="border-cyan-400/30 bg-cyan-500/15 text-cyan-100">
-                                  Sport live now
-                                </StatusPill>
-                              ) : null}
-                              {row.endsSoon ? (
-                                <StatusPill className="border-red-400/30 bg-red-500/15 text-red-100">
-                                  Ends soon
-                                </StatusPill>
-                              ) : null}
-                            </div>
-                            {row.timeHighlights.length > 0 ? (
-                              <div className="flex flex-wrap gap-2">
-                                {row.timeHighlights.map((highlight) => (
-                                  <TimePill key={`${row.venue.id}-${highlight}`}>{highlight}</TimePill>
-                                ))}
-                              </div>
-                            ) : null}
+                  <div className="mt-4 space-y-5">
+                    {groupRowsByTime(section.rows, section.kind).map((group) => (
+                      <div key={`${section.id}-${group.label}`} className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="rounded-full border border-orange-400/20 bg-orange-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-orange-100">
+                            {group.label}
                           </div>
-                        }
-                        details={
-                          <div className="space-y-3">
-                            {row.liveHappyHourRules.map((rule) => (
-                              <PublicHappyHourRuleCard key={rule.id} rule={rule} compact />
-                            ))}
-                            {row.liveEventRules.map((rule) => (
-                              <PublicEventRuleCard key={rule.id} rule={rule} compact />
-                            ))}
-                            {row.liveHappyHourRules.length === 0 &&
-                            row.liveEventRules.length === 0 &&
-                            row.sportLive ? (
-                              <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-3 text-sm text-cyan-100">
-                                Sport is on now at this venue.
-                              </div>
-                            ) : null}
-                          </div>
-                        }
-                      />
+                          <div className="h-px flex-1 bg-white/10" />
+                        </div>
+                        <div className="grid gap-4">
+                          {group.rows.map((row) => (
+                            <PublicVenueCard
+                              key={`${section.id}-${row.venue.id}`}
+                              venue={row.venue}
+                              eyebrow={row.cardEyebrow}
+                              badges={row.badges}
+                              compact
+                              tone="live"
+                              heroBadge={
+                                row.endsSoon ? (
+                                  <TopBadge className="border-red-400/30 bg-red-500/15 text-red-100">
+                                    Ends Soon
+                                  </TopBadge>
+                                ) : row.liveHappyHourRules.length > 0 ? (
+                                  <TopBadge className="border-pink-400/30 bg-pink-500/15 text-pink-100">
+                                    Live
+                                  </TopBadge>
+                                ) : (
+                                  <TopBadge className="border-orange-400/30 bg-orange-500/15 text-orange-100">
+                                    Now
+                                  </TopBadge>
+                                )
+                              }
+                              summary={
+                                <div className="space-y-2">
+                                  <div className="flex flex-wrap gap-2">
+                                    {row.liveHappyHourRules.length > 0 ? (
+                                      <StatusPill className="border-pink-400/30 bg-pink-500/15 text-pink-100">
+                                        Happy hour live
+                                      </StatusPill>
+                                    ) : null}
+                                    {row.liveEventRules.length > 0 ? (
+                                      <StatusPill className="border-orange-400/30 bg-orange-500/15 text-orange-100">
+                                        Events live
+                                      </StatusPill>
+                                    ) : null}
+                                    {row.endsSoon ? (
+                                      <StatusPill className="border-red-400/30 bg-red-500/15 text-red-100">
+                                        Ends soon
+                                      </StatusPill>
+                                    ) : null}
+                                  </div>
+                                  {row.timeHighlights.length > 0 ? (
+                                    <div className="flex flex-wrap gap-2">
+                                      {row.timeHighlights.map((highlight) => (
+                                        <TimePill key={`${row.venue.id}-${highlight}`}>
+                                          {highlight}
+                                        </TimePill>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              }
+                              details={
+                                <div className="space-y-3">
+                                  {row.liveHappyHourRules.map((rule) => (
+                                    <PublicHappyHourRuleCard key={rule.id} rule={rule} compact />
+                                  ))}
+                                  {row.liveEventRules.map((rule) => (
+                                    <PublicEventRuleCard key={rule.id} rule={rule} compact />
+                                  ))}
+                                </div>
+                              }
+                            />
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -346,56 +421,62 @@ export default function LiveNowPage() {
 
 function buildLiveNowRow(venue: Venue) {
   const timezone = venue.timezone || 'Australia/Sydney';
-  const liveHappyHourRules = getTodayRulesForType(getPublishedRulesByType(venue, 'happy_hour'), timezone).filter((rule) =>
-    isOpenNow(buildHoursJsonFromRules([rule]), timezone)
+  const liveHappyHourRules = getTodayRulesForType(
+    getPublishedRulesByType(venue, 'happy_hour'),
+    timezone
+  ).filter((rule) => isOpenNow(buildHoursJsonFromRules([rule]), timezone));
+  const liveEventRules = getTodayRulesForType(getPublishedEventRules(venue), timezone).filter(
+    (rule) => isOpenNow(buildHoursJsonFromRules([rule]), timezone)
   );
-  const liveEventRules = getTodayRulesForType(getPublishedEventRules(venue), timezone).filter((rule) =>
-    isOpenNow(buildHoursJsonFromRules([rule]), timezone)
-  );
-  const sportLive = Boolean(venue.shows_sport) && liveEventRules.some((rule) => rule.schedule_type === 'sport');
-  const isLiveNow = liveHappyHourRules.length > 0 || liveEventRules.length > 0 || sportLive;
+  const isLiveNow = liveHappyHourRules.length > 0 || liveEventRules.length > 0;
 
+  const startTimes = [
+    ...liveHappyHourRules.map((rule) => clockToMinutes(rule.start_time)),
+    ...liveEventRules.map((rule) => clockToMinutes(rule.start_time)),
+  ];
   const endTimes = [
     ...liveHappyHourRules.map((rule) => clockToMinutes(rule.end_time)),
     ...liveEventRules.map((rule) => clockToMinutes(rule.end_time)),
   ];
-  const soonestEnd = endTimes.length > 0 ? Math.min(...endTimes) : null;
-  const endsSoon = soonestEnd !== null && minutesUntil(soonestEnd, timezone) <= 90;
 
-  const timeAnchorMinutes = soonestEnd ?? getCurrentTimeMinutes(timezone);
+  const primaryStartMinutes =
+    startTimes.length > 0 ? Math.min(...startTimes) : getCurrentTimeMinutes(timezone);
+  const soonestEnd = endTimes.length > 0 ? Math.min(...endTimes) : null;
+  const endsSoon = soonestEnd !== null && minutesUntil(soonestEnd, timezone) <= 30;
+
+  const liveEventTypes = liveEventRules.map((rule) => rule.schedule_type);
   const badges = [
-    liveEventRules.some((rule) => rule.schedule_type === 'trivia') ? 'Trivia now' : null,
-    liveEventRules.some((rule) => rule.schedule_type === 'live_music') ? 'Live music now' : null,
-    liveEventRules.some((rule) => rule.schedule_type === 'comedy') ? 'Comedy now' : null,
+    liveEventTypes.includes('trivia') ? 'Trivia now' : null,
+    liveEventTypes.includes('live_music') ? 'Live music now' : null,
+    liveEventTypes.includes('comedy') ? 'Comedy now' : null,
+    liveEventTypes.includes('karaoke') ? 'Karaoke now' : null,
   ].filter(Boolean) as string[];
 
   const urgencyScore =
-    liveEventRules.length * 50 +
-    liveHappyHourRules.length * 40 +
-    (sportLive ? 25 : 0) +
-    (endsSoon ? 15 : 0);
+    liveEventRules.length * 50 + liveHappyHourRules.length * 40 + (endsSoon ? 15 : 0);
 
   const cardEyebrow =
     liveHappyHourRules.length > 0
       ? 'Happy Hour Live'
-      : liveEventRules.length > 0
-        ? 'Happening Now'
-        : 'Sport Live';
+      : liveEventRules.some((rule) => rule.schedule_type === 'trivia')
+        ? 'Trivia Live'
+        : liveEventRules.some((rule) => rule.schedule_type === 'live_music')
+          ? 'Live Music Now'
+          : 'Events Live';
 
   const timeHighlights = [
-    ...liveHappyHourRules.slice(0, 2).map((rule) => buildLiveRangeLabel(rule, 'Happy hour')),
-    ...liveEventRules.slice(0, 2).map((rule) => buildLiveRangeLabel(rule, eventRuleLabel(rule))),
+    ...liveHappyHourRules.slice(0, 2).map((rule) => buildRangeLabel(rule, 'Happy hour')),
+    ...liveEventRules.slice(0, 2).map((rule) => buildRangeLabel(rule, eventRuleLabel(rule))),
   ];
 
   return {
     venue,
     liveHappyHourRules,
     liveEventRules,
-    liveEventTypes: liveEventRules.map((rule) => rule.schedule_type),
-    sportLive,
+    liveEventTypes,
     isLiveNow,
     endsSoon,
-    timeAnchorMinutes,
+    primaryStartMinutes,
     urgencyScore,
     badges,
     cardEyebrow,
@@ -406,7 +487,7 @@ function buildLiveNowRow(venue: Venue) {
 function matchesLiveFilter(row: LiveNowRow, filter: LiveNowFilter) {
   if (filter === 'all') return true;
   if (filter === 'happy_hour') return row.liveHappyHourRules.length > 0;
-  if (filter === 'sport') return row.sportLive || row.liveEventTypes.includes('sport');
+  if (filter === 'events') return row.liveEventRules.length > 0;
   if (filter === 'trivia') return row.liveEventTypes.includes('trivia');
   if (filter === 'live_music') return row.liveEventTypes.includes('live_music');
   if (filter === 'comedy') return row.liveEventTypes.includes('comedy');
@@ -450,7 +531,60 @@ function collectRuleSearchParts(rule: VenueScheduleRule) {
   ];
 }
 
-function buildLiveRangeLabel(rule: VenueScheduleRule, prefix: string) {
+function getFilterHeading(filter: LiveNowFilter) {
+  if (filter === 'happy_hour') return 'Happy hour live';
+  if (filter === 'events') return 'Events live';
+  if (filter === 'trivia') return 'Trivia live';
+  if (filter === 'live_music') return 'Live music now';
+  if (filter === 'comedy') return 'Comedy live';
+  if (filter === 'ends_soon') return 'Ending soon';
+  return 'Live now';
+}
+
+function getFilterSectionKind(filter: LiveNowFilter): SectionKind {
+  if (filter === 'happy_hour') return 'happy_hour';
+  if (filter === 'events') return 'events';
+  if (filter === 'trivia') return 'events';
+  if (filter === 'live_music') return 'events';
+  if (filter === 'comedy') return 'events';
+  return 'mixed';
+}
+
+function groupRowsByTime(rows: LiveNowRow[], kind: SectionKind) {
+  const groups = new Map<number, LiveNowRow[]>();
+
+  rows.forEach((row) => {
+    const minutes = getGroupMinutes(row, kind);
+    const current = groups.get(minutes) ?? [];
+    current.push(row);
+    groups.set(minutes, current);
+  });
+
+  return Array.from(groups.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([minutes, groupedRows]) => ({
+      label: formatTimeHeading(minutes),
+      rows: groupedRows.sort(
+        (a, b) =>
+          a.primaryStartMinutes - b.primaryStartMinutes ||
+          (a.venue.name ?? '').localeCompare(b.venue.name ?? '')
+      ),
+    }));
+}
+
+function getGroupMinutes(row: LiveNowRow, kind: SectionKind) {
+  if (kind === 'happy_hour' && row.liveHappyHourRules.length > 0) {
+    return Math.min(...row.liveHappyHourRules.map((rule) => clockToMinutes(rule.start_time)));
+  }
+
+  if (kind === 'events' && row.liveEventRules.length > 0) {
+    return Math.min(...row.liveEventRules.map((rule) => clockToMinutes(rule.start_time)));
+  }
+
+  return row.primaryStartMinutes;
+}
+
+function buildRangeLabel(rule: VenueScheduleRule, prefix: string) {
   const start = formatTimeForUi(rule.start_time.slice(0, 5));
   const end = formatTimeForUi(rule.end_time.slice(0, 5));
   return `${prefix} ${start} - ${end}`;
@@ -462,7 +596,7 @@ function eventRuleLabel(rule: VenueScheduleRule) {
   if (rule.schedule_type === 'comedy') return 'Comedy';
   if (rule.schedule_type === 'karaoke') return 'Karaoke';
   if (rule.schedule_type === 'dj') return 'DJ';
-  if (rule.schedule_type === 'special_event') return 'Special event';
+  if (rule.schedule_type === 'special_event') return 'Event';
   if (rule.schedule_type === 'sport') return 'Sport';
   return 'Event';
 }
@@ -487,7 +621,16 @@ function getCurrentTimeMinutes(timezone: string) {
 
 function minutesUntil(targetMinutes: number, timezone: string) {
   const nowMinutes = getCurrentTimeMinutes(timezone);
-  return targetMinutes >= nowMinutes ? targetMinutes - nowMinutes : targetMinutes + 1440 - nowMinutes;
+  return targetMinutes >= nowMinutes
+    ? targetMinutes - nowMinutes
+    : targetMinutes + 1440 - nowMinutes;
+}
+
+function formatTimeHeading(minutes: number) {
+  const normalized = ((minutes % 1440) + 1440) % 1440;
+  const hour = String(Math.floor(normalized / 60)).padStart(2, '0');
+  const minute = String(normalized % 60).padStart(2, '0');
+  return formatTimeForUi(`${hour}:${minute}`);
 }
 
 function StatusPill({
@@ -497,7 +640,11 @@ function StatusPill({
   children: string;
   className: string;
 }) {
-  return <span className={`rounded-full border px-3 py-1 text-xs font-medium ${className}`}>{children}</span>;
+  return (
+    <span className={`rounded-full border px-3 py-1 text-xs font-medium ${className}`}>
+      {children}
+    </span>
+  );
 }
 
 function TimePill({ children }: { children: string }) {

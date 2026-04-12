@@ -1,5 +1,6 @@
 'use client';
 
+import GoogleMap from '@/app/components/GoogleMap';
 import PublicEventRuleCard from '@/app/components/PublicEventRuleCard';
 import PublicHappyHourRuleCard from '@/app/components/PublicHappyHourRuleCard';
 import PublicVenueCard from '@/app/components/PublicVenueCard';
@@ -13,31 +14,29 @@ import {
   type Venue,
   type VenueScheduleRule,
 } from '@/lib/public-venue-discovery';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 type TodayFilter =
   | 'all'
   | 'happy_hour'
-  | 'sport'
+  | 'events'
   | 'trivia'
   | 'live_music'
   | 'comedy'
-  | 'karaoke'
-  | 'special_event';
+  | 'karaoke';
 
 type TimeFilter = 'any' | 'afternoon' | 'evening' | 'late_night';
-
+type SectionKind = 'happy_hour' | 'events' | 'mixed';
 type TodayRow = ReturnType<typeof buildTodayRow>;
 
 const TODAY_FILTERS: Array<{ value: TodayFilter; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'happy_hour', label: 'Happy Hour' },
-  { value: 'sport', label: 'Sport' },
+  { value: 'events', label: 'Events' },
   { value: 'trivia', label: 'Trivia' },
   { value: 'live_music', label: 'Live Music' },
   { value: 'comedy', label: 'Comedy' },
   { value: 'karaoke', label: 'Karaoke' },
-  { value: 'special_event', label: 'Special Events' },
 ];
 
 const TIME_FILTERS: Array<{ value: TimeFilter; label: string }> = [
@@ -52,6 +51,8 @@ export default function TodayPage() {
   const [activeFilter, setActiveFilter] = useState<TodayFilter>('all');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('any');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showMap, setShowMap] = useState(false);
+  const mapSectionRef = useRef<HTMLElement | null>(null);
 
   const rows = useMemo(
     () =>
@@ -59,49 +60,45 @@ export default function TodayPage() {
         .map((venue) => buildTodayRow(venue))
         .filter((row) => row.isRelevantToday)
         .filter((row) => matchesTodayFilter(row, activeFilter))
-        .filter((row) => matchesTimeFilter(row.timeAnchorMinutes, timeFilter))
-        .filter((row) => matchesSearchText(row, searchTerm)),
+        .filter((row) => matchesTimeFilter(row.primaryStartMinutes, timeFilter))
+        .filter((row) => matchesSearchText(row, searchTerm))
+        .sort(
+          (a, b) =>
+            a.primaryStartMinutes - b.primaryStartMinutes ||
+            (a.venue.name ?? '').localeCompare(b.venue.name ?? '')
+        ),
     [activeFilter, liveVenues, searchTerm, timeFilter]
   );
 
   const sections = useMemo(() => {
-    if (activeFilter !== 'all') {
+    if (activeFilter === 'all') {
       return [
         {
-          id: 'today-matches',
-          title: 'Matches today',
-          description: 'Filtered picks for the day ahead.',
-          rows,
+          id: 'happy-hour-today',
+          title: 'Happy hour today',
+          description: 'Lunch pours, after-work deals, and tonight&apos;s happy hours.',
+          kind: 'happy_hour' as SectionKind,
+          rows: rows.filter((row) => row.todayHappyHourRules.length > 0),
         },
-      ];
+        {
+          id: 'events-today',
+          title: 'Events today',
+          description: 'Trivia, music, comedy, karaoke, and live sessions across the day.',
+          kind: 'events' as SectionKind,
+          rows: rows.filter((row) => row.todayEventRules.length > 0),
+        },
+      ].filter((section) => section.rows.length > 0);
     }
 
     return [
       {
-        id: 'happy-hour-today',
-        title: 'Happy Hour Today',
-        description: 'Lunch pours, afternoon deals, and after-work specials.',
-        rows: rows.filter((row) => row.todayHappyHourRules.length > 0),
+        id: 'today-matches',
+        title: getFilterHeading(activeFilter),
+        description: 'Filtered picks for the day ahead.',
+        kind: getFilterSectionKind(activeFilter),
+        rows,
       },
-      {
-        id: 'sport-today',
-        title: 'Sport Today',
-        description: 'Venues showing sport or running sport-led sessions today.',
-        rows: rows.filter((row) => row.hasSportToday),
-      },
-      {
-        id: 'events-tonight',
-        title: 'Events Tonight',
-        description: 'Trivia, music, and tonight&apos;s stronger plans.',
-        rows: rows.filter((row) => row.todayEventRules.length > 0),
-      },
-      {
-        id: 'special-events',
-        title: 'Special Events',
-        description: 'Special event sessions that stand out in today&apos;s mix.',
-        rows: rows.filter((row) => row.todayEventTypes.includes('special_event')),
-      },
-    ].filter((section) => section.rows.length > 0);
+    ];
   }, [activeFilter, rows]);
 
   const headlineStats = useMemo(
@@ -109,31 +106,60 @@ export default function TodayPage() {
       {
         label: 'Happy hour today',
         value: rows.filter((row) => row.todayHappyHourRules.length > 0).length,
-        sectionId: 'happy-hour-today',
+        sectionId: activeFilter === 'all' ? 'happy-hour-today' : 'today-matches',
       },
       {
-        label: 'Sport today',
-        value: rows.filter((row) => row.hasSportToday).length,
-        sectionId: 'sport-today',
-      },
-      {
-        label: 'Events tonight',
+        label: 'Events today',
         value: rows.filter((row) => row.todayEventRules.length > 0).length,
-        sectionId: 'events-tonight',
+        sectionId: activeFilter === 'all' ? 'events-today' : 'today-matches',
       },
       {
-        label: 'Special events',
-        value: rows.filter((row) => row.todayEventTypes.includes('special_event')).length,
-        sectionId: 'special-events',
+        label: 'Lunch specials',
+        value: rows.filter((row) => row.hasLunchSpecials).length,
+        sectionId: activeFilter === 'all' ? 'happy-hour-today' : 'today-matches',
       },
     ],
-    [rows]
+    [activeFilter, rows]
   );
+
+  const mapVenues = useMemo(() => {
+    const seen = new Set<string>();
+
+    return rows
+      .filter(
+        (row) =>
+          typeof row.venue.lat === 'number' &&
+          !Number.isNaN(row.venue.lat) &&
+          typeof row.venue.lng === 'number' &&
+          !Number.isNaN(row.venue.lng)
+      )
+      .filter((row) => {
+        if (seen.has(row.venue.id)) return false;
+        seen.add(row.venue.id);
+        return true;
+      })
+      .map((row) => ({
+        id: row.venue.id,
+        name: row.venue.name,
+        lat: row.venue.lat,
+        lng: row.venue.lng,
+      }));
+  }, [rows]);
+
+  useEffect(() => {
+    if (!showMap) return;
+
+    const timeout = window.setTimeout(() => {
+      mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+
+    return () => window.clearTimeout(timeout);
+  }, [showMap]);
 
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-orange-500/18 via-[#120805] to-black p-5 sm:p-6">
+        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-orange-500/20 via-[#120805] to-black p-5 sm:p-6">
           <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-orange-300/80">
             Today
           </div>
@@ -143,10 +169,10 @@ export default function TodayPage() {
                 What&apos;s on today
               </h1>
               <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-                Today&apos;s happy hours, sport, and events across Newtown, Enmore, and Erskineville.
+                Today&apos;s happy hours and events across Newtown, Enmore, and Erskineville.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-3 gap-2">
               {headlineStats.map((stat) =>
                 stat.value > 0 ? (
                   <a
@@ -155,7 +181,9 @@ export default function TodayPage() {
                     className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 transition hover:border-orange-300/35 hover:bg-orange-500/10"
                   >
                     <div className="text-lg font-semibold text-white">{stat.value}</div>
-                    <div className="text-xs uppercase tracking-[0.18em] text-white/45">{stat.label}</div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-white/45">
+                      {stat.label}
+                    </div>
                   </a>
                 ) : (
                   <div
@@ -163,7 +191,9 @@ export default function TodayPage() {
                     className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 opacity-60"
                   >
                     <div className="text-lg font-semibold text-white">{stat.value}</div>
-                    <div className="text-xs uppercase tracking-[0.18em] text-white/45">{stat.label}</div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-white/45">
+                      {stat.label}
+                    </div>
                   </div>
                 )
               )}
@@ -200,6 +230,18 @@ export default function TodayPage() {
                   </button>
                 );
               })}
+              <button
+                type="button"
+                onClick={() => setShowMap((current) => !current)}
+                className={[
+                  'rounded-full border px-3 py-1.5 text-xs transition',
+                  showMap
+                    ? 'border-orange-400/30 bg-orange-500/12 text-orange-100'
+                    : 'border-white/10 bg-black/20 text-white/60 hover:bg-white/10',
+                ].join(' ')}
+              >
+                {showMap ? 'Hide map' : 'Show map'}
+              </button>
             </div>
           </div>
 
@@ -224,6 +266,35 @@ export default function TodayPage() {
             })}
           </div>
         </section>
+
+        {showMap ? (
+          <section
+            ref={mapSectionRef}
+            className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-4 sm:p-5"
+          >
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-300/70">
+                  Map view
+                </div>
+                <h2 className="mt-1 text-xl font-semibold text-white">What&apos;s on today</h2>
+              </div>
+              <div className="text-xs uppercase tracking-[0.18em] text-white/35">
+                {mapVenues.length} venue{mapVenues.length === 1 ? '' : 's'}
+              </div>
+            </div>
+            {mapVenues.length > 0 ? (
+              <div className="mt-4">
+                <GoogleMap venues={mapVenues} />
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-white/65">
+                No mapped venues match this today filter yet. Try another filter or widen the time
+                window.
+              </div>
+            )}
+          </section>
+        ) : null}
 
         <section className="mt-5">
           {loading ? <div className="text-white/65">Loading today&apos;s venues...</div> : null}
@@ -258,76 +329,74 @@ export default function TodayPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-4">
-                    {section.rows.map((row) => (
-                      <PublicVenueCard
-                        key={`${section.id}-${row.venue.id}`}
-                        venue={row.venue}
-                        eyebrow={row.cardEyebrow}
-                        badges={row.badges}
-                        compact
-                        tone="today"
-                        heroBadge={
-                          row.todayHappyHourRules.length > 0 ? (
-                            <TopBadge className="border-pink-400/30 bg-pink-500/15 text-pink-100">
-                              Today
-                            </TopBadge>
-                          ) : row.todayEventRules.length > 0 ? (
-                            <TopBadge className="border-orange-400/30 bg-orange-500/15 text-orange-100">
-                              Tonight
-                            </TopBadge>
-                          ) : row.hasSportToday ? (
-                            <TopBadge className="border-cyan-400/30 bg-cyan-500/15 text-cyan-100">
-                              Sport
-                            </TopBadge>
-                          ) : null
-                        }
-                        summary={
-                          <div className="space-y-2">
-                            <div className="flex flex-wrap gap-2">
-                              {row.todayHappyHourRules.length > 0 ? (
-                                <StatusPill className="border-pink-400/30 bg-pink-500/15 text-pink-100">
-                                  Happy hour today
-                                </StatusPill>
-                              ) : null}
-                              {row.hasSportToday ? (
-                                <StatusPill className="border-cyan-400/30 bg-cyan-500/15 text-cyan-100">
-                                  Sport today
-                                </StatusPill>
-                              ) : null}
-                              {row.todayEventRules.length > 0 ? (
-                                <StatusPill className="border-orange-400/30 bg-orange-500/15 text-orange-100">
-                                  Events today
-                                </StatusPill>
-                              ) : null}
-                            </div>
-                            {row.timeHighlights.length > 0 ? (
-                              <div className="flex flex-wrap gap-2">
-                                {row.timeHighlights.map((highlight) => (
-                                  <TimePill key={`${row.venue.id}-${highlight}`}>{highlight}</TimePill>
-                                ))}
-                              </div>
-                            ) : null}
+                  <div className="mt-4 space-y-5">
+                    {groupRowsByTime(section.rows, section.kind).map((group) => (
+                      <div key={`${section.id}-${group.label}`} className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="rounded-full border border-orange-400/20 bg-orange-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-orange-100">
+                            {group.label}
                           </div>
-                        }
-                        details={
-                          <div className="space-y-3">
-                            {row.todayHappyHourRules.map((rule) => (
-                              <PublicHappyHourRuleCard key={rule.id} rule={rule} compact />
-                            ))}
-                            {row.todayEventRules.map((rule) => (
-                              <PublicEventRuleCard key={rule.id} rule={rule} compact />
-                            ))}
-                            {row.todayHappyHourRules.length === 0 &&
-                            row.todayEventRules.length === 0 &&
-                            row.hasSportToday ? (
-                              <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-3 text-sm text-cyan-100">
-                                Sport is on today at this venue.
-                              </div>
-                            ) : null}
-                          </div>
-                        }
-                      />
+                          <div className="h-px flex-1 bg-white/10" />
+                        </div>
+                        <div className="grid gap-4">
+                          {group.rows.map((row) => (
+                            <PublicVenueCard
+                              key={`${section.id}-${row.venue.id}`}
+                              venue={row.venue}
+                              eyebrow={row.cardEyebrow}
+                              badges={row.badges}
+                              compact
+                              tone="today"
+                              heroBadge={
+                                row.todayHappyHourRules.length > 0 ? (
+                                  <TopBadge className="border-pink-400/30 bg-pink-500/15 text-pink-100">
+                                    Today
+                                  </TopBadge>
+                                ) : (
+                                  <TopBadge className="border-orange-400/30 bg-orange-500/15 text-orange-100">
+                                    Event
+                                  </TopBadge>
+                                )
+                              }
+                              summary={
+                                <div className="space-y-2">
+                                  <div className="flex flex-wrap gap-2">
+                                    {row.todayHappyHourRules.length > 0 ? (
+                                      <StatusPill className="border-pink-400/30 bg-pink-500/15 text-pink-100">
+                                        Happy hour today
+                                      </StatusPill>
+                                    ) : null}
+                                    {row.todayEventRules.length > 0 ? (
+                                      <StatusPill className="border-orange-400/30 bg-orange-500/15 text-orange-100">
+                                        Events today
+                                      </StatusPill>
+                                    ) : null}
+                                  </div>
+                                  {row.timeHighlights.length > 0 ? (
+                                    <div className="flex flex-wrap gap-2">
+                                      {row.timeHighlights.map((highlight) => (
+                                        <TimePill key={`${row.venue.id}-${highlight}`}>
+                                          {highlight}
+                                        </TimePill>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              }
+                              details={
+                                <div className="space-y-3">
+                                  {row.todayHappyHourRules.map((rule) => (
+                                    <PublicHappyHourRuleCard key={rule.id} rule={rule} compact />
+                                  ))}
+                                  {row.todayEventRules.map((rule) => (
+                                    <PublicEventRuleCard key={rule.id} rule={rule} compact />
+                                  ))}
+                                </div>
+                              }
+                            />
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -348,22 +417,24 @@ function buildTodayRow(venue: Venue) {
   );
   const todayEventRules = getTodayRulesForType(getPublishedEventRules(venue), timezone);
   const todayEventTypes = todayEventRules.map((rule) => rule.schedule_type);
-  const hasSportToday = Boolean(venue.shows_sport) || todayEventTypes.includes('sport');
-  const isRelevantToday =
-    todayHappyHourRules.length > 0 || todayEventRules.length > 0 || hasSportToday;
+  const isRelevantToday = todayHappyHourRules.length > 0 || todayEventRules.length > 0;
 
   const startTimes = [
     ...todayHappyHourRules.map((rule) => clockToMinutes(rule.start_time)),
     ...todayEventRules.map((rule) => clockToMinutes(rule.start_time)),
   ];
-  const timeAnchorMinutes = startTimes.length > 0 ? Math.min(...startTimes) : 18 * 60;
+  const primaryStartMinutes = startTimes.length > 0 ? Math.min(...startTimes) : 18 * 60;
+  const hasLunchSpecials = todayHappyHourRules.some((rule) => {
+    const minutes = clockToMinutes(rule.start_time);
+    return minutes >= 11 * 60 && minutes <= 15 * 60;
+  });
 
   const badges = [
     todayEventTypes.includes('trivia') ? 'Trivia tonight' : null,
     todayEventTypes.includes('live_music') ? 'Live music tonight' : null,
     todayEventTypes.includes('comedy') ? 'Comedy tonight' : null,
     todayEventTypes.includes('karaoke') ? 'Karaoke tonight' : null,
-    todayEventTypes.includes('special_event') ? 'Special event' : null,
+    todayEventTypes.includes('sport') ? 'Sport session' : null,
   ].filter(Boolean) as string[];
 
   const primaryEventType = [
@@ -379,22 +450,18 @@ function buildTodayRow(venue: Venue) {
     todayHappyHourRules.length > 0
       ? 'Happy Hour Today'
       : primaryEventType === 'trivia'
-        ? 'Trivia Tonight'
+        ? 'Trivia Today'
         : primaryEventType === 'live_music'
-          ? 'Live Music Tonight'
+          ? 'Live Music Today'
           : primaryEventType === 'comedy'
-            ? 'Comedy Tonight'
+            ? 'Comedy Today'
             : primaryEventType === 'karaoke'
-              ? 'Karaoke Tonight'
-              : primaryEventType === 'special_event'
-                ? 'Special Event Today'
-                : hasSportToday
-                  ? 'Sport Today'
-                  : 'Today';
+              ? 'Karaoke Today'
+              : 'Events Today';
 
   const timeHighlights = [
-    ...todayHappyHourRules.slice(0, 2).map((rule) => buildTodayRangeLabel(rule, 'Happy hour')),
-    ...todayEventRules.slice(0, 2).map((rule) => buildTodayRangeLabel(rule, eventRuleLabel(rule))),
+    ...todayHappyHourRules.slice(0, 2).map((rule) => buildRangeLabel(rule, 'Happy hour')),
+    ...todayEventRules.slice(0, 2).map((rule) => buildRangeLabel(rule, eventRuleLabel(rule))),
   ];
 
   return {
@@ -402,9 +469,9 @@ function buildTodayRow(venue: Venue) {
     todayHappyHourRules,
     todayEventRules,
     todayEventTypes,
-    hasSportToday,
     isRelevantToday,
-    timeAnchorMinutes,
+    primaryStartMinutes,
+    hasLunchSpecials,
     badges,
     cardEyebrow,
     timeHighlights,
@@ -414,12 +481,11 @@ function buildTodayRow(venue: Venue) {
 function matchesTodayFilter(row: TodayRow, filter: TodayFilter) {
   if (filter === 'all') return true;
   if (filter === 'happy_hour') return row.todayHappyHourRules.length > 0;
-  if (filter === 'sport') return row.hasSportToday || row.todayEventTypes.includes('sport');
+  if (filter === 'events') return row.todayEventRules.length > 0;
   if (filter === 'trivia') return row.todayEventTypes.includes('trivia');
   if (filter === 'live_music') return row.todayEventTypes.includes('live_music');
   if (filter === 'comedy') return row.todayEventTypes.includes('comedy');
   if (filter === 'karaoke') return row.todayEventTypes.includes('karaoke');
-  if (filter === 'special_event') return row.todayEventTypes.includes('special_event');
   return true;
 }
 
@@ -459,7 +525,61 @@ function collectRuleSearchParts(rule: VenueScheduleRule) {
   ];
 }
 
-function buildTodayRangeLabel(rule: VenueScheduleRule, prefix: string) {
+function getFilterHeading(filter: TodayFilter) {
+  if (filter === 'happy_hour') return 'Happy hour today';
+  if (filter === 'events') return 'Events today';
+  if (filter === 'trivia') return 'Trivia today';
+  if (filter === 'live_music') return 'Live music today';
+  if (filter === 'comedy') return 'Comedy today';
+  if (filter === 'karaoke') return 'Karaoke today';
+  return 'What&apos;s on today';
+}
+
+function getFilterSectionKind(filter: TodayFilter): SectionKind {
+  if (filter === 'happy_hour') return 'happy_hour';
+  if (filter === 'events') return 'events';
+  if (filter === 'trivia') return 'events';
+  if (filter === 'live_music') return 'events';
+  if (filter === 'comedy') return 'events';
+  if (filter === 'karaoke') return 'events';
+  return 'mixed';
+}
+
+function groupRowsByTime(rows: TodayRow[], kind: SectionKind) {
+  const groups = new Map<number, TodayRow[]>();
+
+  rows.forEach((row) => {
+    const minutes = getGroupMinutes(row, kind);
+    const current = groups.get(minutes) ?? [];
+    current.push(row);
+    groups.set(minutes, current);
+  });
+
+  return Array.from(groups.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([minutes, groupedRows]) => ({
+      label: formatTimeHeading(minutes),
+      rows: groupedRows.sort(
+        (a, b) =>
+          a.primaryStartMinutes - b.primaryStartMinutes ||
+          (a.venue.name ?? '').localeCompare(b.venue.name ?? '')
+      ),
+    }));
+}
+
+function getGroupMinutes(row: TodayRow, kind: SectionKind) {
+  if (kind === 'happy_hour' && row.todayHappyHourRules.length > 0) {
+    return Math.min(...row.todayHappyHourRules.map((rule) => clockToMinutes(rule.start_time)));
+  }
+
+  if (kind === 'events' && row.todayEventRules.length > 0) {
+    return Math.min(...row.todayEventRules.map((rule) => clockToMinutes(rule.start_time)));
+  }
+
+  return row.primaryStartMinutes;
+}
+
+function buildRangeLabel(rule: VenueScheduleRule, prefix: string) {
   const start = formatTimeForUi(rule.start_time.slice(0, 5));
   const end = formatTimeForUi(rule.end_time.slice(0, 5));
   return `${prefix} ${start} - ${end}`;
@@ -471,7 +591,7 @@ function eventRuleLabel(rule: VenueScheduleRule) {
   if (rule.schedule_type === 'comedy') return 'Comedy';
   if (rule.schedule_type === 'karaoke') return 'Karaoke';
   if (rule.schedule_type === 'dj') return 'DJ';
-  if (rule.schedule_type === 'special_event') return 'Special event';
+  if (rule.schedule_type === 'special_event') return 'Event';
   if (rule.schedule_type === 'sport') return 'Sport';
   return 'Event';
 }
@@ -479,6 +599,14 @@ function eventRuleLabel(rule: VenueScheduleRule) {
 function clockToMinutes(value: string) {
   const [hours, minutes] = value.slice(0, 5).split(':').map(Number);
   return hours * 60 + minutes;
+}
+
+
+function formatTimeHeading(minutes: number) {
+  const normalized = ((minutes % 1440) + 1440) % 1440;
+  const hour = String(Math.floor(normalized / 60)).padStart(2, '0');
+  const minute = String(normalized % 60).padStart(2, '0');
+  return formatTimeForUi(`${hour}:${minute}`);
 }
 
 function StatusPill({

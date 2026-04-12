@@ -12,7 +12,7 @@ import {
   isVenueOpenNow,
 } from '@/lib/opening-hours';
 import type { ReactNode } from 'react';
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import GoogleMap from '../components/GoogleMap';
 import TodayHoursSummary from '../components/TodayHoursSummary';
@@ -618,8 +618,9 @@ function VenuesPageContent() {
   const [sortBy, setSortBy] = useState<string>('NAME');
 
   const [expandedVenueIds, setExpandedVenueIds] = useState<Record<string, boolean>>({});
-  const [showDesktopMap, setShowDesktopMap] = useState(true);
+  const [showDesktopMap, setShowDesktopMap] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const mapSectionRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const nextSearch = searchParams.get('search') ?? '';
@@ -897,6 +898,16 @@ function VenuesPageContent() {
     return filtered.filter((v) => hasValidCoords(v.lat, v.lng));
   }, [filtered]);
 
+  useEffect(() => {
+    if (!showDesktopMap) return;
+
+    const timeout = window.setTimeout(() => {
+      mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+
+    return () => window.clearTimeout(timeout);
+  }, [showDesktopMap]);
+
   function clearFilters() {
     setSearchTerm('');
     setSuburb('ALL');
@@ -944,7 +955,7 @@ function VenuesPageContent() {
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        <div className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,128,32,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:p-7">
+        <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-orange-500/20 via-[#120805] to-black p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
               <div>
@@ -962,21 +973,21 @@ function VenuesPageContent() {
             </div>
 
             <div className="grid grid-cols-2 gap-3 self-start lg:min-w-[320px]">
-              <div className="rounded-2xl border border-white/10 bg-black/35 p-4">
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
                 <div className="text-[11px] uppercase tracking-[0.22em] text-white/45">Live area</div>
                 <div className="mt-2 text-lg font-semibold text-white">Newtown, Enmore, Erskineville</div>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-black/35 p-4">
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
                 <div className="text-[11px] uppercase tracking-[0.22em] text-white/45">Explorer mode</div>
                 <div className="mt-2 text-lg font-semibold text-white">
-                  {showDesktopMap ? 'List + map' : 'List focus'}
+                  {showDesktopMap ? 'Map open' : 'List focus'}
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="z-50 mt-6 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.25)] backdrop-blur lg:sticky lg:top-0">
+        <div className="z-50 mt-5 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.25)] backdrop-blur lg:sticky lg:top-0">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(260px,1.5fr)_minmax(180px,0.95fr)_minmax(160px,0.9fr)_auto]">
             <input
               type="text"
@@ -1218,8 +1229,38 @@ function VenuesPageContent() {
           ) : null}
         </div>
 
-        <div className="mt-8 lg:grid lg:grid-cols-12 lg:gap-6">
-          <div className={showDesktopMap ? 'lg:col-span-7 xl:col-span-8' : 'lg:col-span-12'}>
+        {showDesktopMap ? (
+          <section
+            ref={mapSectionRef}
+            id="map-section"
+            className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-4 sm:p-5"
+          >
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-300/70">
+                  Map view
+                </div>
+                <h2 className="mt-1 text-xl font-semibold text-white">Venues</h2>
+              </div>
+              <div className="text-xs uppercase tracking-[0.18em] text-white/35">
+                {mapVenues.length} mapped venue{mapVenues.length === 1 ? '' : 's'}
+              </div>
+            </div>
+
+            {mapVenues.length > 0 ? (
+              <div className="mt-4 overflow-hidden rounded-xl border border-white/10">
+                <GoogleMap venues={mapVenues} />
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-white/65">
+                No mapped venues match this filter mix yet. Try another suburb or widen the filters.
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        <div className="mt-8">
+          <div>
             {loading && <div className="text-white/70">Loading venues...</div>}
 
             {!loading && error && (
@@ -1429,12 +1470,13 @@ function VenuesPageContent() {
                           </button>
 
                           {hasValidCoords(v.lat, v.lng) ? (
-                            <a
-                              href="#map-section"
+                            <button
+                              type="button"
+                              onClick={() => setShowDesktopMap(true)}
                               className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm hover:bg-white/10 lg:hidden"
                             >
                               View on map
-                            </a>
+                            </button>
                           ) : null}
                         </div>
 
@@ -1537,41 +1579,7 @@ function VenuesPageContent() {
               </>
             )}
           </div>
-
-          {showDesktopMap ? (
-            <div className="mt-8 hidden lg:col-span-5 lg:mt-0 lg:block xl:col-span-4">
-              <div
-                id="map-section"
-                className="sticky top-[180px] rounded-2xl border border-white/10 bg-white/5 p-4"
-              >
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-white/80">Map</div>
-                    <div className="text-xs text-white/50">
-                      {mapVenues.length} mapped venue{mapVenues.length === 1 ? '' : 's'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="overflow-hidden rounded-xl border border-white/10">
-                  <GoogleMap venues={mapVenues} />
-                </div>
-              </div>
-            </div>
-          ) : null}
         </div>
-
-        {!loading && !error && filtered.length > 0 ? (
-          <div
-            id="map-section"
-            className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4 lg:hidden"
-          >
-            <div className="mb-3 text-sm font-semibold text-white/80">Map</div>
-            <div className="overflow-hidden rounded-xl border border-white/10">
-              <GoogleMap venues={mapVenues} />
-            </div>
-          </div>
-        ) : null}
 
         {showFilters ? (
           <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center sm:p-6">
