@@ -153,6 +153,7 @@ export const PUBLIC_VENUE_SELECT = `
   opening_hours,
   kitchen_hours,
   happy_hour_hours,
+  bottle_shop_hours,
   timezone,
   is_temporarily_closed,
   status,
@@ -380,7 +381,11 @@ export function getTodayRulesForType(rules: VenueScheduleRule[], timezone: strin
   return rules.filter((rule) => rule.day_of_week === today);
 }
 
-export function buildPublicVenueHref(venue: Pick<Venue, 'name' | 'suburb'>) {
+export function buildPublicVenueHref(venue: Pick<Venue, 'id' | 'name' | 'suburb'>) {
+  if (venue.id?.trim()) {
+    return `/venues/${encodeURIComponent(venue.id.trim())}`;
+  }
+
   const basePath = isLiveInnerWestSuburb(venue.suburb) ? '/venues' : '/futurevenues';
   if (!venue.name?.trim()) return basePath;
   return `${basePath}?search=${encodeURIComponent(venue.name.trim())}`;

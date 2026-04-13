@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { nswFetch } from "@/lib/nsw";
+import { supabaseServer } from "@/lib/supabaseServer";
 
 type BrowseRow = {
   licenceID?: string;
@@ -88,13 +88,7 @@ export async function POST(req: Request) {
       for (const pc of suburbToPostcode[S] ?? []) searchTerms.push(pc);
     }
 
-    // env / supabase
-    const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    if (!SUPABASE_URL) throw new Error("Missing env: NEXT_PUBLIC_SUPABASE_URL");
-    if (!SERVICE_ROLE) throw new Error("Missing env: SUPABASE_SERVICE_ROLE_KEY");
-
-    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
+    const supabase = supabaseServer();
 
     // Track unique licence_ids imported per suburb (avoid double counting)
     const importedIdsBySuburb: Record<string, Set<string>> = {};

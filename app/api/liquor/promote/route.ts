@@ -1,11 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-function requiredEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env var: ${name}`);
-  return v;
-}
+import { supabaseServer } from "@/lib/supabaseServer";
 
 export async function GET() {
   return NextResponse.json({ ok: true, message: "promote route is live" });
@@ -23,11 +17,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const supabase = createClient(
-      requiredEnv("NEXT_PUBLIC_SUPABASE_URL"),
-      requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
-      { auth: { persistSession: false } }
-    );
+    const supabase = supabaseServer();
 
     // IMPORTANT: find by either:
     // 1) liquor_venues.licence_id (snake_case) OR

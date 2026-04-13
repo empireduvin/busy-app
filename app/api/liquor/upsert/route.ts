@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseServer } from "@/lib/supabaseServer";
 
 /**
  * Temporary GET handler so we can confirm the route exists.
@@ -10,12 +10,6 @@ export async function GET() {
     ok: true,
     message: "upsert route is live",
   });
-}
-
-function requiredEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env var: ${name}`);
-  return v;
 }
 
 export async function POST(req: Request) {
@@ -30,11 +24,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const supabase = createClient(
-      requiredEnv("NEXT_PUBLIC_SUPABASE_URL"),
-      requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
-      { auth: { persistSession: false } }
-    );
+    const supabase = supabaseServer();
 
     const payload = rows
       .filter((r: any) => r.licenceID)

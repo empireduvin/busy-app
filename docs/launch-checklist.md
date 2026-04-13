@@ -9,6 +9,10 @@
 - [ ] Confirm the production Supabase project is the intended long-term project.
 - [ ] Confirm the production Supabase project has the required schema, RLS policies, users, and seeded values used by the app.
 - [ ] Confirm `.env.example` matches the final environment-variable naming you want to keep.
+- [ ] Review:
+  - [ ] [docs/vercel-deployment.md](/c:/Users/nickn/busy-app/docs/vercel-deployment.md)
+  - [ ] [docs/release-smoke-tests.md](/c:/Users/nickn/busy-app/docs/release-smoke-tests.md)
+  - [ ] [docs/supabase-soft-launch-checks.md](/c:/Users/nickn/busy-app/docs/supabase-soft-launch-checks.md)
 
 ## 2. Vercel configuration
 - [ ] Create a Vercel project from this repository.
@@ -25,6 +29,7 @@
   - [ ] `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
   - [ ] `GOOGLE_MAPS_API_KEY`
 - [ ] Trigger the first production deploy.
+- [ ] Record the exact commit hash being deployed.
 
 ## 3. Production verification
 - [ ] Check the public routes:
@@ -93,3 +98,4 @@
 - [ ] Turn manual Supabase setup into committed migrations.
 - [ ] Add smoke tests for the highest-risk flows.
 - [ ] Continue mobile polish based on real-device testing.
+- [ ] Record the deployed commit, smoke-test outcome, and any rollback action.

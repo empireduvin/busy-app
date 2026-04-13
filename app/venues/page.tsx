@@ -3,6 +3,7 @@
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import { isBottleShopVenueType } from '@/lib/venue-type-rules';
 import { PUBLIC_VENUE_SELECT, splitVenuesByLaunchArea } from '@/lib/public-venue-discovery';
+import { buildPublicVenueHref } from '@/lib/public-venue-discovery';
 import {
   formatTimeForUi,
   getClosingSoonText,
@@ -13,7 +14,8 @@ import {
 } from '@/lib/opening-hours';
 import type { ReactNode } from 'react';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
+import { getSupabaseBrowserClientResult } from '@/lib/supabase-browser';
+import { BROWSER_SUPABASE_ENV_ERROR } from '@/lib/public-env';
 import GoogleMap from '../components/GoogleMap';
 import TodayHoursSummary from '../components/TodayHoursSummary';
 import WeeklyTimelineChart from '../components/WeeklyTimelineChart';
@@ -153,7 +155,7 @@ type Venue = {
   venue_schedule_rules?: VenueScheduleRule[] | null;
 };
 
-const supabase = getSupabaseBrowserClient();
+const supabase = getSupabaseBrowserClientResult().client;
 
 const DAY_ORDER: DayOfWeek[] = [
   'monday',
@@ -636,7 +638,7 @@ function VenuesPageContent() {
 
       if (!supabase) {
         setError(
-          'Missing Supabase env vars. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local, then restart npm run dev.'
+          `${BROWSER_SUPABASE_ENV_ERROR} Restart the app after updating your env.`
         );
         setVenues([]);
         setLoading(false);
@@ -723,6 +725,142 @@ function VenuesPageContent() {
     foodMaxPrice,
     overallHhMaxPrice,
     eventFilters,
+  ]);
+
+  const hasActiveFilters = useMemo(
+    () =>
+      searchTerm.trim().length > 0 ||
+      suburb !== 'ALL' ||
+      venueType !== 'ALL' ||
+      openNowOnly ||
+      openLateOnly ||
+      happyHourNowOnly ||
+      kitchenOpenNowOnly ||
+      filterSport ||
+      filterBYO ||
+      filterDog ||
+      filterKid ||
+      eventsOnly ||
+      Object.values(eventFilters).some(Boolean) ||
+      hhWine ||
+      hhBeer ||
+      hhSpirits ||
+      hhCocktails ||
+      hhFood ||
+      beerMaxPrice !== 'ALL' ||
+      wineMaxPrice !== 'ALL' ||
+      cocktailMaxPrice !== 'ALL' ||
+      foodMaxPrice !== 'ALL' ||
+      overallHhMaxPrice !== 'ALL' ||
+      minGoogleRating !== 'ALL' ||
+      priceFilter !== 'ALL' ||
+      sortBy !== 'NAME',
+    [
+      beerMaxPrice,
+      cocktailMaxPrice,
+      eventFilters,
+      eventsOnly,
+      filterBYO,
+      filterDog,
+      filterKid,
+      filterSport,
+      foodMaxPrice,
+      happyHourNowOnly,
+      hhBeer,
+      hhCocktails,
+      hhFood,
+      hhSpirits,
+      hhWine,
+      kitchenOpenNowOnly,
+      minGoogleRating,
+      openLateOnly,
+      openNowOnly,
+      overallHhMaxPrice,
+      priceFilter,
+      searchTerm,
+      sortBy,
+      suburb,
+      venueType,
+      wineMaxPrice,
+    ]
+  );
+
+  const appliedFilterLabels = useMemo(() => {
+    const labels: string[] = [];
+
+    if (searchTerm.trim()) labels.push(`Search: "${searchTerm.trim()}"`);
+    if (suburb !== 'ALL') labels.push(`Suburb: ${suburb}`);
+    if (venueType !== 'ALL') labels.push(`Type: ${venueType}`);
+    if (openNowOnly) labels.push('Open now');
+    if (openLateOnly) labels.push('Open late');
+    if (happyHourNowOnly) labels.push('Happy hour live');
+    if (kitchenOpenNowOnly) labels.push('Kitchen open');
+    if (filterSport) labels.push('Sport');
+    if (filterBYO) labels.push('BYO');
+    if (filterDog) labels.push('Dog');
+    if (filterKid) labels.push('Kid');
+    if (eventsOnly) labels.push('Any events');
+
+    Object.entries(eventFilters).forEach(([key, enabled]) => {
+      if (!enabled) return;
+      const match = EVENT_FILTER_OPTIONS.find((option) => option.type === key);
+      if (match) labels.push(match.label.replace(/[^\x20-\x7E]/g, '').trim());
+    });
+
+    if (hhWine) labels.push('Wine deals');
+    if (hhBeer) labels.push('Beer deals');
+    if (hhSpirits) labels.push('Spirits deals');
+    if (hhCocktails) labels.push('Cocktail deals');
+    if (hhFood) labels.push('Food deals');
+    if (beerMaxPrice !== 'ALL') labels.push(`Beer <= $${beerMaxPrice}`);
+    if (wineMaxPrice !== 'ALL') labels.push(`Wine <= $${wineMaxPrice}`);
+    if (cocktailMaxPrice !== 'ALL') labels.push(`Cocktails <= $${cocktailMaxPrice}`);
+    if (foodMaxPrice !== 'ALL') labels.push(`Food <= $${foodMaxPrice}`);
+    if (overallHhMaxPrice !== 'ALL') labels.push(`Any deal <= $${overallHhMaxPrice}`);
+    if (minGoogleRating !== 'ALL') labels.push(`Rating ${minGoogleRating}+`);
+    if (priceFilter !== 'ALL') labels.push(`Price ${priceFilter}`);
+    if (sortBy !== 'NAME') {
+      const sortLabel =
+        sortBy === 'RATING_DESC'
+          ? 'Highest Rated'
+          : sortBy === 'REVIEWS_DESC'
+            ? 'Most Reviews'
+            : sortBy === 'PRICE_ASC'
+              ? 'Cheapest'
+              : sortBy === 'PRICE_DESC'
+                ? 'Most Expensive'
+                : null;
+      if (sortLabel) labels.push(`Sort: ${sortLabel}`);
+    }
+
+    return labels;
+  }, [
+    beerMaxPrice,
+    cocktailMaxPrice,
+    eventFilters,
+    eventsOnly,
+    filterBYO,
+    filterDog,
+    filterKid,
+    filterSport,
+    foodMaxPrice,
+    happyHourNowOnly,
+    hhBeer,
+    hhCocktails,
+    hhFood,
+    hhSpirits,
+    hhWine,
+    kitchenOpenNowOnly,
+    minGoogleRating,
+    overallHhMaxPrice,
+    openLateOnly,
+    openNowOnly,
+    priceFilter,
+    searchTerm,
+    sortBy,
+    suburb,
+    venueType,
+    wineMaxPrice,
   ]);
 
   const filtered = useMemo(() => {
@@ -972,7 +1110,7 @@ function VenuesPageContent() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 self-start lg:min-w-[320px]">
+            <div className="grid grid-cols-1 gap-3 self-start sm:grid-cols-2 lg:min-w-[320px]">
               <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
                 <div className="text-[11px] uppercase tracking-[0.22em] text-white/45">Live area</div>
                 <div className="mt-2 text-lg font-semibold text-white">Newtown, Enmore, Erskineville</div>
@@ -989,18 +1127,29 @@ function VenuesPageContent() {
 
         <div className="z-50 mt-5 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.25)] backdrop-blur lg:sticky lg:top-0">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(260px,1.5fr)_minmax(180px,0.95fr)_minmax(160px,0.9fr)_auto]">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search venue"
-              className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white placeholder:text-white/35"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search venue, suburb, or what you're after"
+                className="h-11 w-full rounded-xl border border-white/10 bg-black px-3 pr-20 text-sm text-white placeholder:text-white/35"
+              />
+              {searchTerm.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-white/70 hover:bg-white/10 hover:text-white"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
 
             <select
               value={suburb}
               onChange={(e) => setSuburb(e.target.value)}
-              className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
+              className="h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
             >
               {suburbs.map((s) => (
                 <option key={s} value={s}>
@@ -1012,7 +1161,7 @@ function VenuesPageContent() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="h-10 min-w-0 rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
+              className="h-11 min-w-0 rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
             >
               <option value="NAME">Sort by venue</option>
               <option value="RATING_DESC">Highest Rated</option>
@@ -1021,11 +1170,11 @@ function VenuesPageContent() {
               <option value="PRICE_DESC">Most Expensive</option>
             </select>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <button
                 type="button"
                 onClick={() => setShowFilters((prev) => !prev)}
-                className="rounded-xl border border-orange-400/30 bg-orange-500/10 px-4 py-2 text-sm font-medium text-orange-100 hover:bg-orange-500/15"
+                className="rounded-xl border border-orange-400/30 bg-orange-500/10 px-4 py-2.5 text-sm font-medium text-orange-100 hover:bg-orange-500/15"
               >
                 {showFilters ? 'Close filters' : 'Advanced filters'}
                 {advancedFilterCount > 0 ? ` (${advancedFilterCount})` : ''}
@@ -1034,21 +1183,21 @@ function VenuesPageContent() {
               <button
                 type="button"
                 onClick={() => setShowDesktopMap((prev) => !prev)}
-                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10"
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm text-white hover:bg-white/10"
               >
                 {showDesktopMap ? 'Hide map' : 'Show map'}
               </button>
 
               <button
                 onClick={clearFilters}
-                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10"
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm text-white hover:bg-white/10"
               >
                 Clear all
               </button>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-4 flex flex-wrap items-center gap-2.5">
             <CompactToggle label="Open now" checked={openNowOnly} onChange={setOpenNowOnly} />
             <CompactToggle label="Happy hour live" checked={happyHourNowOnly} onChange={setHappyHourNowOnly} />
             <CompactToggle label="Kitchen open" checked={kitchenOpenNowOnly} onChange={setKitchenOpenNowOnly} />
@@ -1058,6 +1207,34 @@ function VenuesPageContent() {
             <CompactToggle label="Kid" checked={filterKid} onChange={setFilterKid} />
             <CompactToggle label="Events" checked={eventsOnly} onChange={setEventsOnly} />
           </div>
+
+          {hasActiveFilters ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
+                Applied
+              </span>
+              {appliedFilterLabels.slice(0, 8).map((label) => (
+                <span
+                  key={label}
+                  className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs text-white/70"
+                >
+                  {label}
+                </span>
+              ))}
+              {appliedFilterLabels.length > 8 ? (
+                <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs text-white/55">
+                  +{appliedFilterLabels.length - 8} more
+                </span>
+              ) : null}
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="text-sm text-orange-200 underline underline-offset-4 hover:text-white"
+              >
+                Clear all
+              </button>
+            </div>
+          ) : null}
 
           {showFilters ? (
             <div className="hidden">
@@ -1272,7 +1449,19 @@ function VenuesPageContent() {
 
             {!loading && !error && filtered.length === 0 && (
               <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] p-6 text-white/70">
-                Nothing matches this filter mix right now. Clear a few filters or open advanced filters to widen the search.
+                <div>Nothing matches this filter mix right now.</div>
+                <div className="mt-2 text-white/55">
+                  Clear a few filters or open advanced filters to widen the search.
+                </div>
+                {hasActiveFilters ? (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="mt-4 text-sm text-orange-200 underline underline-offset-4 hover:text-white"
+                  >
+                    Clear all filters
+                  </button>
+                ) : null}
               </div>
             )}
 
@@ -1281,6 +1470,8 @@ function VenuesPageContent() {
                 <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/60">
                   Showing {filtered.length} venue{filtered.length === 1 ? '' : 's'}
                   {searchTerm.trim() ? ` for "${searchTerm.trim()}"` : ''}
+                  {suburb !== 'ALL' ? ` in ${suburb}` : ''}
+                  {venueType !== 'ALL' ? ` for ${venueType.toLowerCase()}` : ''}
                 </div>
 
                 <div className="grid grid-cols-1 gap-4">
@@ -1520,6 +1711,13 @@ function VenuesPageContent() {
                         ) : null}
 
                         <div className="mt-4 flex flex-wrap gap-3 text-sm">
+                          <a
+                            className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
+                            href={buildPublicVenueHref(v)}
+                          >
+                            Explore venue
+                          </a>
+
                           {isExpanded ? (
                             <button
                               type="button"
@@ -1783,7 +1981,7 @@ function CompactToggle({
       type="button"
       onClick={() => onChange(!checked)}
       className={[
-        'inline-flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-xs leading-none',
+        'inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-[13px] leading-none sm:h-9 sm:gap-1.5 sm:px-2.5 sm:text-xs',
         checked
           ? 'border-white/30 bg-white/15'
           : 'border-white/10 bg-white/5 hover:bg-white/10',

@@ -1,8 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
+import { getPublicSupabaseEnvResult } from "@/lib/public-env";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!;
+const publicEnv = getPublicSupabaseEnvResult();
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = publicEnv.env
+  ? createClient(publicEnv.env.url, publicEnv.env.anonKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    })
+  : null;

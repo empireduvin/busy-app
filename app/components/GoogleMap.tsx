@@ -208,11 +208,7 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
 
       <div
         ref={mapDivRef}
-        className="w-full overflow-hidden rounded-2xl border border-white/10"
-        style={{
-          height: "min(70vh, 720px)",
-          minHeight: 420,
-        }}
+        className="h-[min(62vh,560px)] min-h-[300px] w-full overflow-hidden rounded-2xl border border-white/10 sm:h-[min(70vh,720px)] sm:min-h-[420px]"
       />
     </div>
   );

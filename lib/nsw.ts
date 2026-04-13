@@ -1,21 +1,15 @@
+import { getNswEnv } from '@/lib/server-env';
+
 // busy-app/lib/nsw.ts
 
 type TokenCache = { token: string; expiresAt: number } | null;
 let cache: TokenCache = null;
 
-function requiredEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env var: ${name}`);
-  return v;
-}
-
 /**
  * Get OAuth access token from NSW OneGov
  */
 export async function getNswAccessToken(): Promise<string> {
-  const apiKey = requiredEnv("NSW_API_KEY");
-  const apiSecret = requiredEnv("NSW_API_SECRET");
-  const oauthUrl = requiredEnv("NSW_OAUTH_URL");
+  const { apiKey, apiSecret, oauthUrl } = getNswEnv();
 
   const now = Date.now();
   if (cache && cache.expiresAt > now + 30_000) {
@@ -68,7 +62,7 @@ export async function getNswAccessToken(): Promise<string> {
  * Generic NSW API fetch helper
  */
 export async function nswFetch(path: string, init?: RequestInit) {
-  const base = requiredEnv("NSW_LIQUOR_BASE_URL");
+  const { apiKey, baseUrl } = getNswEnv();
   const token = await getNswAccessToken();
 
   const headers: Record<string, string> = {
@@ -76,12 +70,12 @@ export async function nswFetch(path: string, init?: RequestInit) {
     Accept: "application/json",
 
     // Liquor Register API requires this exact header name
-    apikey: requiredEnv("NSW_API_KEY"),
+    apikey: apiKey,
 
     ...(init?.headers as Record<string, string> | undefined),
   };
 
-  const url = `${base}${path.startsWith("/") ? "" : "/"}${path}`;
+  const url = `${baseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
 
   const res = await fetch(url, {
     ...init,

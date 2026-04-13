@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
+import { getSupabaseBrowserClientResult } from '@/lib/supabase-browser';
+import { BROWSER_SUPABASE_ENV_ERROR } from '@/lib/public-env';
 import {
   PUBLIC_VENUE_SELECT,
   splitVenuesByLaunchArea,
@@ -9,7 +10,7 @@ import {
 } from '@/lib/public-venue-discovery';
 
 export function usePublicVenueCollections() {
-  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  const supabase = useMemo(() => getSupabaseBrowserClientResult().client, []);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +24,7 @@ export function usePublicVenueCollections() {
 
       if (!supabase) {
         setError(
-          'Missing Supabase env vars. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY and restart.'
+          `${BROWSER_SUPABASE_ENV_ERROR} Restart the app after updating your env.`
         );
         setVenues([]);
         setLoading(false);

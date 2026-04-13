@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   buildPublicVenueHref,
   getVenueTypeLabel,
@@ -29,6 +30,7 @@ export default function PublicVenueCard({
   tone?: CardTone;
   heroBadge?: ReactNode;
 }) {
+  const router = useRouter();
   const venueTypeLabel = getVenueTypeLabel(venue);
   const websiteHref = buildPublicVenueHref(venue);
   const toneClasses =
@@ -41,10 +43,19 @@ export default function PublicVenueCard({
   return (
     <article
       className={[
-        'relative overflow-hidden rounded-[28px] border shadow-[0_20px_60px_rgba(0,0,0,0.28)]',
+        'relative overflow-hidden rounded-[28px] border shadow-[0_20px_60px_rgba(0,0,0,0.28)] transition hover:border-white/20 hover:bg-white/[0.07]',
         toneClasses,
         compact ? 'p-4' : 'p-5',
       ].join(' ')}
+      role="link"
+      tabIndex={0}
+      onClick={() => router.push(websiteHref)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          router.push(websiteHref);
+        }
+      }}
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,122,40,0.12),transparent_32%)]" />
 
@@ -104,7 +115,8 @@ export default function PublicVenueCard({
         <div className={['mt-5 flex flex-wrap text-sm', compact ? 'gap-2' : 'gap-3'].join(' ')}>
           <a
             href={websiteHref}
-            className="rounded-xl border border-white/15 bg-white/6 px-3 py-2 text-white transition hover:bg-white/10"
+            onClick={(event) => event.stopPropagation()}
+            className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/15 bg-white/6 px-3 py-2 text-white transition hover:bg-white/10"
           >
             Explore venue
           </a>
@@ -113,7 +125,8 @@ export default function PublicVenueCard({
               href={venue.website_url}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
+              onClick={(event) => event.stopPropagation()}
+              className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
             >
               Website
             </a>
@@ -121,7 +134,8 @@ export default function PublicVenueCard({
           {venue.phone ? (
             <a
               href={`tel:${venue.phone}`}
-              className="rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
+              onClick={(event) => event.stopPropagation()}
+              className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
             >
               Call
             </a>
@@ -131,7 +145,8 @@ export default function PublicVenueCard({
               href={venue.google_maps_uri}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
+              onClick={(event) => event.stopPropagation()}
+              className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
             >
               Maps
             </a>

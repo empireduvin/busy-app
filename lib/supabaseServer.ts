@@ -1,16 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
-
-function requiredEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env var: ${name}`);
-  return v;
-}
+import { getSupabaseServerEnv } from "@/lib/server-env";
 
 export function supabaseServer() {
-  const url = requiredEnv("NEXT_PUBLIC_SUPABASE_URL");
-  const serviceKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const { url, serviceRoleKey } = getSupabaseServerEnv();
 
-  return createClient(url, serviceKey, {
+  return createClient(url, serviceRoleKey, {
     auth: { persistSession: false },
   });
 }

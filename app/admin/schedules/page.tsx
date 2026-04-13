@@ -998,6 +998,18 @@ function getAdminFriendlyErrorMessage(error: unknown, fallback: string) {
   const rawMessage = getErrorMessage(error, fallback);
   const normalized = rawMessage.toLowerCase();
   if (
+    normalized.includes('missing admin authorization token') ||
+    normalized.includes('invalid or expired admin session')
+  ) {
+    return 'Your admin session has expired. Sign in again, then retry the action.';
+  }
+  if (
+    normalized.includes('not allowed to perform admin actions') ||
+    normalized.includes('status 403')
+  ) {
+    return 'This account does not have permission to complete that admin action.';
+  }
+  if (
     normalized.includes('is not a function') ||
     normalized.includes('__turbopack__')
   ) {
@@ -1360,7 +1372,13 @@ export default function AdminMasterPage() {
     const json = (await response.json()) as { ok?: boolean; error?: string } & T;
 
     if (!response.ok || json?.ok === false) {
-      throw new Error(json?.error || `Request failed with status ${response.status}`);
+      const fallback =
+        response.status === 401
+          ? 'Your admin session has expired. Sign in again and retry.'
+          : response.status === 403
+          ? 'This account is not allowed to perform that admin action.'
+          : `Request failed with status ${response.status}`;
+      throw new Error(json?.error || fallback);
     }
 
     return json;
@@ -2939,6 +2957,23 @@ export default function AdminMasterPage() {
   const enteredTimeBlockCount = timeBlocks.filter(
     (block) => block.start_time.trim() && block.end_time.trim()
   ).length;
+  const activeAdminTask = savingSchedule
+    ? 'Saving schedule changes'
+    : clearingSchedule
+    ? 'Deleting schedule rows'
+    : savingVenue
+    ? 'Saving venue details'
+    : savingVenueAccess
+    ? 'Updating venue access'
+    : savingGlobalVenueAccess
+    ? 'Assigning venues to a portal user'
+    : googleLoading
+    ? 'Searching Google places'
+    : null;
+  const scheduleReplaceWarning =
+    saveMode === 'replace'
+      ? 'Overwrite days will remove existing rows for the selected days before saving the new set.'
+      : 'Add to existing will keep current rows and add the new rows alongside them.';
 
   return (
     <div className="min-h-screen bg-neutral-50">
@@ -3056,6 +3091,13 @@ export default function AdminMasterPage() {
         {venuesError ? (
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
             {venuesError}
+          </div>
+        ) : null}
+
+        {activeAdminTask ? (
+          <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            <div className="font-semibold">Working on it</div>
+            <div className="mt-1 text-blue-800">{activeAdminTask}. Please wait for the confirmation message before moving on.</div>
           </div>
         ) : null}
 
@@ -3332,7 +3374,10 @@ export default function AdminMasterPage() {
               ) : null}
 
               <div className="mb-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
-                <div className="text-sm font-semibold text-neutral-900">Current plan</div>
+                <div className="text-sm font-semibold text-neutral-900">Ready to save</div>
+                <div className="mt-1 text-xs text-neutral-600">
+                  Review the impact below before saving or deleting anything.
+                </div>
                 <div className="mt-2 grid gap-3 text-sm text-neutral-700 md:grid-cols-2">
                   <div>
                     <span className="font-medium">Schedule type:</span> {getScheduleTypeLabel(scheduleType)}
@@ -3351,6 +3396,15 @@ export default function AdminMasterPage() {
                     <span className="font-medium">Time blocks entered:</span> {enteredTimeBlockCount}
                   </div>
                 </div>
+                <div
+                  className={`mt-3 rounded-xl px-3 py-2 text-sm ${
+                    saveMode === 'replace'
+                      ? 'border border-amber-200 bg-amber-50 text-amber-900'
+                      : 'border border-blue-200 bg-blue-50 text-blue-900'
+                  }`}
+                >
+                  {scheduleReplaceWarning}
+                </div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -3367,7 +3421,11 @@ export default function AdminMasterPage() {
                     <div className="mt-2 text-xs text-neutral-500">
                       Event rows only appear on the website when published details exist for that venue and day.
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="mt-2 text-xs text-neutral-500">
+                      Use opening, kitchen, happy hour, or bottle shop hours to keep the public venue view in sync.
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium">Mode</label>
@@ -3379,6 +3437,11 @@ export default function AdminMasterPage() {
                     <option value="replace">Overwrite days</option>
                     <option value="append">Add to existing</option>
                   </select>
+                  <div className="mt-2 text-xs text-neutral-500">
+                    {saveMode === 'replace'
+                      ? 'Best when you want the selected days to exactly match the rows below.'
+                      : 'Best when you want to layer in extra sessions without removing current rows.'}
+                  </div>
                 </div>
               </div>
               <div className="mt-4">
@@ -3447,27 +3510,37 @@ export default function AdminMasterPage() {
                 <div className="space-y-3">
                   {timeBlocks.map((block, index) => (
                     <div key={index} className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-                      <input
-                        type="time"
-                        value={block.start_time}
-                        onChange={(e) =>
-                          updateTimeBlock(index, 'start_time', e.target.value)
-                        }
-                        className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                      />
-                      <input
-                        type="time"
-                        value={block.end_time}
-                        onChange={(e) =>
-                          updateTimeBlock(index, 'end_time', e.target.value)
-                        }
-                        className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                      />
+                      <div>
+                        <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">
+                          Start
+                        </label>
+                        <input
+                          type="time"
+                          value={block.start_time}
+                          onChange={(e) =>
+                            updateTimeBlock(index, 'start_time', e.target.value)
+                          }
+                          className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">
+                          End
+                        </label>
+                        <input
+                          type="time"
+                          value={block.end_time}
+                          onChange={(e) =>
+                            updateTimeBlock(index, 'end_time', e.target.value)
+                          }
+                          className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeTimeBlock(index)}
                         disabled={timeBlocks.length === 1}
-                        className="rounded-xl border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        className="mt-6 rounded-xl border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
                       >
                         Remove
                       </button>
@@ -3476,38 +3549,53 @@ export default function AdminMasterPage() {
                 </div>
               </div>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Title"
-                  className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                />
-                <input
-                  type="text"
-                  value={dealText}
-                  onChange={(e) => setDealText(e.target.value)}
-                  placeholder="Deal text"
-                  className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Title</label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Optional public heading"
+                    className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Deal text</label>
+                  <input
+                    type="text"
+                    value={dealText}
+                    onChange={(e) => setDealText(e.target.value)}
+                    placeholder="Short line for the public card"
+                    className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="mt-3">
+                <label className="mb-1 block text-sm font-medium">Description</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Public-facing detail or context for this activity"
+                  rows={3}
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                 />
               </div>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Description"
-                rows={2}
-                className="mt-3 w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-              />
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Notes"
-                rows={2}
-                className="mt-3 w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-              />
+              <div className="mt-3">
+                <label className="mb-1 block text-sm font-medium">Internal notes</label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Operator notes, sourcing notes, or reminders"
+                  rows={3}
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                />
+              </div>
               {scheduleType === 'happy_hour' && (
                 <div className="mt-4 rounded-2xl border border-pink-200 bg-pink-50 p-4">
                   <h3 className="mb-3 font-semibold">Happy Hour Items</h3>
+                  <div className="mb-3 text-sm text-pink-900/80">
+                    Add the items you want to surface publicly. Keep names clean, pricing short, and notes useful for guests.
+                  </div>
                   <div className="space-y-3">
                     {(['beer', 'wine', 'spirits', 'cocktails', 'food'] as const).map((category) => (
                       <HappyHourCategoryEditor
@@ -3643,60 +3731,100 @@ export default function AdminMasterPage() {
                   {venueErrorMessage}
                 </div>
               )}
-              <input
-                type="text"
-                value={venueForm.name}
-                onChange={(e) => updateVenueForm('name', e.target.value)}
-                placeholder="Venue name"
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm mb-3"
-              />
-              <input
-                type="text"
-                value={venueForm.suburb}
-                onChange={(e) => updateVenueForm('suburb', e.target.value)}
-                placeholder="Suburb"
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm mb-3"
-              />
-              <select
-                value={venueForm.venue_type_id}
-                onChange={(e) => updateVenueForm('venue_type_id', e.target.value)}
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm mb-3"
-              >
-                <option value="">Select type</option>
-                {venueTypes.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.display_name}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="text"
-                value={venueForm.address}
-                onChange={(e) => updateVenueForm('address', e.target.value)}
-                placeholder="Address"
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm mb-3"
-              />
-              <input
-                type="text"
-                value={venueForm.phone}
-                onChange={(e) => updateVenueForm('phone', e.target.value)}
-                placeholder="Phone"
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm mb-3"
-              />
-              <input
-                type="text"
-                value={venueForm.website_url}
-                onChange={(e) => updateVenueForm('website_url', e.target.value)}
-                placeholder="Website"
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm mb-3"
-              />
-              <input
-                type="text"
-                value={venueForm.sport_types}
-                onChange={(e) => updateVenueForm('sport_types', e.target.value)}
-                placeholder="Sport types, e.g. AFL, NRL, UFC"
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm mb-3"
-              />
+              <div className="mb-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                <div className="text-sm font-semibold text-neutral-900">Venue save summary</div>
+                <div className="mt-1 text-xs text-neutral-600">
+                  Google results can prefill the form, but nothing changes live until you save.
+                </div>
+                <div className="mt-3 grid gap-3 text-sm text-neutral-700 md:grid-cols-2">
+                  <div><span className="font-medium">Editing:</span> {venueForm.id ? 'Existing venue' : 'New venue draft'}</div>
+                  <div><span className="font-medium">Venue type list:</span> {loadingVenueTypes ? 'Loading…' : `${venueTypes.length} available`}</div>
+                  <div><span className="font-medium">Name:</span> {venueForm.name.trim() || 'Not entered yet'}</div>
+                  <div><span className="font-medium">Suburb:</span> {venueForm.suburb.trim() || 'Not entered yet'}</div>
+                </div>
+              </div>
+              <div className="mb-3">
+                <label className="mb-1 block text-sm font-medium">Venue name</label>
+                <input
+                  type="text"
+                  value={venueForm.name}
+                  onChange={(e) => updateVenueForm('name', e.target.value)}
+                  placeholder="Venue name"
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="mb-3 grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Suburb</label>
+                  <input
+                    type="text"
+                    value={venueForm.suburb}
+                    onChange={(e) => updateVenueForm('suburb', e.target.value)}
+                    placeholder="Suburb"
+                    className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Venue type</label>
+                  <select
+                    value={venueForm.venue_type_id}
+                    onChange={(e) => updateVenueForm('venue_type_id', e.target.value)}
+                    className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  >
+                    <option value="">Select type</option>
+                    {venueTypes.map((type) => (
+                      <option key={type.id} value={type.id}>
+                        {type.display_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="mb-3">
+                <label className="mb-1 block text-sm font-medium">Address</label>
+                <input
+                  type="text"
+                  value={venueForm.address}
+                  onChange={(e) => updateVenueForm('address', e.target.value)}
+                  placeholder="Street address"
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="mb-3 grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Phone</label>
+                  <input
+                    type="text"
+                    value={venueForm.phone}
+                    onChange={(e) => updateVenueForm('phone', e.target.value)}
+                    placeholder="Phone"
+                    className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Website</label>
+                  <input
+                    type="text"
+                    value={venueForm.website_url}
+                    onChange={(e) => updateVenueForm('website_url', e.target.value)}
+                    placeholder="https://..."
+                    className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="mb-3">
+                <label className="mb-1 block text-sm font-medium">Sport types</label>
+                <input
+                  type="text"
+                  value={venueForm.sport_types}
+                  onChange={(e) => updateVenueForm('sport_types', e.target.value)}
+                  placeholder="AFL, NRL, UFC"
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                />
+                <div className="mt-1 text-xs text-neutral-500">
+                  Only fill this in if the venue actually promotes live sport.
+                </div>
+              </div>
               <div className="mb-4 grid gap-3 sm:grid-cols-2">
                 <button
                   type="button"
@@ -3776,7 +3904,7 @@ export default function AdminMasterPage() {
                   onClick={resetVenueForm}
                   className="rounded-xl border border-neutral-300 px-4 py-2 text-sm font-semibold hover:bg-neutral-100"
                 >
-                  Reset
+                  Clear form
                 </button>
               </div>
 

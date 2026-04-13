@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAdminRequest } from '@/lib/admin-server';
+import { getErrorStatus } from '@/lib/authz';
 
 type ScheduleType =
   | 'opening'
@@ -199,7 +200,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { status: getErrorStatus(error) }
     );
   }
 }

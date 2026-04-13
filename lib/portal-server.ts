@@ -1,4 +1,5 @@
 import { supabaseServer } from '@/lib/supabaseServer';
+import { AuthzError } from '@/lib/authz';
 
 export async function requirePortalVenueRequest(
   request: Request,
@@ -10,11 +11,11 @@ export async function requirePortalVenueRequest(
     : '';
 
   if (!token) {
-    throw new Error('Missing portal authorization token.');
+    throw new AuthzError('Missing portal authorization token.', 401);
   }
 
   if (!venueId?.trim()) {
-    throw new Error('Missing portal venue id.');
+    throw new AuthzError('Missing portal venue id.', 400);
   }
 
   const supabase = supabaseServer();
@@ -24,7 +25,7 @@ export async function requirePortalVenueRequest(
   } = await supabase.auth.getUser(token);
 
   if (userError || !user) {
-    throw new Error('Invalid or expired portal session.');
+    throw new AuthzError('Invalid or expired portal session.', 401);
   }
 
   const { data: adminRow, error: adminError } = await supabase
@@ -52,7 +53,7 @@ export async function requirePortalVenueRequest(
     }
 
     if (!venueAccessRow?.venue_id) {
-      throw new Error('This account is not allowed to manage this venue.');
+      throw new AuthzError('This account is not allowed to manage this venue.', 403);
     }
   }
 

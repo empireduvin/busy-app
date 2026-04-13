@@ -1,23 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-
-function requiredEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env var: ${name}`);
-  return v;
-}
-
-function getPublicSupabaseKey() {
-  return (
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||
-    (() => {
-      throw new Error(
-        "Missing env var: NEXT_PUBLIC_SUPABASE_ANON_KEY (or legacy NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY)"
-      );
-    })()
-  );
-}
+import { getPublicSupabaseEnv } from "@/lib/public-env";
 
 export async function GET(req: Request) {
   try {
@@ -26,11 +9,8 @@ export async function GET(req: Request) {
     const suburb = url.searchParams.get("suburb")?.trim() ?? "";
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 20) || 20, 200);
 
-    const sb = createClient(
-      requiredEnv("NEXT_PUBLIC_SUPABASE_URL"),
-      getPublicSupabaseKey(),
-      { auth: { persistSession: false } }
-    );
+    const { url: supabaseUrl, anonKey } = getPublicSupabaseEnv();
+    const sb = createClient(supabaseUrl, anonKey, { auth: { persistSession: false } });
 
     let query = sb
       .from("liquor_venues")
@@ -48,9 +28,12 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ ok: true, data });
   } catch (e: any) {
+    const message = e?.message ?? "Unknown error";
+    const status = message.includes("Missing Supabase browser env vars") ? 503 : 500;
+
     return NextResponse.json(
-      { ok: false, error: e?.message ?? "Unknown error" },
-      { status: 500 }
+      { ok: false, error: message },
+      { status }
     );
   }
 }

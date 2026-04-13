@@ -1,4 +1,5 @@
 import { supabaseServer } from '@/lib/supabaseServer';
+import { AuthzError } from '@/lib/authz';
 
 export async function requireAdminRequest(request: Request) {
   const authorization = request.headers.get('authorization') ?? '';
@@ -7,7 +8,7 @@ export async function requireAdminRequest(request: Request) {
     : '';
 
   if (!token) {
-    throw new Error('Missing admin authorization token.');
+    throw new AuthzError('Missing admin authorization token.', 401);
   }
 
   const supabase = supabaseServer();
@@ -17,7 +18,7 @@ export async function requireAdminRequest(request: Request) {
   } = await supabase.auth.getUser(token);
 
   if (userError || !user) {
-    throw new Error('Invalid or expired admin session.');
+    throw new AuthzError('Invalid or expired admin session.', 401);
   }
 
   const { data: adminRow, error: adminError } = await supabase
@@ -31,7 +32,7 @@ export async function requireAdminRequest(request: Request) {
   }
 
   if (!adminRow?.user_id) {
-    throw new Error('This account is not allowed to perform admin actions.');
+    throw new AuthzError('This account is not allowed to perform admin actions.', 403);
   }
 
   return { supabase, user };

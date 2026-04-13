@@ -1,16 +1,22 @@
-# First Round Vercel Deployment
+# First Round Vercel Deployment Notes
 
 ## Current status
-- The app is structured as a standard Next.js project and is deployable to Vercel.
-- Supabase is used in both browser and server contexts.
-- Server-side admin and portal APIs require `SUPABASE_SERVICE_ROLE_KEY`.
-- Public venue pages, admin, portal, Google Maps, and NSW liquor endpoints all depend on environment variables being present.
+
+What is already in place:
+- Vercel is the intended deployment target
+- public site, admin, and portal ship from the same project
+- browser and server env names are more consistent in code
+- key public/auth paths now fail more clearly when required env vars are missing
+
+What is still operationally risky:
+- there is still no automated test suite protecting releases
+- some Supabase setup is still manual unless the latest migrations are applied
+- Google Maps behavior still depends on correct referrer setup in Google Cloud
+- live confidence still depends on Vercel builds plus manual smoke tests
 
 ## Required environment variables
 
-Set these in Vercel for Production, Preview, and Development as needed:
-
-### Required
+Required in Vercel Production:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -20,168 +26,143 @@ Set these in Vercel for Production, Preview, and Development as needed:
 - `NSW_OAUTH_URL`
 - `NSW_LIQUOR_BASE_URL`
 
-### Optional / legacy compatibility
+Optional / compatibility only:
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
 - `GOOGLE_MAPS_API_KEY`
 
-Use [.env.example](/c:/Users/nickn/busy-app/.env.example) as the source of truth for names.
+Recommendations:
+- prefer `NEXT_PUBLIC_SUPABASE_ANON_KEY` over the legacy publishable fallback
+- keep Preview and Production envs aligned for Maps and Supabase where practical
+- use `GOOGLE_MAPS_API_KEY` only for local/server scripts if needed
+
+## Pre-deploy verification
+
+Run locally before pushing:
+
+```powershell
+npm install
+npm run typecheck
+npm run verify
+```
+
+Notes:
+- `npm run verify` runs TypeScript plus a Next production build
+- if Windows local build issues return, use the Vercel build as the final build source of truth, but do not skip `typecheck`
+
+Before deploy, confirm:
+- branch and commit are the intended release
+- Vercel env vars are correct
+- Supabase target project is the intended live project
+- recent migrations are applied or consciously deferred
 
 ## Supabase production readiness check
 
-Verified from code:
-- Browser-side Supabase clients use `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in:
-  - [lib/supabase-browser.ts](/c:/Users/nickn/busy-app/lib/supabase-browser.ts)
-  - [lib/supabaseClient.ts](/c:/Users/nickn/busy-app/lib/supabaseClient.ts)
-- Server-side protected routes use `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in:
-  - [lib/supabaseServer.ts](/c:/Users/nickn/busy-app/lib/supabaseServer.ts)
-  - [lib/admin-server.ts](/c:/Users/nickn/busy-app/lib/admin-server.ts)
-  - [lib/portal-server.ts](/c:/Users/nickn/busy-app/lib/portal-server.ts)
-- Public liquor lookup API now accepts the standard public Supabase key in:
-  - [app/api/venues/route.ts](/c:/Users/nickn/busy-app/app/api/venues/route.ts)
+Before pointing production traffic at a Supabase project, confirm:
+- core tables exist
+- required lookup data exists
+- admin and portal access rows exist
+- RLS/policies are present
+- at least one admin account works
+- at least one portal account works if portal is in scope
 
-Not fully verifiable from repo alone:
-- Whether the target Supabase project has the exact schema, RLS policies, and seeded rows required in production
-- Whether the configured Vercel env vars point to the intended production Supabase project
+Use:
+- [docs/supabase-soft-launch-checks.md](/c:/Users/nickn/busy-app/docs/supabase-soft-launch-checks.md)
 
-Use [docs/supabase-soft-launch-checks.md](/c:/Users/nickn/busy-app/docs/supabase-soft-launch-checks.md) for copy-paste SQL to verify the target Supabase project before soft launch.
+## Deployment risks to watch
 
-## Deployment blockers
+### 1. Google Maps referrer restrictions
+Maps will fail with `RefererNotAllowedMapError` unless Google Cloud allows the current domain.
 
-### High priority
-- Full Supabase setup is not fully captured as versioned migrations in the repo.
-  - This is the main blocker to repeatable production deploys.
-- Secrets currently exist in local `.env.local`; they should be rotated if they have been shared outside secure tooling.
+Recommended allowed referrers:
+- `https://firstroundapp.com/*`
+- `https://www.firstroundapp.com/*`
+- `https://*.vercel.app/*`
+- `http://localhost:3000/*`
+- `http://127.0.0.1:3000/*`
 
-### Medium priority
-- `next build` compiled successfully but failed in this local environment with `spawn EPERM`.
-  - This appears to be an environment/tooling issue rather than an application compile issue.
-  - It should still be verified in Vercel with a real production build.
-- Some older/legacy env naming still exists in code for compatibility.
-  - Standardize on `NEXT_PUBLIC_SUPABASE_ANON_KEY` going forward.
-- There are visible mojibake/encoding issues in some UI text that should be cleaned before launch.
+### 2. Missing or inconsistent Supabase env vars
+- browser/public flows expect:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- server/admin/portal flows expect:
+  - `SUPABASE_SERVICE_ROLE_KEY`
 
-### Lower priority but important before launch
-- CI is now present, but there are still no visible automated application tests
-- Mobile responsiveness still needs focused QA across admin, portal, and venue pages
+### 3. Domain / DNS drift
+- confirm `firstroundapp.com` and `www.firstroundapp.com` are both connected in Vercel
+- confirm GoDaddy/other DNS no longer points at old website-builder values
+- if Vercel shows `DNS change recommended`, capture the desired root record and decide whether to update before launch
 
-## Exact steps to go live
+### 4. Manual Supabase drift
+- if schema or RLS was configured manually, compare the live project against committed migrations before assuming safety
 
-1. Rotate any exposed secrets before deployment.
-   - Rotate:
-     - `SUPABASE_SERVICE_ROLE_KEY`
-     - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-     - Google Maps keys
-     - NSW API credentials
+## Standard production deploy steps
 
-2. In Supabase, confirm the production project has:
-   - all required tables used by the app
-   - admin and portal auth/access tables
-   - correct RLS policies
-   - required seeded data such as venue types and schedule enum values
+1. In the repo root:
 
-3. In Vercel, create a new project from this repository.
+```powershell
+git status
+git add .
+git commit -m "Your release message"
+git push origin main
+```
 
-4. In Vercel Project Settings -> Environment Variables, add:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-   - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
-   - `NSW_API_KEY`
-   - `NSW_API_SECRET`
-   - `NSW_OAUTH_URL`
-   - `NSW_LIQUOR_BASE_URL`
+2. In Vercel:
+- open `Deployments`
+- wait for the newest production deployment from `main`
+- confirm the deployment is `Ready`
+- confirm the commit hash matches what you intended to ship
 
-5. Optionally add compatibility vars if still needed:
-   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
-   - `GOOGLE_MAPS_API_KEY`
+3. Verify the main domains:
+- `https://firstroundapp.com`
+- `https://www.firstroundapp.com`
 
-6. Trigger a Vercel production build.
+4. Run the release smoke tests:
+- [docs/release-smoke-tests.md](/c:/Users/nickn/busy-app/docs/release-smoke-tests.md)
 
-7. After deploy, verify these routes manually:
-   - `/`
-   - `/venues`
-   - `/today`
-   - `/login`
-   - `/admin`
-   - `/portal`
+## Auth verification after deploy
 
-8. Verify server-backed workflows in production:
-   - admin login
-   - portal login
-   - venue save
-   - schedule save
-   - portal venue save
-   - portal schedule save
-   - Google Maps rendering
-   - NSW liquor API endpoints if they are intended to be live
+Minimum checks:
+- public user cannot access `/admin` or protected portal flows
+- admin user can log in and reach `/admin`
+- venue user can log in and reach `/portal`
+- venue user cannot access unrelated venue workspaces
 
-9. Confirm browser/public behavior:
-   - venue filters
-   - venue cards
-   - happy hour details
-   - events
-   - weekly hours
+Full checklist:
+- [docs/release-smoke-tests.md](/c:/Users/nickn/busy-app/docs/release-smoke-tests.md)
 
-10. Confirm admin and portal permissions:
-   - admin user can access `/admin`
-   - non-admin venue manager is redirected to `/portal`
-   - venue manager can only access assigned venues
+## Rollback basics
 
-## Add the live domain
+If the latest production deploy is bad:
+1. Stop testing on the broken deploy.
+2. In Vercel, open the last known-good production deployment.
+3. Re-promote or roll back to that deployment in Vercel.
+4. Re-run:
+   - public route smoke tests
+   - auth checks
+   - map checks
+5. Record:
+   - broken commit
+   - rollback target
+   - symptoms
+   - any env or migration changes made around the release
 
-Current live domain:
-- `firstroundapp.com`
+## Live-domain setup
 
-Recommended domain setup:
-- primary production domain: `firstroundapp.com`
-- optional redirect or alias: `www.firstroundapp.com`
+In Vercel:
+- add `firstroundapp.com`
+- add `www.firstroundapp.com`
+- keep `firstroundapp.com` as primary if that is the intended root
 
-### Steps in Vercel
+In DNS:
+- use the exact Vercel-provided values for root and `www`
+- remove old GoDaddy website-builder A/CNAME values
 
-1. Open the First Round project in Vercel.
-2. Go to `Settings` -> `Domains`.
-3. Add:
-   - `firstroundapp.com`
-   - optionally `www.firstroundapp.com`
-4. Set `firstroundapp.com` as the primary domain.
-5. If both root and `www` are added, configure one to redirect to the other.
-   - simplest option: redirect `www.firstroundapp.com` -> `firstroundapp.com`
+In Google Maps key restrictions:
+- keep production and preview refs aligned with what Vercel actually serves
 
-### DNS records
+## Recommended operator habits
 
-The exact DNS records depend on where the domain is managed, but Vercel will show the required values after you add the domain.
-
-Common patterns are:
-- apex/root domain (`firstroundapp.com`):
-  - an `A` record pointing to Vercel's recommended IP, or
-  - nameserver delegation to Vercel if you choose that path
-- `www` subdomain:
-  - a `CNAME` record pointing to Vercel's target
-
-Important:
-- use the DNS values shown in the Vercel Domains screen as the source of truth
-- after updating DNS, wait for Vercel to verify the domain
-
-### After domain verification
-
-1. Open:
-   - `https://firstroundapp.com`
-   - `https://firstroundapp.com/venues`
-   - `https://firstroundapp.com/login`
-2. Confirm the site loads over HTTPS.
-3. Confirm admin and portal login still work on the live domain.
-
-### Supabase note for the live domain
-
-The current login flow uses `signInWithPassword`, so there is no custom email magic-link callback flow that must be wired for basic login.
-
-Still recommended in Supabase:
-- set the project `Site URL` to:
-  - `https://firstroundapp.com`
-- if you later add magic links, email confirmations, or OAuth providers, also add the live domain to the allowed redirect URLs.
-
-## Recommended final pre-launch tasks
-- Add proper migrations for all Supabase schema/auth/RLS setup
-- Clean visible text encoding issues
-- Run mobile QA on public, admin, and portal experiences
-- Add application smoke tests beyond lint/type/build validation
+- Record the deployed commit for every production release.
+- Keep a short release note in `docs/project-status.md` when something changes in production-only config.
+- Do not mix schema changes, env changes, and large UI changes in one untracked release if you can avoid it.
+- Apply database migrations before broad public sharing when those migrations are required by the shipped code.

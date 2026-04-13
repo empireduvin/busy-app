@@ -1,6 +1,7 @@
 'use client';
 
-import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
+import { getSupabaseBrowserClientResult } from '@/lib/supabase-browser';
+import { BROWSER_SUPABASE_ENV_ERROR } from '@/lib/public-env';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -12,7 +13,7 @@ export default function PortalLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  const supabase = useMemo(() => getSupabaseBrowserClientResult().client, []);
   const router = useRouter();
   const pathname = usePathname();
   const [guardState, setGuardState] = useState<GuardState>('checking');
@@ -21,12 +22,24 @@ export default function PortalLayout({
 
   useEffect(() => {
     let mounted = true;
+    if (!supabase) {
+      setErrorMessage(BROWSER_SUPABASE_ENV_ERROR);
+      setGuardState('unauthorized');
+      return () => {
+        mounted = false;
+      };
+    }
 
     async function checkAccess(showLoading = true) {
       if (showLoading) {
         setGuardState('checking');
       }
       setErrorMessage(null);
+      if (!supabase) {
+        setErrorMessage(BROWSER_SUPABASE_ENV_ERROR);
+        setGuardState('unauthorized');
+        return;
+      }
 
       const {
         data: { session },
@@ -110,6 +123,10 @@ export default function PortalLayout({
   }, [pathname, router, supabase]);
 
   async function handleSignOut() {
+    if (!supabase) {
+      router.replace('/login');
+      return;
+    }
     await supabase.auth.signOut();
     router.replace('/login');
   }

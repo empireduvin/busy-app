@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requirePortalVenueRequest } from '@/lib/portal-server';
+import { getErrorStatus } from '@/lib/authz';
 
 function normalizeVenueSuburb(value: string | null | undefined) {
   return value?.trim().toUpperCase() || null;
@@ -62,7 +63,7 @@ export async function POST(
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { status: getErrorStatus(error) }
     );
   }
 }

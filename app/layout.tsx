@@ -2,6 +2,7 @@ import "./globals.css";
 import Link from "next/link";
 import FirstRoundLogo from "./components/FirstRoundLogo";
 import PublicNavLinks from "./components/PublicNavLinks";
+import PublicVenueInterestStrip from "./components/PublicVenueInterestStrip";
 
 export default function RootLayout({
   children,
@@ -22,6 +23,7 @@ export default function RootLayout({
           </header>
 
           <main className="flex-1">{children}</main>
+          <PublicVenueInterestStrip />
         </div>
       </body>
     </html>

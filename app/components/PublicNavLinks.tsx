@@ -7,6 +7,7 @@ const PUBLIC_LINKS = [
   { href: '/livenow', label: 'Live Now' },
   { href: '/today', label: 'Today' },
   { href: '/venues', label: 'Venues' },
+  { href: '/contact', label: 'Contact' },
 ];
 
 export default function PublicNavLinks() {
@@ -15,7 +16,10 @@ export default function PublicNavLinks() {
   return (
     <nav className="flex flex-wrap items-center gap-2 sm:justify-end">
       {PUBLIC_LINKS.map((link) => {
-        const active = pathname === link.href;
+        const active =
+          link.href === '/venues'
+            ? pathname === '/venues' || pathname.startsWith('/venues/')
+            : pathname === link.href;
         return (
           <Link
             key={link.href}

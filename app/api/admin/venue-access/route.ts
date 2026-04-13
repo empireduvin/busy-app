@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAdminRequest } from '@/lib/admin-server';
+import { getErrorStatus } from '@/lib/authz';
 
 export async function GET(request: Request) {
   try {
@@ -23,7 +24,7 @@ export async function GET(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { status: getErrorStatus(error) }
     );
   }
 }
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { status: getErrorStatus(error) }
     );
   }
 }
@@ -119,7 +120,7 @@ export async function DELETE(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { status: getErrorStatus(error) }
     );
   }
 }

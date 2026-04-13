@@ -1,6 +1,7 @@
 'use client';
 
-import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
+import { getSupabaseBrowserClientResult } from '@/lib/supabase-browser';
+import { BROWSER_SUPABASE_ENV_ERROR } from '@/lib/public-env';
 import { buildPublicVenueHref } from '@/lib/public-venue-discovery';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -83,7 +84,7 @@ function normalizePortalVenueRows(
 }
 
 export default function VenuePortalPage() {
-  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  const supabase = useMemo(() => getSupabaseBrowserClientResult().client, []);
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -98,6 +99,11 @@ export default function VenuePortalPage() {
     async function loadPortalData() {
       setLoading(true);
       setErrorMessage(null);
+      if (!supabase) {
+        setErrorMessage(BROWSER_SUPABASE_ENV_ERROR);
+        setLoading(false);
+        return;
+      }
 
       const {
         data: { session },
@@ -203,10 +209,10 @@ export default function VenuePortalPage() {
   }, [search, venues]);
 
   return (
-    <div className="min-h-screen bg-neutral-950 px-6 py-8 text-white">
+    <div className="min-h-screen bg-neutral-950 px-4 py-6 text-white sm:px-6 sm:py-8">
       <div className="mx-auto max-w-6xl">
-        <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+        <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.35)] sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300/80">
                 Venue Portal
@@ -219,7 +225,7 @@ export default function VenuePortalPage() {
                 manage current details, trading hours, happy hour deals, and events.
               </p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white/70">
+            <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white/70 sm:min-w-[220px]">
               <div>{userEmail ?? 'Loading user...'}</div>
               <div className="mt-1 text-xs uppercase tracking-[0.2em] text-white/40">
                 {isAdmin ? 'Admin access also enabled' : 'Venue manager access'}
@@ -246,7 +252,7 @@ export default function VenuePortalPage() {
         </section>
 
         <section className="mt-8">
-          <div className="mb-4 flex items-center justify-between gap-4">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Assigned venues</h2>
               <p className="mt-1 text-sm text-white/55">
@@ -261,16 +267,27 @@ export default function VenuePortalPage() {
           </div>
 
           <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_auto]">
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by venue name, suburb, type, or role"
-              className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/40"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search by venue name, suburb, type, or role"
+                className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 pr-24 text-sm text-white outline-none focus:border-cyan-300/40"
+              />
+              {search.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-white/70 hover:bg-white/10 hover:text-white"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
             <Link
               href="/venues"
-              className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-white/80 hover:bg-white/[0.06]"
+              className="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-white/80 hover:bg-white/[0.06]"
             >
               Open public website
             </Link>
@@ -342,13 +359,13 @@ export default function VenuePortalPage() {
                     <button
                       type="button"
                       onClick={() => router.push(`/portal/venues/${row.venue_id}`)}
-                      className="text-sm font-medium text-cyan-200 transition hover:text-cyan-100"
+                      className="inline-flex min-h-[40px] items-center rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-sm font-medium text-cyan-200 transition hover:bg-cyan-400/15 hover:text-cyan-100"
                     >
                       Open workspace
                     </button>
                     <Link
                       href={row.venue ? buildPublicVenueHref(row.venue) : '/venues'}
-                      className="text-sm font-medium text-white/60 transition hover:text-white"
+                      className="inline-flex min-h-[40px] items-center rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/70 transition hover:bg-white/[0.08] hover:text-white"
                     >
                       View on website
                     </Link>

@@ -101,22 +101,45 @@ export default function TodayPage() {
     ];
   }, [activeFilter, rows]);
 
+  const hasActiveFilters = activeFilter !== 'all' || timeFilter !== 'any' || searchTerm.trim().length > 0;
+
+  const appliedFilterLabels = useMemo(() => {
+    const labels: string[] = [];
+
+    if (searchTerm.trim()) labels.push(`Search: "${searchTerm.trim()}"`);
+
+    const selectedTodayFilter = TODAY_FILTERS.find((filter) => filter.value === activeFilter);
+    if (selectedTodayFilter && selectedTodayFilter.value !== 'all') {
+      labels.push(selectedTodayFilter.label);
+    }
+
+    const selectedTimeFilter = TIME_FILTERS.find((filter) => filter.value === timeFilter);
+    if (selectedTimeFilter && selectedTimeFilter.value !== 'any') {
+      labels.push(selectedTimeFilter.label);
+    }
+
+    return labels;
+  }, [activeFilter, searchTerm, timeFilter]);
+
   const headlineStats = useMemo(
     () => [
       {
         label: 'Happy hour today',
         value: rows.filter((row) => row.todayHappyHourRules.length > 0).length,
         sectionId: activeFilter === 'all' ? 'happy-hour-today' : 'today-matches',
+        emptyLabel: 'No deals yet',
       },
       {
         label: 'Events today',
         value: rows.filter((row) => row.todayEventRules.length > 0).length,
         sectionId: activeFilter === 'all' ? 'events-today' : 'today-matches',
+        emptyLabel: 'No events yet',
       },
       {
         label: 'Lunch specials',
         value: rows.filter((row) => row.hasLunchSpecials).length,
         sectionId: activeFilter === 'all' ? 'happy-hour-today' : 'today-matches',
+        emptyLabel: 'No lunch deals',
       },
     ],
     [activeFilter, rows]
@@ -146,6 +169,12 @@ export default function TodayPage() {
       }));
   }, [rows]);
 
+  function resetFilters() {
+    setActiveFilter('all');
+    setTimeFilter('any');
+    setSearchTerm('');
+  }
+
   useEffect(() => {
     if (!showMap) return;
 
@@ -172,13 +201,13 @@ export default function TodayPage() {
                 Today&apos;s happy hours and events across Newtown, Enmore, and Erskineville.
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {headlineStats.map((stat) =>
                 stat.value > 0 ? (
                   <a
                     key={stat.label}
                     href={`#${stat.sectionId}`}
-                    className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 transition hover:border-orange-300/35 hover:bg-orange-500/10"
+                    className="min-h-[88px] rounded-2xl border border-white/10 bg-black/30 px-4 py-3 transition hover:border-orange-300/35 hover:bg-orange-500/10"
                   >
                     <div className="text-lg font-semibold text-white">{stat.value}</div>
                     <div className="text-xs uppercase tracking-[0.18em] text-white/45">
@@ -188,11 +217,11 @@ export default function TodayPage() {
                 ) : (
                   <div
                     key={stat.label}
-                    className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 opacity-60"
+                    className="min-h-[88px] rounded-2xl border border-white/10 bg-black/20 px-4 py-3 opacity-60"
                   >
                     <div className="text-lg font-semibold text-white">{stat.value}</div>
                     <div className="text-xs uppercase tracking-[0.18em] text-white/45">
-                      {stat.label}
+                      {stat.emptyLabel}
                     </div>
                   </div>
                 )
@@ -203,15 +232,26 @@ export default function TodayPage() {
 
         <section className="mt-5 rounded-3xl border border-white/10 bg-white/5 p-4">
           <div className="grid gap-3 md:grid-cols-[minmax(220px,1.2fr)_auto] md:items-center">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search venue, suburb, or today&apos;s plan"
-              className="h-11 rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white placeholder:text-white/35"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search venue, suburb, or today&apos;s plan"
+                className="h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 pr-24 text-sm text-white placeholder:text-white/35"
+              />
+              {searchTerm.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-white/70 hover:bg-white/10 hover:text-white"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2.5">
               {TIME_FILTERS.map((filter) => {
                 const active = filter.value === timeFilter;
                 return (
@@ -220,7 +260,7 @@ export default function TodayPage() {
                     type="button"
                     onClick={() => setTimeFilter(filter.value)}
                     className={[
-                      'rounded-full border px-3 py-1.5 text-xs transition',
+                      'rounded-full border px-4 py-2 text-sm transition sm:px-3 sm:py-1.5 sm:text-xs',
                       active
                         ? 'border-white/20 bg-white/15 text-white'
                         : 'border-white/10 bg-black/20 text-white/60 hover:bg-white/10',
@@ -234,7 +274,7 @@ export default function TodayPage() {
                 type="button"
                 onClick={() => setShowMap((current) => !current)}
                 className={[
-                  'rounded-full border px-3 py-1.5 text-xs transition',
+                  'rounded-full border px-4 py-2 text-sm transition sm:px-3 sm:py-1.5 sm:text-xs',
                   showMap
                     ? 'border-orange-400/30 bg-orange-500/12 text-orange-100'
                     : 'border-white/10 bg-black/20 text-white/60 hover:bg-white/10',
@@ -245,7 +285,7 @@ export default function TodayPage() {
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2.5">
             {TODAY_FILTERS.map((filter) => {
               const active = filter.value === activeFilter;
               return (
@@ -254,7 +294,7 @@ export default function TodayPage() {
                   type="button"
                   onClick={() => setActiveFilter(filter.value)}
                   className={[
-                    'rounded-full border px-4 py-2 text-sm transition',
+                    'rounded-full border px-4 py-2.5 text-sm transition sm:py-2',
                     active
                       ? 'border-orange-400 bg-orange-500 text-black'
                       : 'border-white/10 bg-black/30 text-white/75 hover:bg-white/10',
@@ -265,6 +305,32 @@ export default function TodayPage() {
               );
             })}
           </div>
+
+          {hasActiveFilters ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
+                Applied
+              </span>
+              {appliedFilterLabels.map((label) => (
+                <span
+                  key={label}
+                  className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs text-white/70"
+                >
+                  {label}
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="text-sm text-orange-200 underline underline-offset-4 hover:text-white"
+              >
+                Reset filters
+              </button>
+              <div className="text-xs text-white/45">
+                Back to the full today view across happy hour and events.
+              </div>
+            </div>
+          ) : null}
         </section>
 
         {showMap ? (
@@ -278,6 +344,9 @@ export default function TodayPage() {
                   Map view
                 </div>
                 <h2 className="mt-1 text-xl font-semibold text-white">What&apos;s on today</h2>
+                <div className="mt-1 text-sm text-white/55">
+                  Today&apos;s filtered happy hours and events on the map.
+                </div>
               </div>
               <div className="text-xs uppercase tracking-[0.18em] text-white/35">
                 {mapVenues.length} venue{mapVenues.length === 1 ? '' : 's'}
@@ -291,6 +360,15 @@ export default function TodayPage() {
               <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-white/65">
                 No mapped venues match this today filter yet. Try another filter or widen the time
                 window.
+                {hasActiveFilters ? (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="mt-3 block text-sm text-orange-200 underline underline-offset-4 hover:text-white"
+                  >
+                    Reset filters
+                  </button>
+                ) : null}
               </div>
             )}
           </section>
@@ -309,6 +387,26 @@ export default function TodayPage() {
               <div className="mt-2 text-white/55">
                 Try another filter or search for a venue, suburb, or event style.
               </div>
+              {hasActiveFilters ? (
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="mt-4 text-sm text-orange-200 underline underline-offset-4 hover:text-white"
+                >
+                  Reset filters
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {!loading && !error && rows.length > 0 ? (
+            <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/60">
+              Showing {rows.length} venue{rows.length === 1 ? '' : 's'}
+              {searchTerm.trim() ? ` for "${searchTerm.trim()}"` : ''}
+              {activeFilter !== 'all' ? ` in ${getFilterHeading(activeFilter).toLowerCase()}` : ''}
+              {timeFilter !== 'any'
+                ? `${activeFilter !== 'all' ? ' during ' : ' for '} ${TIME_FILTERS.find((filter) => filter.value === timeFilter)?.label.toLowerCase()}`
+                : ''}
             </div>
           ) : null}
 
@@ -319,7 +417,7 @@ export default function TodayPage() {
                   <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-300/70">
-                        Today lane
+                        Today picks
                       </div>
                       <h2 className="mt-1 text-xl font-semibold text-white">{section.title}</h2>
                       <p className="text-sm text-white/55">{section.description}</p>

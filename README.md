@@ -38,7 +38,13 @@ npm run dev
 Type-check:
 
 ```bash
-npx tsc --noEmit
+npm run typecheck
+```
+
+Pre-deploy verification:
+
+```bash
+npm run verify
 ```
 
 Open:
@@ -66,9 +72,11 @@ Optional / compatibility:
 - `GOOGLE_MAPS_API_KEY`
 
 Notes:
-- Browser-side Supabase uses the public URL + anon key.
+- Browser-side Supabase standardizes on `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY` is now legacy compatibility only and should not be the primary production value.
 - Protected admin and portal routes use the service role key on the server.
-- Google Maps is used on the public venue page and in admin Google venue workflows.
+- Google Maps in the web app uses `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`.
+- Local scripts can use `GOOGLE_MAPS_API_KEY`, with a fallback to `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`.
 - NSW liquor endpoints rely on the NSW API credentials.
 
 ## Supabase overview
@@ -124,6 +132,8 @@ Before going live:
 
 Deployment checklist and blockers are documented in:
 - [docs/vercel-deployment.md](/c:/Users/nickn/busy-app/docs/vercel-deployment.md)
+- [docs/release-smoke-tests.md](/c:/Users/nickn/busy-app/docs/release-smoke-tests.md)
+- [docs/launch-checklist.md](/c:/Users/nickn/busy-app/docs/launch-checklist.md)
 
 ## Current project notes
 
