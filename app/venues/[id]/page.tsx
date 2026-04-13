@@ -14,7 +14,7 @@ import {
   isVenueOpenNow,
 } from '@/lib/opening-hours';
 import {
-  PUBLIC_VENUE_SELECT,
+  fetchPublicVenues,
   getEffectiveScheduleHours,
   getPublishedEventRules,
   getPublishedRulesByType,
@@ -72,11 +72,9 @@ export default function PublicVenueDetailPage() {
         return;
       }
 
-      const { data, error: loadError } = await supabase
-        .from('venues')
-        .select(PUBLIC_VENUE_SELECT)
-        .eq('id', venueId)
-        .maybeSingle();
+      const { data, error: loadError } = await fetchPublicVenues(supabase, {
+        venueId,
+      });
 
       if (cancelled) return;
 
@@ -87,7 +85,14 @@ export default function PublicVenueDetailPage() {
         setVenue(null);
         setError('Venue not found.');
       } else {
-        setVenue((data as unknown) as Venue);
+        const venueRow = Array.isArray(data) ? data[0] ?? null : data;
+
+        if (!venueRow) {
+          setVenue(null);
+          setError('Venue not found.');
+        } else {
+          setVenue((venueRow as unknown) as Venue);
+        }
       }
 
       setLoading(false);

@@ -2,7 +2,10 @@
 
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import { isBottleShopVenueType } from '@/lib/venue-type-rules';
-import { PUBLIC_VENUE_SELECT, splitVenuesByLaunchArea } from '@/lib/public-venue-discovery';
+import {
+  fetchPublicVenues,
+  splitVenuesByLaunchArea,
+} from '@/lib/public-venue-discovery';
 import { buildPublicVenueHref } from '@/lib/public-venue-discovery';
 import {
   formatTimeForUi,
@@ -645,10 +648,9 @@ function VenuesPageContent() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from('venues')
-        .select(PUBLIC_VENUE_SELECT)
-        .order('name', { ascending: true });
+      const { data, error } = await fetchPublicVenues(supabase, {
+        orderByName: true,
+      });
 
       if (cancelled) return;
 

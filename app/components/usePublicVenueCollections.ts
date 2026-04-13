@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getSupabaseBrowserClientResult } from '@/lib/supabase-browser';
 import { BROWSER_SUPABASE_ENV_ERROR } from '@/lib/public-env';
 import {
-  PUBLIC_VENUE_SELECT,
+  fetchPublicVenues,
   splitVenuesByLaunchArea,
   type Venue,
 } from '@/lib/public-venue-discovery';
@@ -31,10 +31,9 @@ export function usePublicVenueCollections() {
         return;
       }
 
-      const { data, error: loadError } = await supabase
-        .from('venues')
-        .select(PUBLIC_VENUE_SELECT)
-        .order('name', { ascending: true });
+      const { data, error: loadError } = await fetchPublicVenues(supabase, {
+        orderByName: true,
+      });
 
       if (cancelled) return;
 

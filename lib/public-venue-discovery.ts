@@ -1,4 +1,5 @@
 import { isBottleShopVenueType } from '@/lib/venue-type-rules';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type OpeningPeriod = {
   open: string;
@@ -124,6 +125,57 @@ export type Venue = {
 };
 
 export const PUBLIC_VENUE_SELECT = `
+  id,
+  name,
+  suburb,
+  venue_type_id,
+  venue_types (
+    id,
+    label,
+    slug
+  ),
+  address,
+  lat,
+  lng,
+  phone,
+  website_url,
+  booking_url,
+  google_maps_uri,
+  google_rating,
+  google_user_rating_count,
+  price_level,
+  shows_sport,
+  plays_with_sound,
+  sport_types,
+  byo_allowed,
+  byo_notes,
+  dog_friendly,
+  kid_friendly,
+  opening_hours,
+  kitchen_hours,
+  happy_hour_hours,
+  timezone,
+  is_temporarily_closed,
+  status,
+  venue_schedule_rules (
+    id,
+    venue_id,
+    schedule_type,
+    day_of_week,
+    start_time,
+    end_time,
+    sort_order,
+    title,
+    description,
+    deal_text,
+    notes,
+    is_active,
+    status,
+    detail_json
+  )
+`;
+
+export const PUBLIC_VENUE_SELECT_WITH_BOTTLE_SHOP = `
   id,
   name,
   suburb,
@@ -389,6 +441,45 @@ export function buildPublicVenueHref(venue: Pick<Venue, 'id' | 'name' | 'suburb'
   const basePath = isLiveInnerWestSuburb(venue.suburb) ? '/venues' : '/futurevenues';
   if (!venue.name?.trim()) return basePath;
   return `${basePath}?search=${encodeURIComponent(venue.name.trim())}`;
+}
+
+function isMissingBottleShopHoursColumnError(error: { message?: string } | null) {
+  const message = error?.message?.toLowerCase() ?? '';
+  return (
+    message.includes('column') &&
+    message.includes('bottle_shop_hours') &&
+    message.includes('does not exist')
+  );
+}
+
+export async function fetchPublicVenues(
+  supabase: SupabaseClient,
+  options?: {
+    orderByName?: boolean;
+    venueId?: string;
+  }
+) {
+  const buildQuery = (selectText: string) => {
+    let query = supabase.from('venues').select(selectText);
+
+    if (options?.venueId) {
+      query = query.eq('id', options.venueId);
+    }
+
+    if (options?.orderByName) {
+      query = query.order('name', { ascending: true });
+    }
+
+    return query;
+  };
+
+  const primaryResult = await buildQuery(PUBLIC_VENUE_SELECT_WITH_BOTTLE_SHOP);
+
+  if (!isMissingBottleShopHoursColumnError(primaryResult.error)) {
+    return primaryResult;
+  }
+
+  return buildQuery(PUBLIC_VENUE_SELECT);
 }
 
 export function hasText(value: string | null | undefined) {
