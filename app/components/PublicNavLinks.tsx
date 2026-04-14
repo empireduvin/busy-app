@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 const PUBLIC_LINKS = [
   { href: '/livenow', label: 'Live Now' },
   { href: '/today', label: 'Today' },
+  { href: '/week', label: 'This Week' },
   { href: '/venues', label: 'Venues' },
   { href: '/contact', label: 'Contact' },
 ];

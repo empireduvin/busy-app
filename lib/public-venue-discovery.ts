@@ -102,6 +102,7 @@ export type Venue = {
   lng: number | null;
   phone: string | null;
   website_url: string | null;
+  instagram_url: string | null;
   booking_url: string | null;
   google_maps_uri: string | null;
   google_rating: number | null;
@@ -139,6 +140,7 @@ export const PUBLIC_VENUE_SELECT = `
   lng,
   phone,
   website_url,
+  instagram_url,
   booking_url,
   google_maps_uri,
   google_rating,
@@ -190,6 +192,7 @@ export const PUBLIC_VENUE_SELECT_WITH_BOTTLE_SHOP = `
   lng,
   phone,
   website_url,
+  instagram_url,
   booking_url,
   google_maps_uri,
   google_rating,
@@ -408,12 +411,19 @@ export function getEffectiveScheduleHours(venue: Venue, scheduleType: ScheduleTy
 }
 
 export function getTodayDayOfWeek(timezone: string) {
+  return getDayOfWeekForOffset(timezone, 0);
+}
+
+export function getDayOfWeekForOffset(timezone: string, offsetDays = 0) {
   const formatter = new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
     timeZone: timezone,
   });
 
-  const value = formatter.format(new Date()).toLowerCase();
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+
+  const value = formatter.format(date).toLowerCase();
 
   const map: Record<string, DayOfWeek> = {
     monday: 'monday',
@@ -431,6 +441,10 @@ export function getTodayDayOfWeek(timezone: string) {
 export function getTodayRulesForType(rules: VenueScheduleRule[], timezone: string) {
   const today = getTodayDayOfWeek(timezone);
   return rules.filter((rule) => rule.day_of_week === today);
+}
+
+export function getRulesForDay(rules: VenueScheduleRule[], day: DayOfWeek) {
+  return rules.filter((rule) => rule.day_of_week === day);
 }
 
 export function buildPublicVenueHref(venue: Pick<Venue, 'id' | 'name' | 'suburb'>) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requirePortalVenueRequest } from '@/lib/portal-server';
 import { getErrorStatus } from '@/lib/authz';
+import { normalizeInstagramUrl } from '@/lib/social-links';
 
 function normalizeVenueSuburb(value: string | null | undefined) {
   return value?.trim().toUpperCase() || null;
@@ -37,6 +38,7 @@ export async function POST(
       address: String(venue.address ?? '').trim() || null,
       phone: String(venue.phone ?? '').trim() || null,
       website_url: String(venue.website_url ?? '').trim() || null,
+      instagram_url: normalizeInstagramUrl(String(venue.instagram_url ?? '')),
       shows_sport: normalizedShowsSport,
       plays_with_sound: normalizedPlaysWithSound,
       sport_types: String(venue.sport_types ?? '').trim() || null,
@@ -51,7 +53,7 @@ export async function POST(
       .update(payload)
       .eq('id', id)
       .select(
-        'id, name, suburb, address, phone, website_url, shows_sport, plays_with_sound, sport_types, dog_friendly, kid_friendly'
+        'id, name, suburb, address, phone, website_url, instagram_url, shows_sport, plays_with_sound, sport_types, dog_friendly, kid_friendly'
       )
       .single();
 

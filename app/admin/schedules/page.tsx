@@ -86,6 +86,7 @@ type Venue = {
   lng?: number | null;
   phone?: string | null;
   website_url?: string | null;
+  instagram_url?: string | null;
   google_rating?: number | null;
   price_level?: string | null;
   shows_sport?: boolean | null;
@@ -202,6 +203,7 @@ type VenueFormState = {
   lng: string;
   phone: string;
   website_url: string;
+  instagram_url: string;
   google_rating: string;
   price_level: string;
   shows_sport: boolean;
@@ -820,6 +822,7 @@ function diffVenuePayload(
     lng: 'Longitude',
     phone: 'Phone',
     website_url: 'Website',
+    instagram_url: 'Instagram',
     google_rating: 'Google rating',
     price_level: 'Price level',
     shows_sport: 'Shows live sport',
@@ -841,6 +844,7 @@ function diffVenuePayload(
     lng: originalVenue?.lng ?? null,
     phone: originalVenue?.phone ?? null,
     website_url: originalVenue?.website_url ?? null,
+    instagram_url: originalVenue?.instagram_url ?? null,
     google_rating: originalVenue?.google_rating ?? null,
     price_level: originalVenue?.price_level ?? null,
     shows_sport: originalVenue?.shows_sport ?? null,
@@ -934,6 +938,7 @@ function blankVenueForm(): VenueFormState {
     lng: '',
     phone: '',
     website_url: '',
+    instagram_url: '',
     google_rating: '',
     price_level: '',
     shows_sport: false,
@@ -1422,7 +1427,7 @@ export default function AdminMasterPage() {
     const { data, error } = await supabase
       .from('venues')
       .select(
-        'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, dog_friendly, kid_friendly, opening_hours, kitchen_hours, happy_hour_hours, venue_schedule_rules(id, venue_id, schedule_type, day_of_week, start_time, end_time, sort_order, title, description, deal_text, notes, detail_json, is_active, status)'
+        'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, dog_friendly, kid_friendly, opening_hours, kitchen_hours, happy_hour_hours, venue_schedule_rules(id, venue_id, schedule_type, day_of_week, start_time, end_time, sort_order, title, description, deal_text, notes, detail_json, is_active, status)'
       )
       .order('name', { ascending: true });
     if (error) {
@@ -2046,6 +2051,7 @@ export default function AdminMasterPage() {
       lng: venue.lng != null ? String(venue.lng) : '',
       phone: venue.phone ?? '',
       website_url: venue.website_url ?? '',
+      instagram_url: venue.instagram_url ?? '',
       google_rating:
         venue.google_rating != null ? String(venue.google_rating) : '',
       price_level: venue.price_level ?? '',
@@ -2158,6 +2164,7 @@ export default function AdminMasterPage() {
             : '',
         phone: place.nationalPhoneNumber ?? existingMatch?.phone ?? '',
         website_url: place.websiteUri ?? existingMatch?.website_url ?? '',
+        instagram_url: existingMatch?.instagram_url ?? '',
         google_rating: place.rating != null ? String(place.rating) : '',
         price_level: place.priceLevel ?? '',
         shows_sport: normalizeBooleanFlag(existingMatch?.shows_sport),
@@ -2250,6 +2257,7 @@ export default function AdminMasterPage() {
         lng: venueForm.lng.trim() ? Number(venueForm.lng) : null,
         phone: venueForm.phone.trim() || null,
         website_url: venueForm.website_url.trim() || null,
+        instagram_url: venueForm.instagram_url.trim() || null,
         google_rating: venueForm.google_rating.trim()
           ? Number(venueForm.google_rating)
           : null,
@@ -2297,6 +2305,9 @@ export default function AdminMasterPage() {
               : current.lng,
           phone: String(result.venue?.phone ?? current.phone ?? ''),
           website_url: String(result.venue?.website_url ?? current.website_url ?? ''),
+          instagram_url: String(
+            result.venue?.instagram_url ?? current.instagram_url ?? ''
+          ),
           google_rating:
             result.venue?.google_rating != null
               ? String(result.venue.google_rating)
@@ -3808,6 +3819,16 @@ export default function AdminMasterPage() {
                     value={venueForm.website_url}
                     onChange={(e) => updateVenueForm('website_url', e.target.value)}
                     placeholder="https://..."
+                    className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Instagram</label>
+                  <input
+                    type="text"
+                    value={venueForm.instagram_url}
+                    onChange={(e) => updateVenueForm('instagram_url', e.target.value)}
+                    placeholder="@venuehandle or https://instagram.com/..."
                     className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>

@@ -15,7 +15,9 @@ function LoginPageContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,6 +41,42 @@ function LoginPageContent() {
 
     router.replace(nextPath);
     router.refresh();
+  }
+
+  async function handlePasswordReset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase) {
+      setErrorMessage(BROWSER_SUPABASE_ENV_ERROR);
+      return;
+    }
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setErrorMessage('Enter your email address first so we know where to send the reset link.');
+      return;
+    }
+
+    setSendingReset(true);
+    setErrorMessage(null);
+    setResetMessage(null);
+
+    const redirectTo =
+      typeof window !== 'undefined' ? `${window.location.origin}/reset-password` : undefined;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+      redirectTo,
+    });
+
+    if (error) {
+      setErrorMessage(error.message);
+      setSendingReset(false);
+      return;
+    }
+
+    setResetMessage(
+      'Password reset email sent. Open the link in that email and you will land on the reset screen.'
+    );
+    setSendingReset(false);
   }
 
   return (
@@ -92,12 +130,32 @@ function LoginPageContent() {
             </div>
           ) : null}
 
+          {resetMessage ? (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+              {resetMessage}
+            </div>
+          ) : null}
+
           <button
             type="submit"
             disabled={submitting || !supabase}
             className="flex h-11 w-full items-center justify-center rounded-xl bg-orange-500 px-4 text-sm font-semibold text-black hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? 'Signing in...' : 'Sign in'}
+          </button>
+        </form>
+
+        <form onSubmit={handlePasswordReset} className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+          <div className="text-sm font-medium text-white/80">Forgot your password?</div>
+          <p className="mt-1 text-sm leading-6 text-white/55">
+            Enter your email above, then send yourself a secure password reset link.
+          </p>
+          <button
+            type="submit"
+            disabled={sendingReset || !supabase}
+            className="mt-4 inline-flex h-10 items-center justify-center rounded-xl border border-white/10 px-4 text-sm font-semibold text-white/80 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {sendingReset ? 'Sending reset link...' : 'Send reset link'}
           </button>
         </form>
 

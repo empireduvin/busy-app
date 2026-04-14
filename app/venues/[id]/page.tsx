@@ -25,6 +25,7 @@ import {
   type Venue,
   type VenueScheduleRule,
 } from '@/lib/public-venue-discovery';
+import { normalizeInstagramUrl } from '@/lib/social-links';
 import { getSupabaseBrowserClientResult } from '@/lib/supabase-browser';
 import { BROWSER_SUPABASE_ENV_ERROR } from '@/lib/public-env';
 import Link from 'next/link';
@@ -216,6 +217,7 @@ export default function PublicVenueDetailPage() {
       : detail.nextOpeningText
         ? 'Opens later'
         : 'Closed';
+  const instagramHref = normalizeInstagramUrl(venue.instagram_url);
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -286,6 +288,16 @@ export default function PublicVenueDetailPage() {
                     className="rounded-xl border border-white/15 bg-white/6 px-4 py-2 text-sm text-white hover:bg-white/10"
                   >
                     Website
+                  </a>
+                ) : null}
+                {instagramHref ? (
+                  <a
+                    href={instagramHref}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-xl border border-white/15 bg-white/6 px-4 py-2 text-sm text-white hover:bg-white/10"
+                  >
+                    Instagram
                   </a>
                 ) : null}
                 {venue.phone ? (

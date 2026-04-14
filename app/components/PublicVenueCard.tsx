@@ -8,6 +8,7 @@ import {
   normalizeBooleanFlag,
   type Venue,
 } from '@/lib/public-venue-discovery';
+import { normalizeInstagramUrl } from '@/lib/social-links';
 
 type CardTone = 'default' | 'live' | 'today';
 
@@ -33,6 +34,7 @@ export default function PublicVenueCard({
   const router = useRouter();
   const venueTypeLabel = getVenueTypeLabel(venue);
   const websiteHref = buildPublicVenueHref(venue);
+  const instagramHref = normalizeInstagramUrl(venue.instagram_url);
   const toneClasses =
     tone === 'live'
       ? 'border-orange-400/20 bg-[linear-gradient(180deg,rgba(255,111,36,0.16),rgba(255,255,255,0.04)_30%,rgba(255,255,255,0.03))]'
@@ -129,6 +131,17 @@ export default function PublicVenueCard({
               className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
             >
               Website
+            </a>
+          ) : null}
+          {instagramHref ? (
+            <a
+              href={instagramHref}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
+            >
+              Instagram
             </a>
           ) : null}
           {venue.phone ? (

@@ -1,15 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { FormEvent, useState } from 'react';
 
-const CONTACT_EMAIL = 'admin@firstroundapp.com';
+const CONTACT_EMAIL = 'admin.firstround@gmail.com';
 
 const TOPIC_OPTIONS = [
   {
     value: 'correction',
     label: 'Fix a venue listing',
-    helper: 'Update trading hours, happy hour details, event info, contact details, or venue features.',
+    helper:
+      'Update trading hours, happy hour details, event info, contact details, or venue features.',
   },
   {
     value: 'partner',
@@ -28,13 +29,6 @@ const TOPIC_OPTIONS = [
   },
 ] as const;
 
-function topicToSubject(topic: string) {
-  if (topic === 'correction') return 'First Round listing correction';
-  if (topic === 'partner') return 'First Round feature request';
-  if (topic === 'access') return 'First Round venue access request';
-  return 'First Round enquiry';
-}
-
 const inputClassName =
   'h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-orange-400/40 focus:bg-black/40';
 
@@ -44,24 +38,91 @@ export default function ContactPage() {
   const [venueName, setVenueName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
+  const [website, setWebsite] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const [deliveryId, setDeliveryId] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [replyToUsed, setReplyToUsed] = useState<string | null>(null);
 
   const selectedTopic =
     TOPIC_OPTIONS.find((option) => option.value === topic) ?? TOPIC_OPTIONS[3];
 
-  const mailtoHref = useMemo(() => {
-    const lines = [
-      `Topic: ${selectedTopic.label}`,
-      name.trim() ? `Name: ${name.trim()}` : null,
-      venueName.trim() ? `Venue: ${venueName.trim()}` : null,
-      email.trim() ? `Reply email: ${email.trim()}` : null,
-      '',
-      message.trim() || 'Tell us what you need help with.',
-    ].filter(Boolean);
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-    return `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(
-      topicToSubject(topic)
-    )}&body=${encodeURIComponent(lines.join('\n'))}`;
-  }, [email, message, name, selectedTopic.label, topic, venueName]);
+    if (submitting) return;
+
+    if (!message.trim()) {
+      setSubmitError('Add a message so we know what you need help with.');
+      setSubmitSuccess(null);
+      setDeliveryId(null);
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitError(null);
+    setSubmitSuccess(null);
+    setDeliveryId(null);
+    setSentTo(null);
+    setReplyToUsed(null);
+
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          topic,
+          name,
+          venueName,
+          email,
+          message,
+          website,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            error?: string;
+            message?: string;
+            deliveryId?: string | null;
+            sentTo?: string | null;
+            replyTo?: string | null;
+          }
+        | null;
+
+      if (!response.ok || !payload?.ok) {
+        setSubmitError(
+          payload?.error ??
+            'We could not send your message right now. Please try again or use email directly.'
+        );
+        return;
+      }
+
+      setSubmitSuccess(
+        payload.message ?? 'Your message has been sent. We will get back to you soon.'
+      );
+      setDeliveryId(payload.deliveryId ?? null);
+      setSentTo(payload.sentTo ?? null);
+      setReplyToUsed(payload.replyTo ?? null);
+      setName('');
+      setVenueName('');
+      setEmail('');
+      setMessage('');
+      setWebsite('');
+      setTopic('general');
+    } catch {
+      setSubmitError(
+        'We could not send your message right now. Please try again or use email directly.'
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -101,38 +162,58 @@ export default function ContactPage() {
               <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-300/70">
                 Send a note
               </div>
-              <h2 className="text-xl font-semibold text-white">Start a quick email draft</h2>
+              <h2 className="text-xl font-semibold text-white">Send a message to First Round</h2>
               <p className="text-sm leading-6 text-white/58">
-                Pick the reason, add a few details, and we&apos;ll open a ready-to-send email so
-                you don&apos;t have to write it from scratch.
+                Pick the reason, add a few details, and send it straight from the site. If sending
+                is not available, you can still open your email app instead.
               </p>
             </div>
 
-            <div className="mt-6 grid gap-5">
+            <form className="mt-6 grid gap-5" onSubmit={handleSubmit}>
               <FieldBlock label="What do you need?" helper={selectedTopic.helper}>
-                <select
-                  value={topic}
-                  onChange={(event) =>
-                    setTopic(event.target.value as (typeof TOPIC_OPTIONS)[number]['value'])
-                  }
-                  className={inputClassName}
+                <div
+                  className="grid gap-3 sm:grid-cols-2"
+                  role="radiogroup"
+                  aria-label="What do you need?"
                 >
-                  {TOPIC_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  {TOPIC_OPTIONS.map((option) => {
+                    const active = option.value === topic;
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setTopic(option.value)}
+                        className={[
+                          'rounded-2xl border p-4 text-left transition',
+                          active
+                            ? 'border-orange-400/40 bg-orange-500/12 text-white'
+                            : 'border-white/10 bg-black/25 text-white/80 hover:bg-white/[0.06]',
+                        ].join(' ')}
+                      >
+                        <div className="text-sm font-semibold">{option.label}</div>
+                        <div className="mt-2 text-xs leading-5 text-white/50">{option.helper}</div>
+                      </button>
+                    );
+                  })}
+                </div>
               </FieldBlock>
 
               <div className="grid gap-5 sm:grid-cols-2">
-                <FieldBlock label="Your name" helper="Optional, but helpful if you want a personal reply.">
+                <FieldBlock
+                  label="Your name"
+                  helper="Optional, but helpful if you want a personal reply."
+                >
                   <input
                     type="text"
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     placeholder="Your name"
                     className={inputClassName}
+                    maxLength={100}
+                    disabled={submitting}
                   />
                 </FieldBlock>
 
@@ -143,6 +224,8 @@ export default function ContactPage() {
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder="name@venue.com"
                     className={inputClassName}
+                    maxLength={160}
+                    disabled={submitting}
                   />
                 </FieldBlock>
               </div>
@@ -157,8 +240,20 @@ export default function ContactPage() {
                   onChange={(event) => setVenueName(event.target.value)}
                   placeholder="Venue name"
                   className={inputClassName}
+                  maxLength={120}
+                  disabled={submitting}
                 />
               </FieldBlock>
+
+              <input
+                type="text"
+                tabIndex={-1}
+                autoComplete="off"
+                value={website}
+                onChange={(event) => setWebsite(event.target.value)}
+                className="hidden"
+                aria-hidden="true"
+              />
 
               <FieldBlock
                 label="Message"
@@ -170,24 +265,60 @@ export default function ContactPage() {
                   rows={8}
                   placeholder="Example: We need our Thursday happy hour updated. Or: We'd like access to manage our venue page and publish weekly events."
                   className={`${inputClassName} min-h-[180px] resize-y py-3`}
+                  maxLength={3000}
+                  disabled={submitting}
+                  required
                 />
               </FieldBlock>
 
+              {submitError ? (
+                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                  {submitError}
+                </div>
+              ) : null}
+
+              {submitSuccess ? (
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+                  <div>{submitSuccess}</div>
+                  {sentTo ? (
+                    <div className="mt-2 text-xs leading-5 text-emerald-100/80">
+                      Sent to: {sentTo}
+                    </div>
+                  ) : null}
+                  {replyToUsed ? (
+                    <div className="mt-1 text-xs leading-5 text-emerald-100/80">
+                      Reply-to: {replyToUsed}
+                    </div>
+                  ) : null}
+                  {deliveryId ? (
+                    <div className="mt-1 text-xs leading-5 text-emerald-100/80">
+                      Delivery reference: {deliveryId}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
               <div className="flex flex-wrap items-center gap-3 pt-1">
-                <a
-                  href={mailtoHref}
-                  className="rounded-xl border border-orange-400/30 bg-orange-500/12 px-4 py-2.5 text-sm font-medium text-orange-100 transition hover:bg-orange-500/18"
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="rounded-xl border border-orange-400/30 bg-orange-500/12 px-4 py-2.5 text-sm font-medium text-orange-100 transition hover:bg-orange-500/18 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Open email draft
-                </a>
+                  {submitting ? 'Sending message...' : 'Send message'}
+                </button>
                 <a
                   href={`mailto:${CONTACT_EMAIL}`}
                   className="rounded-xl border border-white/12 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
                 >
-                  Email directly
+                  Open email
                 </a>
               </div>
-            </div>
+
+              <div className="text-xs leading-5 text-white/42">
+                A green success message means First Round accepted the send request. If no email
+                arrives, check spam or confirm the live email sender settings are configured.
+              </div>
+            </form>
           </section>
 
           <section className="rounded-3xl border border-white/10 bg-white/[0.02] p-5 sm:p-6">

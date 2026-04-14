@@ -14,6 +14,7 @@ import {
   type Venue,
   type VenueScheduleRule,
 } from '@/lib/public-venue-discovery';
+import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 type TodayFilter =
@@ -76,7 +77,7 @@ export default function TodayPage() {
         {
           id: 'happy-hour-today',
           title: 'Happy hour today',
-          description: 'Lunch pours, after-work deals, and tonight&apos;s happy hours.',
+          description: 'Lunch pours, after-work deals, and happy hours!',
           kind: 'happy_hour' as SectionKind,
           rows: rows.filter((row) => row.todayHappyHourRules.length > 0),
         },
@@ -231,6 +232,26 @@ export default function TodayPage() {
         </section>
 
         <section className="mt-5 rounded-3xl border border-white/10 bg-white/5 p-4">
+          <div className="mb-4 rounded-3xl border border-orange-400/20 bg-orange-500/10 p-4 sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-200/80">
+                  New
+                </div>
+                <h2 className="mt-1 text-xl font-semibold text-white">See the next 7 days</h2>
+                <p className="mt-1 max-w-2xl text-sm text-white/65">
+                  Jump from today into the rolling week view to check what&apos;s coming up next across happy hour and events.
+                </p>
+              </div>
+              <Link
+                href="/week"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border border-orange-300/30 bg-orange-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-orange-400"
+              >
+                Open This Week
+              </Link>
+            </div>
+          </div>
+
           <div className="grid gap-3 md:grid-cols-[minmax(220px,1.2fr)_auto] md:items-center">
             <div className="relative">
               <input
@@ -417,10 +438,9 @@ export default function TodayPage() {
                   <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-300/70">
-                        Today picks
+                        What&apos;s on today
                       </div>
-                      <h2 className="mt-1 text-xl font-semibold text-white">{section.title}</h2>
-                      <p className="text-sm text-white/55">{section.description}</p>
+                      <p className="mt-1 text-sm text-white/55">{section.description}</p>
                     </div>
                     <div className="text-xs uppercase tracking-[0.18em] text-white/35">
                       {section.rows.length} venue{section.rows.length === 1 ? '' : 's'}

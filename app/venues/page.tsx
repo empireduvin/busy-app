@@ -19,6 +19,7 @@ import type { ReactNode } from 'react';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabaseBrowserClientResult } from '@/lib/supabase-browser';
 import { BROWSER_SUPABASE_ENV_ERROR } from '@/lib/public-env';
+import { normalizeInstagramUrl } from '@/lib/social-links';
 import GoogleMap from '../components/GoogleMap';
 import TodayHoursSummary from '../components/TodayHoursSummary';
 import WeeklyTimelineChart from '../components/WeeklyTimelineChart';
@@ -128,6 +129,7 @@ type Venue = {
 
   phone: string | null;
   website_url: string | null;
+  instagram_url: string | null;
   booking_url: string | null;
   google_maps_uri: string | null;
 
@@ -156,6 +158,13 @@ type Venue = {
   status: string | null;
 
   venue_schedule_rules?: VenueScheduleRule[] | null;
+};
+
+type SearchSuggestion = {
+  kind: 'venue' | 'suburb';
+  label: string;
+  value: string;
+  helper: string;
 };
 
 const supabase = getSupabaseBrowserClientResult().client;
@@ -333,6 +342,15 @@ function matchesVenueTypeFilter(
 
 function normalizeSearchValue(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase();
+}
+
+function getSearchPriority(value: string | null | undefined, term: string): number | null {
+  const normalizedValue = normalizeSearchValue(value);
+  if (!normalizedValue) return null;
+  if (normalizedValue === term) return 0;
+  if (normalizedValue.startsWith(term)) return 1;
+  if (normalizedValue.includes(term)) return 2;
+  return null;
 }
 
 function matchesSearchTerm(venue: Venue, searchTerm: string): boolean {
@@ -1038,6 +1056,67 @@ function VenuesPageContent() {
     return filtered.filter((v) => hasValidCoords(v.lat, v.lng));
   }, [filtered]);
 
+  const searchSuggestions = useMemo(() => {
+    const term = normalizeSearchValue(searchTerm);
+    if (term.length < 2) return [] as SearchSuggestion[];
+
+    type RankedVenueSuggestion = SearchSuggestion & { kind: 'venue'; priority: number };
+
+    const venueMatches = venues
+      .map((venue) => {
+        const priorities = [
+          getSearchPriority(venue.name, term),
+          getSearchPriority(venue.suburb, term),
+          getSearchPriority(venue.address, term),
+        ].filter((priority): priority is number => priority != null);
+
+        if (priorities.length === 0 || !venue.name?.trim()) return null;
+
+        return {
+          kind: 'venue' as const,
+          label: venue.name.trim(),
+          value: venue.name.trim(),
+          helper: venue.suburb?.trim() || 'Venue',
+          priority: Math.min(...priorities),
+        };
+      })
+      .filter((suggestion): suggestion is RankedVenueSuggestion => suggestion !== null)
+      .sort(
+        (a, b) =>
+          a.priority - b.priority ||
+          a.label.localeCompare(b.label) ||
+          a.helper.localeCompare(b.helper)
+      )
+      .slice(0, 4)
+      .map(({ kind, label, value, helper }) => ({ kind, label, value, helper }));
+
+    const seenSuburbs = new Set<string>();
+    const suburbMatches = venues
+      .map((venue) => venue.suburb?.trim() || '')
+      .filter(Boolean)
+      .filter((suburbValue) => {
+        const normalizedSuburb = normalizeSearchValue(suburbValue);
+        if (seenSuburbs.has(normalizedSuburb)) return false;
+        if (getSearchPriority(suburbValue, term) == null) return false;
+        seenSuburbs.add(normalizedSuburb);
+        return true;
+      })
+      .sort((a, b) => {
+        const aPriority = getSearchPriority(a, term) ?? 9;
+        const bPriority = getSearchPriority(b, term) ?? 9;
+        return aPriority - bPriority || a.localeCompare(b);
+      })
+      .slice(0, 3)
+      .map((suburbValue) => ({
+        kind: 'suburb' as const,
+        label: suburbValue,
+        value: suburbValue,
+        helper: 'Suburb',
+      }));
+
+    return [...venueMatches, ...suburbMatches].slice(0, 6);
+  }, [searchTerm, venues]);
+
   useEffect(() => {
     if (!showDesktopMap) return;
 
@@ -1127,7 +1206,7 @@ function VenuesPageContent() {
           </div>
         </div>
 
-        <div className="z-50 mt-5 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.25)] backdrop-blur lg:sticky lg:top-0">
+        <div className="z-40 mt-5 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.25)] backdrop-blur lg:sticky lg:top-24">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(260px,1.5fr)_minmax(180px,0.95fr)_minmax(160px,0.9fr)_auto]">
             <div className="relative">
               <input
@@ -1198,6 +1277,31 @@ function VenuesPageContent() {
               </button>
             </div>
           </div>
+
+          {searchSuggestions.length > 0 ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
+                Quick matches
+              </div>
+              {searchSuggestions.map((suggestion) => (
+                <button
+                  key={`${suggestion.kind}-${suggestion.label}`}
+                  type="button"
+                  onClick={() => {
+                    if (suggestion.kind === 'suburb') {
+                      setSuburb(suggestion.value);
+                    } else {
+                      setSearchTerm(suggestion.value);
+                    }
+                  }}
+                  className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-left text-xs text-white/78 transition hover:border-orange-300/35 hover:bg-orange-500/10 hover:text-white"
+                >
+                  <span className="font-medium">{suggestion.label}</span>
+                  <span className="ml-2 text-white/45">{suggestion.helper}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <div className="mt-4 flex flex-wrap items-center gap-2.5">
             <CompactToggle label="Open now" checked={openNowOnly} onChange={setOpenNowOnly} />
@@ -1749,6 +1853,17 @@ function VenuesPageContent() {
                               rel="noreferrer"
                             >
                               Website
+                            </a>
+                          ) : null}
+
+                          {normalizeInstagramUrl(v.instagram_url) ? (
+                            <a
+                              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
+                              href={normalizeInstagramUrl(v.instagram_url) ?? undefined}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Instagram
                             </a>
                           ) : null}
 

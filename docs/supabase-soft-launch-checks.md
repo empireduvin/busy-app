@@ -282,3 +282,21 @@ Defer for later if needed:
 - broader lint cleanup
 - full production hardening
 - wider mobile polish beyond launch-critical paths
+
+## 11. Confirm password reset redirect setup
+
+The app now expects password recovery emails to send users to:
+- `/reset-password`
+
+What to verify in Supabase Authentication settings:
+- `Site URL` matches your real app origin for the current environment
+- `Redirect URLs` includes your local and deployed reset URLs
+
+Typical values:
+- `http://localhost:3000/reset-password`
+- `https://your-production-domain.com/reset-password`
+
+Notes:
+- the login screen now calls `supabase.auth.resetPasswordForEmail(...)` with an explicit `redirectTo`
+- if Supabase does not allow that redirect URL, the email may still fall back to the main site or fail recovery
+- if a reset link opens but no recovery session is present, request a fresh email and confirm the allowed redirect list is correct

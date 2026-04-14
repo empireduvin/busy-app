@@ -5,40 +5,49 @@ import PublicEventRuleCard from '@/app/components/PublicEventRuleCard';
 import PublicHappyHourRuleCard from '@/app/components/PublicHappyHourRuleCard';
 import PublicVenueCard from '@/app/components/PublicVenueCard';
 import { usePublicVenueCollections } from '@/app/components/usePublicVenueCollections';
-import { formatTimeForUi, isOpenNow } from '@/lib/opening-hours';
+import { formatTimeForUi } from '@/lib/opening-hours';
 import {
-  buildHoursJsonFromRules,
+  getDayOfWeekForOffset,
   getPublishedEventRules,
   getPublishedRulesByType,
-  getTodayRulesForType,
+  getRulesForDay,
   hasText,
+  type DayOfWeek,
   type Venue,
   type VenueScheduleRule,
 } from '@/lib/public-venue-discovery';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-type LiveNowFilter =
+type WeekFilter =
   | 'all'
   | 'happy_hour'
   | 'events'
   | 'trivia'
   | 'live_music'
   | 'comedy'
-  | 'ends_soon';
+  | 'karaoke';
 
 type TimeFilter = 'any' | 'afternoon' | 'evening' | 'late_night';
 type SectionKind = 'happy_hour' | 'events' | 'mixed';
-type LiveNowRow = ReturnType<typeof buildLiveNowRow>;
+type WeekRow = ReturnType<typeof buildWeekRow>;
+type DayOption = {
+  offset: number;
+  label: string;
+  shortDate: string;
+  fullDate: string;
+  dayOfWeek: DayOfWeek;
+  isToday: boolean;
+};
 
-const LIVE_NOW_FILTERS: Array<{ value: LiveNowFilter; label: string }> = [
+const WEEK_FILTERS: Array<{ value: WeekFilter; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'happy_hour', label: 'Happy Hour' },
   { value: 'events', label: 'Events' },
   { value: 'trivia', label: 'Trivia' },
   { value: 'live_music', label: 'Live Music' },
   { value: 'comedy', label: 'Comedy' },
-  { value: 'ends_soon', label: 'Ends Soon' },
+  { value: 'karaoke', label: 'Karaoke' },
 ];
 
 const TIME_FILTERS: Array<{ value: TimeFilter; label: string }> = [
@@ -48,59 +57,66 @@ const TIME_FILTERS: Array<{ value: TimeFilter; label: string }> = [
   { value: 'late_night', label: 'Late night' },
 ];
 
-export default function LiveNowPage() {
+const DISPLAY_TIMEZONE = 'Australia/Sydney';
+
+export default function WeekPage() {
   const { liveVenues, loading, error } = usePublicVenueCollections();
-  const [activeFilter, setActiveFilter] = useState<LiveNowFilter>('all');
+  const [selectedOffset, setSelectedOffset] = useState(0);
+  const [activeFilter, setActiveFilter] = useState<WeekFilter>('all');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('any');
   const [searchTerm, setSearchTerm] = useState('');
   const [showMap, setShowMap] = useState(false);
   const mapSectionRef = useRef<HTMLElement | null>(null);
 
-  const liveRows = useMemo(() => {
-    return liveVenues
-      .map((venue) => buildLiveNowRow(venue))
-      .filter((row) => row.isLiveNow)
-      .filter((row) => matchesLiveFilter(row, activeFilter))
-      .filter((row) => matchesTimeFilter(row.primaryStartMinutes, timeFilter))
-      .filter((row) => matchesSearchText(row, searchTerm))
-      .sort(
-        (a, b) =>
-          a.primaryStartMinutes - b.primaryStartMinutes ||
-          b.urgencyScore - a.urgencyScore ||
-          (a.venue.name ?? '').localeCompare(b.venue.name ?? '')
-      );
-  }, [activeFilter, liveVenues, searchTerm, timeFilter]);
+  const dayOptions = useMemo(() => buildDayOptions(), []);
+  const selectedDay = dayOptions.find((option) => option.offset === selectedOffset) ?? dayOptions[0];
+
+  const rows = useMemo(
+    () =>
+      liveVenues
+        .map((venue) => buildWeekRow(venue, selectedDay))
+        .filter((row) => row.isRelevantOnDay)
+        .filter((row) => matchesWeekFilter(row, activeFilter))
+        .filter((row) => matchesTimeFilter(row.primaryStartMinutes, timeFilter))
+        .filter((row) => matchesSearchText(row, searchTerm))
+        .sort(
+          (a, b) =>
+            a.primaryStartMinutes - b.primaryStartMinutes ||
+            (a.venue.name ?? '').localeCompare(b.venue.name ?? '')
+        ),
+    [activeFilter, liveVenues, searchTerm, selectedDay, timeFilter]
+  );
 
   const sections = useMemo(() => {
     if (activeFilter === 'all') {
       return [
         {
-          id: 'happy-hour-live',
-          title: 'Happy hour live',
-          description: 'Deals already running right now.',
+          id: 'week-happy-hour',
+          title: selectedDay.isToday ? 'Happy hour today' : `Happy hour ${selectedDay.fullDate}`,
+          description: 'Lunch pours, after-work deals, and happy hours!',
           kind: 'happy_hour' as SectionKind,
-          rows: liveRows.filter((row) => row.liveHappyHourRules.length > 0),
+          rows: rows.filter((row) => row.dayHappyHourRules.length > 0),
         },
         {
-          id: 'events-live',
-          title: 'Events live',
-          description: 'Trivia, music, comedy, and live sessions already underway.',
+          id: 'week-events',
+          title: selectedDay.isToday ? 'Events today' : `Events ${selectedDay.fullDate}`,
+          description: `Trivia, music, comedy, karaoke, and live sessions lined up for ${selectedDay.fullDate.toLowerCase()}.`,
           kind: 'events' as SectionKind,
-          rows: liveRows.filter((row) => row.liveEventRules.length > 0),
+          rows: rows.filter((row) => row.dayEventRules.length > 0),
         },
       ].filter((section) => section.rows.length > 0);
     }
 
     return [
       {
-        id: 'live-matches',
-        title: getFilterHeading(activeFilter),
-        description: 'Filtered picks happening now.',
+        id: 'week-matches',
+        title: getFilterHeading(activeFilter, selectedDay),
+        description: `Filtered picks for ${selectedDay.fullDate.toLowerCase()}.`,
         kind: getFilterSectionKind(activeFilter),
-        rows: liveRows,
+        rows,
       },
     ];
-  }, [activeFilter, liveRows]);
+  }, [activeFilter, rows, selectedDay]);
 
   const hasActiveFilters = activeFilter !== 'all' || timeFilter !== 'any' || searchTerm.trim().length > 0;
 
@@ -109,9 +125,9 @@ export default function LiveNowPage() {
 
     if (searchTerm.trim()) labels.push(`Search: "${searchTerm.trim()}"`);
 
-    const selectedLiveFilter = LIVE_NOW_FILTERS.find((filter) => filter.value === activeFilter);
-    if (selectedLiveFilter && selectedLiveFilter.value !== 'all') {
-      labels.push(selectedLiveFilter.label);
+    const selectedWeekFilter = WEEK_FILTERS.find((filter) => filter.value === activeFilter);
+    if (selectedWeekFilter && selectedWeekFilter.value !== 'all') {
+      labels.push(selectedWeekFilter.label);
     }
 
     const selectedTimeFilter = TIME_FILTERS.find((filter) => filter.value === timeFilter);
@@ -125,31 +141,31 @@ export default function LiveNowPage() {
   const headlineStats = useMemo(
     () => [
       {
-        label: 'Happy hour live',
-        value: liveRows.filter((row) => row.liveHappyHourRules.length > 0).length,
-        sectionId: activeFilter === 'all' ? 'happy-hour-live' : 'live-matches',
-        emptyLabel: 'No live deals',
+        label: selectedDay.isToday ? 'Happy hour today' : 'Happy hour picks',
+        value: rows.filter((row) => row.dayHappyHourRules.length > 0).length,
+        sectionId: activeFilter === 'all' ? 'week-happy-hour' : 'week-matches',
+        emptyLabel: 'No deals yet',
       },
       {
-        label: 'Events live',
-        value: liveRows.filter((row) => row.liveEventRules.length > 0).length,
-        sectionId: activeFilter === 'all' ? 'events-live' : 'live-matches',
-        emptyLabel: 'Nothing live',
+        label: selectedDay.isToday ? 'Events today' : 'Events lined up',
+        value: rows.filter((row) => row.dayEventRules.length > 0).length,
+        sectionId: activeFilter === 'all' ? 'week-events' : 'week-matches',
+        emptyLabel: 'No events yet',
       },
       {
-        label: 'Ending soon',
-        value: liveRows.filter((row) => row.endsSoon).length,
-        sectionId: 'live-matches',
-        emptyLabel: 'Nothing urgent',
+        label: 'Lunch specials',
+        value: rows.filter((row) => row.hasLunchSpecials).length,
+        sectionId: activeFilter === 'all' ? 'week-happy-hour' : 'week-matches',
+        emptyLabel: 'No lunch deals',
       },
     ],
-    [activeFilter, liveRows]
+    [activeFilter, rows, selectedDay]
   );
 
   const mapVenues = useMemo(() => {
     const seen = new Set<string>();
 
-    return liveRows
+    return rows
       .filter(
         (row) =>
           typeof row.venue.lat === 'number' &&
@@ -168,7 +184,7 @@ export default function LiveNowPage() {
         lat: row.venue.lat,
         lng: row.venue.lng,
       }));
-  }, [liveRows]);
+  }, [rows]);
 
   function resetFilters() {
     setActiveFilter('all');
@@ -191,16 +207,15 @@ export default function LiveNowPage() {
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-orange-500/20 via-[#120805] to-black p-5 sm:p-6">
           <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-orange-300/80">
-            Live Now
+            This Week
           </div>
           <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                What&apos;s on right now
+                What&apos;s on this week
               </h1>
               <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
-                Happy hours and live events happening now across Newtown, Enmore, and
-                Erskineville.
+                Start with today, then jump through the next 6 days to see happy hours and events coming up.
               </p>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -237,37 +252,53 @@ export default function LiveNowPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-200/80">
-                  Keep planning
+                  Live options
                 </div>
-                <h2 className="mt-1 text-xl font-semibold text-white">See what&apos;s next</h2>
+                <h2 className="mt-1 text-xl font-semibold text-white">Need something on right now?</h2>
                 <p className="mt-1 max-w-2xl text-sm text-white/65">
-                  Move from what&apos;s live now into today&apos;s full lineup or the rolling 7-day view to plan ahead.
+                  Switch to the live view for venues with happy hours and events already happening.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2.5">
-                <Link
-                  href="/today"
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
-                >
-                  Open Today
-                </Link>
-                <Link
-                  href="/week"
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border border-orange-300/30 bg-orange-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-orange-400"
-                >
-                  Open This Week
-                </Link>
-              </div>
+              <Link
+                href="/livenow"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border border-orange-300/30 bg-orange-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-orange-400"
+              >
+                Open Live Now
+              </Link>
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[minmax(220px,1.2fr)_auto] md:items-center">
+          <div className="flex flex-wrap gap-2.5">
+            {dayOptions.map((option) => {
+              const active = option.offset === selectedOffset;
+              return (
+                <button
+                  key={option.offset}
+                  type="button"
+                  onClick={() => setSelectedOffset(option.offset)}
+                  className={[
+                    'min-w-[92px] rounded-2xl border px-4 py-3 text-left transition',
+                    active
+                      ? 'border-orange-400 bg-orange-500 text-black'
+                      : 'border-white/10 bg-black/30 text-white/80 hover:bg-white/10',
+                  ].join(' ')}
+                >
+                  <div className="text-sm font-semibold">{option.label}</div>
+                  <div className={active ? 'text-xs text-black/70' : 'text-xs text-white/50'}>
+                    {option.shortDate}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-[minmax(220px,1.2fr)_auto] md:items-center">
             <div className="relative">
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search venue, suburb, or what's on"
+                placeholder={`Search venue, suburb, or ${selectedDay.isToday ? "today's" : `${selectedDay.label.toLowerCase()}'s`} plan`}
                 className="h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 pr-24 text-sm text-white placeholder:text-white/35"
               />
               {searchTerm.trim() ? (
@@ -316,7 +347,7 @@ export default function LiveNowPage() {
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2.5">
-            {LIVE_NOW_FILTERS.map((filter) => {
+            {WEEK_FILTERS.map((filter) => {
               const active = filter.value === activeFilter;
               return (
                 <button
@@ -334,6 +365,10 @@ export default function LiveNowPage() {
                 </button>
               );
             })}
+          </div>
+
+          <div className="mt-3 text-sm text-white/55">
+            Viewing {selectedDay.fullDate}.
           </div>
 
           {hasActiveFilters ? (
@@ -357,7 +392,7 @@ export default function LiveNowPage() {
                 Reset filters
               </button>
               <div className="text-xs text-white/45">
-                Back to the full live view across happy hour and events.
+                Back to the full week view across happy hour and events.
               </div>
             </div>
           ) : null}
@@ -373,9 +408,11 @@ export default function LiveNowPage() {
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-300/70">
                   Map view
                 </div>
-                <h2 className="mt-1 text-xl font-semibold text-white">What&apos;s live now</h2>
+                <h2 className="mt-1 text-xl font-semibold text-white">
+                  What&apos;s on {selectedDay.isToday ? 'today' : selectedDay.label.toLowerCase()}
+                </h2>
                 <div className="mt-1 text-sm text-white/55">
-                  Live happy hours and events only for the current filter set.
+                  {selectedDay.fullDate}&apos;s filtered happy hours and events on the map.
                 </div>
               </div>
               <div className="text-xs uppercase tracking-[0.18em] text-white/35">
@@ -388,8 +425,7 @@ export default function LiveNowPage() {
               </div>
             ) : (
               <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-white/65">
-                No mapped venues match this live filter yet. Try another filter or widen the time
-                window.
+                No mapped venues match this day and filter set yet. Try another filter or another day.
                 {hasActiveFilters ? (
                   <button
                     type="button"
@@ -405,17 +441,17 @@ export default function LiveNowPage() {
         ) : null}
 
         <section className="mt-5">
-          {loading ? <div className="text-white/65">Loading live venues...</div> : null}
+          {loading ? <div className="text-white/65">Loading week picks...</div> : null}
           {!loading && error ? (
             <div className="rounded-3xl border border-red-500/30 bg-red-950/30 p-5 text-red-100">
               {error}
             </div>
           ) : null}
-          {!loading && !error && liveRows.length === 0 ? (
+          {!loading && !error && rows.length === 0 ? (
             <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-white/70">
-              <div>Nothing&apos;s live for this filter right now.</div>
+              <div>Nothing matches this week filter yet.</div>
               <div className="mt-2 text-white/55">
-                Try another filter or check Today for what&apos;s coming up next.
+                Try another day, widen the filters, or search for a venue, suburb, or event style.
               </div>
               {hasActiveFilters ? (
                 <button
@@ -429,11 +465,11 @@ export default function LiveNowPage() {
             </div>
           ) : null}
 
-          {!loading && !error && liveRows.length > 0 ? (
+          {!loading && !error && rows.length > 0 ? (
             <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/60">
-              Showing {liveRows.length} live venue{liveRows.length === 1 ? '' : 's'}
+              Showing {rows.length} venue{rows.length === 1 ? '' : 's'}
               {searchTerm.trim() ? ` for "${searchTerm.trim()}"` : ''}
-              {activeFilter !== 'all' ? ` in ${getFilterHeading(activeFilter).toLowerCase()}` : ''}
+              {activeFilter !== 'all' ? ` in ${getFilterHeading(activeFilter, selectedDay).toLowerCase()}` : ''}
               {timeFilter !== 'any'
                 ? `${activeFilter !== 'all' ? ' during ' : ' for '} ${TIME_FILTERS.find((filter) => filter.value === timeFilter)?.label.toLowerCase()}`
                 : ''}
@@ -447,9 +483,11 @@ export default function LiveNowPage() {
                   <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-300/70">
-                        Live picks
+                        What&apos;s on this week
                       </div>
-                      <h2 className="mt-1 text-xl font-semibold text-white">{section.title}</h2>
+                      <div className="mt-1 text-sm font-medium text-white/70">
+                        {selectedDay.fullDate}
+                      </div>
                       <p className="text-sm text-white/55">{section.description}</p>
                     </div>
                     <div className="text-xs uppercase tracking-[0.18em] text-white/35">
@@ -474,38 +512,29 @@ export default function LiveNowPage() {
                               eyebrow={row.cardEyebrow}
                               badges={row.badges}
                               compact
-                              tone="live"
+                              tone="today"
                               heroBadge={
-                                row.endsSoon ? (
-                                  <TopBadge className="border-red-400/30 bg-red-500/15 text-red-100">
-                                    Ends Soon
-                                  </TopBadge>
-                                ) : row.liveHappyHourRules.length > 0 ? (
+                                row.dayHappyHourRules.length > 0 ? (
                                   <TopBadge className="border-pink-400/30 bg-pink-500/15 text-pink-100">
-                                    Live
+                                    {selectedDay.isToday ? 'Today' : row.dayBadgeLabel}
                                   </TopBadge>
                                 ) : (
                                   <TopBadge className="border-orange-400/30 bg-orange-500/15 text-orange-100">
-                                    Now
+                                    {selectedDay.isToday ? 'Event' : row.dayBadgeLabel}
                                   </TopBadge>
                                 )
                               }
                               summary={
                                 <div className="space-y-2">
                                   <div className="flex flex-wrap gap-2">
-                                    {row.liveHappyHourRules.length > 0 ? (
+                                    {row.dayHappyHourRules.length > 0 ? (
                                       <StatusPill className="border-pink-400/30 bg-pink-500/15 text-pink-100">
-                                        Happy hour live
+                                        {selectedDay.isToday ? 'Happy hour today' : `Happy hour ${row.dayBadgeLabel.toLowerCase()}`}
                                       </StatusPill>
                                     ) : null}
-                                    {row.liveEventRules.length > 0 ? (
+                                    {row.dayEventRules.length > 0 ? (
                                       <StatusPill className="border-orange-400/30 bg-orange-500/15 text-orange-100">
-                                        Events live
-                                      </StatusPill>
-                                    ) : null}
-                                    {row.endsSoon ? (
-                                      <StatusPill className="border-red-400/30 bg-red-500/15 text-red-100">
-                                        Ends soon
+                                        {selectedDay.isToday ? 'Events today' : `Events ${row.dayBadgeLabel.toLowerCase()}`}
                                       </StatusPill>
                                     ) : null}
                                   </div>
@@ -522,10 +551,10 @@ export default function LiveNowPage() {
                               }
                               details={
                                 <div className="space-y-3">
-                                  {row.liveHappyHourRules.map((rule) => (
+                                  {row.dayHappyHourRules.map((rule) => (
                                     <PublicHappyHourRuleCard key={rule.id} rule={rule} compact />
                                   ))}
-                                  {row.liveEventRules.map((rule) => (
+                                  {row.dayEventRules.map((rule) => (
                                     <PublicEventRuleCard key={rule.id} rule={rule} compact />
                                   ))}
                                 </div>
@@ -546,79 +575,119 @@ export default function LiveNowPage() {
   );
 }
 
-function buildLiveNowRow(venue: Venue) {
-  const timezone = venue.timezone || 'Australia/Sydney';
-  const liveHappyHourRules = getTodayRulesForType(
+function buildDayOptions(): DayOption[] {
+  const shortFormatter = new Intl.DateTimeFormat('en-AU', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: DISPLAY_TIMEZONE,
+  });
+  const fullFormatter = new Intl.DateTimeFormat('en-AU', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: DISPLAY_TIMEZONE,
+  });
+
+  return Array.from({ length: 7 }, (_, offset) => {
+    const date = new Date();
+    date.setDate(date.getDate() + offset);
+    const shortText = shortFormatter.format(date);
+    const fullText = fullFormatter.format(date);
+    const label =
+      offset === 0
+        ? 'Today'
+        : fullText.split(' ')[0]?.replace(/,$/, '') ?? fullText;
+
+    return {
+      offset,
+      label,
+      shortDate: shortText,
+      fullDate: fullText,
+      dayOfWeek: getDayOfWeekForOffset(DISPLAY_TIMEZONE, offset),
+      isToday: offset === 0,
+    };
+  });
+}
+
+function buildWeekRow(venue: Venue, selectedDay: DayOption) {
+  const dayHappyHourRules = getRulesForDay(
     getPublishedRulesByType(venue, 'happy_hour'),
-    timezone
-  ).filter((rule) => isOpenNow(buildHoursJsonFromRules([rule]), timezone));
-  const liveEventRules = getTodayRulesForType(getPublishedEventRules(venue), timezone).filter(
-    (rule) => isOpenNow(buildHoursJsonFromRules([rule]), timezone)
+    selectedDay.dayOfWeek
   );
-  const isLiveNow = liveHappyHourRules.length > 0 || liveEventRules.length > 0;
+  const dayEventRules = getRulesForDay(getPublishedEventRules(venue), selectedDay.dayOfWeek);
+  const dayEventTypes = dayEventRules.map((rule) => rule.schedule_type);
+  const isRelevantOnDay = dayHappyHourRules.length > 0 || dayEventRules.length > 0;
 
   const startTimes = [
-    ...liveHappyHourRules.map((rule) => clockToMinutes(rule.start_time)),
-    ...liveEventRules.map((rule) => clockToMinutes(rule.start_time)),
+    ...dayHappyHourRules.map((rule) => clockToMinutes(rule.start_time)),
+    ...dayEventRules.map((rule) => clockToMinutes(rule.start_time)),
   ];
-  const endTimes = [
-    ...liveHappyHourRules.map((rule) => clockToMinutes(rule.end_time)),
-    ...liveEventRules.map((rule) => clockToMinutes(rule.end_time)),
-  ];
+  const primaryStartMinutes = startTimes.length > 0 ? Math.min(...startTimes) : 18 * 60;
+  const hasLunchSpecials = dayHappyHourRules.some((rule) => {
+    const minutes = clockToMinutes(rule.start_time);
+    return minutes >= 11 * 60 && minutes <= 15 * 60;
+  });
 
-  const primaryStartMinutes =
-    startTimes.length > 0 ? Math.min(...startTimes) : getCurrentTimeMinutes(timezone);
-  const soonestEnd = endTimes.length > 0 ? Math.min(...endTimes) : null;
-  const endsSoon = soonestEnd !== null && minutesUntil(soonestEnd, timezone) <= 30;
-
-  const liveEventTypes = liveEventRules.map((rule) => rule.schedule_type);
+  const dayLower = selectedDay.label.toLowerCase();
   const badges = [
-    liveEventTypes.includes('trivia') ? 'Trivia now' : null,
-    liveEventTypes.includes('live_music') ? 'Live music now' : null,
-    liveEventTypes.includes('comedy') ? 'Comedy now' : null,
-    liveEventTypes.includes('karaoke') ? 'Karaoke now' : null,
+    dayEventTypes.includes('trivia') ? `Trivia ${dayLower}` : null,
+    dayEventTypes.includes('live_music') ? `Live music ${dayLower}` : null,
+    dayEventTypes.includes('comedy') ? `Comedy ${dayLower}` : null,
+    dayEventTypes.includes('karaoke') ? `Karaoke ${dayLower}` : null,
+    dayEventTypes.includes('sport') ? 'Sport session' : null,
   ].filter(Boolean) as string[];
 
-  const urgencyScore =
-    liveEventRules.length * 50 + liveHappyHourRules.length * 40 + (endsSoon ? 15 : 0);
+  const primaryEventType = [
+    'trivia',
+    'live_music',
+    'comedy',
+    'karaoke',
+    'special_event',
+    'sport',
+  ].find((type) => dayEventTypes.includes(type as (typeof dayEventTypes)[number]));
 
+  const dayLabel = selectedDay.isToday ? 'Today' : selectedDay.label;
   const cardEyebrow =
-    liveHappyHourRules.length > 0
-      ? 'Happy Hour Live'
-      : liveEventRules.some((rule) => rule.schedule_type === 'trivia')
-        ? 'Trivia Live'
-        : liveEventRules.some((rule) => rule.schedule_type === 'live_music')
-          ? 'Live Music Now'
-          : 'Events Live';
+    dayHappyHourRules.length > 0
+      ? `Happy Hour ${dayLabel}`
+      : primaryEventType === 'trivia'
+        ? `Trivia ${dayLabel}`
+        : primaryEventType === 'live_music'
+          ? `Live Music ${dayLabel}`
+          : primaryEventType === 'comedy'
+            ? `Comedy ${dayLabel}`
+            : primaryEventType === 'karaoke'
+              ? `Karaoke ${dayLabel}`
+              : `Events ${dayLabel}`;
 
   const timeHighlights = [
-    ...liveHappyHourRules.slice(0, 2).map((rule) => buildRangeLabel(rule, 'Happy hour')),
-    ...liveEventRules.slice(0, 2).map((rule) => buildRangeLabel(rule, eventRuleLabel(rule))),
+    ...dayHappyHourRules.slice(0, 2).map((rule) => buildRangeLabel(rule, 'Happy hour')),
+    ...dayEventRules.slice(0, 2).map((rule) => buildRangeLabel(rule, eventRuleLabel(rule))),
   ];
 
   return {
     venue,
-    liveHappyHourRules,
-    liveEventRules,
-    liveEventTypes,
-    isLiveNow,
-    endsSoon,
+    dayHappyHourRules,
+    dayEventRules,
+    dayEventTypes,
+    isRelevantOnDay,
     primaryStartMinutes,
-    urgencyScore,
+    hasLunchSpecials,
     badges,
     cardEyebrow,
     timeHighlights,
+    dayBadgeLabel: dayLabel,
   };
 }
 
-function matchesLiveFilter(row: LiveNowRow, filter: LiveNowFilter) {
+function matchesWeekFilter(row: WeekRow, filter: WeekFilter) {
   if (filter === 'all') return true;
-  if (filter === 'happy_hour') return row.liveHappyHourRules.length > 0;
-  if (filter === 'events') return row.liveEventRules.length > 0;
-  if (filter === 'trivia') return row.liveEventTypes.includes('trivia');
-  if (filter === 'live_music') return row.liveEventTypes.includes('live_music');
-  if (filter === 'comedy') return row.liveEventTypes.includes('comedy');
-  if (filter === 'ends_soon') return row.endsSoon;
+  if (filter === 'happy_hour') return row.dayHappyHourRules.length > 0;
+  if (filter === 'events') return row.dayEventRules.length > 0;
+  if (filter === 'trivia') return row.dayEventTypes.includes('trivia');
+  if (filter === 'live_music') return row.dayEventTypes.includes('live_music');
+  if (filter === 'comedy') return row.dayEventTypes.includes('comedy');
+  if (filter === 'karaoke') return row.dayEventTypes.includes('karaoke');
   return true;
 }
 
@@ -630,7 +699,7 @@ function matchesTimeFilter(minutes: number, filter: TimeFilter) {
   return true;
 }
 
-function matchesSearchText(row: LiveNowRow, searchTerm: string) {
+function matchesSearchText(row: WeekRow, searchTerm: string) {
   const normalized = searchTerm.trim().toLowerCase();
   if (!normalized) return true;
 
@@ -638,8 +707,8 @@ function matchesSearchText(row: LiveNowRow, searchTerm: string) {
     row.venue.name,
     row.venue.suburb,
     row.venue.address,
-    ...row.liveHappyHourRules.flatMap((rule) => collectRuleSearchParts(rule)),
-    ...row.liveEventRules.flatMap((rule) => collectRuleSearchParts(rule)),
+    ...row.dayHappyHourRules.flatMap((rule) => collectRuleSearchParts(rule)),
+    ...row.dayEventRules.flatMap((rule) => collectRuleSearchParts(rule)),
   ]
     .filter(hasText)
     .join(' ')
@@ -658,27 +727,29 @@ function collectRuleSearchParts(rule: VenueScheduleRule) {
   ];
 }
 
-function getFilterHeading(filter: LiveNowFilter) {
-  if (filter === 'happy_hour') return 'Happy hour live';
-  if (filter === 'events') return 'Events live';
-  if (filter === 'trivia') return 'Trivia live';
-  if (filter === 'live_music') return 'Live music now';
-  if (filter === 'comedy') return 'Comedy live';
-  if (filter === 'ends_soon') return 'Ending soon';
-  return 'Live now';
+function getFilterHeading(filter: WeekFilter, selectedDay: DayOption) {
+  const suffix = selectedDay.isToday ? 'today' : selectedDay.label.toLowerCase();
+  if (filter === 'happy_hour') return `Happy hour ${suffix}`;
+  if (filter === 'events') return `Events ${suffix}`;
+  if (filter === 'trivia') return `Trivia ${suffix}`;
+  if (filter === 'live_music') return `Live music ${suffix}`;
+  if (filter === 'comedy') return `Comedy ${suffix}`;
+  if (filter === 'karaoke') return `Karaoke ${suffix}`;
+  return selectedDay.isToday ? 'What&apos;s on today' : `What&apos;s on ${suffix}`;
 }
 
-function getFilterSectionKind(filter: LiveNowFilter): SectionKind {
+function getFilterSectionKind(filter: WeekFilter): SectionKind {
   if (filter === 'happy_hour') return 'happy_hour';
   if (filter === 'events') return 'events';
   if (filter === 'trivia') return 'events';
   if (filter === 'live_music') return 'events';
   if (filter === 'comedy') return 'events';
+  if (filter === 'karaoke') return 'events';
   return 'mixed';
 }
 
-function groupRowsByTime(rows: LiveNowRow[], kind: SectionKind) {
-  const groups = new Map<number, LiveNowRow[]>();
+function groupRowsByTime(rows: WeekRow[], kind: SectionKind) {
+  const groups = new Map<number, WeekRow[]>();
 
   rows.forEach((row) => {
     const minutes = getGroupMinutes(row, kind);
@@ -699,13 +770,13 @@ function groupRowsByTime(rows: LiveNowRow[], kind: SectionKind) {
     }));
 }
 
-function getGroupMinutes(row: LiveNowRow, kind: SectionKind) {
-  if (kind === 'happy_hour' && row.liveHappyHourRules.length > 0) {
-    return Math.min(...row.liveHappyHourRules.map((rule) => clockToMinutes(rule.start_time)));
+function getGroupMinutes(row: WeekRow, kind: SectionKind) {
+  if (kind === 'happy_hour' && row.dayHappyHourRules.length > 0) {
+    return Math.min(...row.dayHappyHourRules.map((rule) => clockToMinutes(rule.start_time)));
   }
 
-  if (kind === 'events' && row.liveEventRules.length > 0) {
-    return Math.min(...row.liveEventRules.map((rule) => clockToMinutes(rule.start_time)));
+  if (kind === 'events' && row.dayEventRules.length > 0) {
+    return Math.min(...row.dayEventRules.map((rule) => clockToMinutes(rule.start_time)));
   }
 
   return row.primaryStartMinutes;
@@ -731,26 +802,6 @@ function eventRuleLabel(rule: VenueScheduleRule) {
 function clockToMinutes(value: string) {
   const [hours, minutes] = value.slice(0, 5).split(':').map(Number);
   return hours * 60 + minutes;
-}
-
-function getCurrentTimeMinutes(timezone: string) {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: timezone,
-  });
-  const parts = formatter.formatToParts(new Date());
-  const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? '0');
-  const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? '0');
-  return hour * 60 + minute;
-}
-
-function minutesUntil(targetMinutes: number, timezone: string) {
-  const nowMinutes = getCurrentTimeMinutes(timezone);
-  return targetMinutes >= nowMinutes
-    ? targetMinutes - nowMinutes
-    : targetMinutes + 1440 - nowMinutes;
 }
 
 function formatTimeHeading(minutes: number) {

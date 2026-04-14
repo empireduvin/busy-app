@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdminRequest } from '@/lib/admin-server';
 import { getErrorStatus } from '@/lib/authz';
 import { getEffectiveKitchenHours } from '@/lib/venue-type-rules';
+import { normalizeInstagramUrl } from '@/lib/social-links';
 
 type OpeningHours = {
   monday?: Array<{ open: string; close: string }>;
@@ -142,6 +143,7 @@ export async function POST(request: Request) {
       lng: String(venue.lng ?? '').trim() ? Number(venue.lng) : null,
       phone: String(venue.phone ?? '').trim() || null,
       website_url: String(venue.website_url ?? '').trim() || null,
+      instagram_url: normalizeInstagramUrl(String(venue.instagram_url ?? '')),
       google_rating: String(venue.google_rating ?? '').trim()
         ? Number(venue.google_rating)
         : null,
@@ -180,7 +182,7 @@ export async function POST(request: Request) {
         .update(payload)
         .eq('id', existingVenueId)
         .select(
-          'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, dog_friendly, kid_friendly, opening_hours'
+          'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, dog_friendly, kid_friendly, opening_hours'
         )
         .single();
 
@@ -197,7 +199,7 @@ export async function POST(request: Request) {
       .from('venues')
       .insert(payload)
       .select(
-        'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, dog_friendly, kid_friendly, opening_hours'
+        'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, dog_friendly, kid_friendly, opening_hours'
       )
       .single();
 

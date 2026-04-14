@@ -3,6 +3,7 @@
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import { buildPublicVenueHref } from '@/lib/public-venue-discovery';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
+import { normalizeInstagramUrl } from '@/lib/social-links';
 import {
   type HappyHourDetailItem,
   type HappyHourDetailJson,
@@ -76,6 +77,7 @@ type PortalVenueDetail = {
   address?: string | null;
   phone?: string | null;
   website_url?: string | null;
+  instagram_url?: string | null;
   shows_sport?: boolean | null;
   plays_with_sound?: boolean | null;
   sport_types?: string | null;
@@ -102,6 +104,7 @@ type VenueFormState = {
   address: string;
   phone: string;
   website_url: string;
+  instagram_url: string;
   shows_sport: boolean;
   plays_with_sound: boolean;
   sport_types: string;
@@ -151,6 +154,7 @@ function blankVenueForm(): VenueFormState {
     address: '',
     phone: '',
     website_url: '',
+    instagram_url: '',
     shows_sport: false,
     plays_with_sound: false,
     sport_types: '',
@@ -509,7 +513,7 @@ export default function PortalVenueDetailPage() {
     const { data: venueRow, error: venueError } = await supabase
       .from('venues')
       .select(
-        'id, name, suburb, venue_type_id, updated_at, address, phone, website_url, shows_sport, plays_with_sound, sport_types, dog_friendly, kid_friendly, opening_hours, kitchen_hours, happy_hour_hours, venue_types(label, slug), venue_schedule_rules(id, venue_id, schedule_type, day_of_week, start_time, end_time, sort_order, title, description, deal_text, notes, detail_json, is_active, status)'
+        'id, name, suburb, venue_type_id, updated_at, address, phone, website_url, instagram_url, shows_sport, plays_with_sound, sport_types, dog_friendly, kid_friendly, opening_hours, kitchen_hours, happy_hour_hours, venue_types(label, slug), venue_schedule_rules(id, venue_id, schedule_type, day_of_week, start_time, end_time, sort_order, title, description, deal_text, notes, detail_json, is_active, status)'
       )
       .eq('id', venueId)
       .maybeSingle();
@@ -536,6 +540,7 @@ export default function PortalVenueDetailPage() {
       address: nextVenue.address ?? '',
       phone: nextVenue.phone ?? '',
       website_url: nextVenue.website_url ?? '',
+      instagram_url: nextVenue.instagram_url ?? '',
       shows_sport: normalizeBooleanFlag(nextVenue.shows_sport),
       plays_with_sound: normalizeBooleanFlag(nextVenue.plays_with_sound),
       sport_types: nextVenue.sport_types ?? '',
@@ -727,6 +732,9 @@ export default function PortalVenueDetailPage() {
           address: String(result.venue?.address ?? current.address ?? ''),
           phone: String(result.venue?.phone ?? current.phone ?? ''),
           website_url: String(result.venue?.website_url ?? current.website_url ?? ''),
+          instagram_url: String(
+            result.venue?.instagram_url ?? current.instagram_url ?? ''
+          ),
           shows_sport:
             result.venue?.shows_sport != null
               ? normalizeBooleanFlag(result.venue.shows_sport)
@@ -1005,6 +1013,7 @@ export default function PortalVenueDetailPage() {
               <div>{venue.address ?? 'No address listed yet'}</div>
               {venue.phone ? <div className="mt-2">{venue.phone}</div> : null}
               {venue.website_url ? <a href={venue.website_url} target="_blank" rel="noreferrer" className="mt-2 block text-cyan-200 hover:text-cyan-100">Website</a> : null}
+              {normalizeInstagramUrl(venue.instagram_url) ? <a href={normalizeInstagramUrl(venue.instagram_url) ?? undefined} target="_blank" rel="noreferrer" className="mt-2 block text-cyan-200 hover:text-cyan-100">Instagram</a> : null}
             </div>
           </div>
         </section>
@@ -1090,6 +1099,7 @@ export default function PortalVenueDetailPage() {
               <div><label className="mb-1 block text-sm font-medium text-white/75">Address</label><input type="text" value={venueForm.address} onChange={(event) => updateVenueForm('address', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
               <div><label className="mb-1 block text-sm font-medium text-white/75">Phone</label><input type="text" value={venueForm.phone} onChange={(event) => updateVenueForm('phone', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
               <div><label className="mb-1 block text-sm font-medium text-white/75">Website</label><input type="text" value={venueForm.website_url} onChange={(event) => updateVenueForm('website_url', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
+              <div><label className="mb-1 block text-sm font-medium text-white/75">Instagram</label><input type="text" value={venueForm.instagram_url} onChange={(event) => updateVenueForm('instagram_url', event.target.value)} placeholder="@venuehandle or https://instagram.com/..." className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
               <div><label className="mb-1 block text-sm font-medium text-white/75">Sport types</label><input type="text" value={venueForm.sport_types} onChange={(event) => updateVenueForm('sport_types', event.target.value)} placeholder="e.g. AFL, NRL, UFC" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
             </div>
             <div className="mt-5 grid gap-2 sm:grid-cols-2">

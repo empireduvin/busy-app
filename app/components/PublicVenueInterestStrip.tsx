@@ -8,11 +8,10 @@ export default function PublicVenueInterestStrip() {
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-orange-300/80">
-            Need something updated?
+            Need a quick update?
           </div>
           <div className="mt-1 text-sm text-white/65">
-            Corrections, venue partnerships, or venues wanting their own access to publish happy
-            hours and events can reach us directly.
+            Fix a listing, get venue access, or feature your events and happy hours.
           </div>
         </div>
 
@@ -24,10 +23,10 @@ export default function PublicVenueInterestStrip() {
             Contact us
           </Link>
           <a
-            href="mailto:admin@firstroundapp.com"
+            href="mailto:admin.firstround@gmail.com"
             className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
           >
-            admin@firstroundapp.com
+            admin.firstround@gmail.com
           </a>
         </div>
       </div>
