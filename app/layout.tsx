@@ -15,7 +15,7 @@ export default function RootLayout({
         <div className="min-h-screen flex flex-col">
           <header className="sticky top-0 z-50 border-b border-white/10 bg-black/95 text-white backdrop-blur">
             <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
-              <Link href="/livenow" className="inline-flex items-center text-white transition hover:opacity-90">
+              <Link href="/livenow" className="inline-flex max-w-full items-center text-white transition hover:opacity-90">
                 <FirstRoundLogo compact />
               </Link>
               <PublicNavLinks />

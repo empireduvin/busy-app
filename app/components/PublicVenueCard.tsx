@@ -85,8 +85,8 @@ export default function PublicVenueCard({
         </div>
 
         <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className={[compact ? 'text-[26px]' : 'text-3xl', 'font-semibold leading-[1.05] text-white'].join(' ')}>
+          <div className="min-w-0 flex-1">
+            <h2 className={[compact ? 'text-[18px] sm:text-[26px]' : 'text-[22px] sm:text-3xl', 'break-words font-semibold leading-[1.05] text-white'].join(' ')}>
               {venue.name || 'Untitled venue'}
             </h2>
             <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/75">
@@ -103,9 +103,9 @@ export default function PublicVenueCard({
         </div>
 
         {venue.address ? (
-          <div className="mt-3 inline-flex items-center gap-2 text-sm text-white/58">
+          <div className="mt-3 flex min-w-0 items-start gap-2 text-sm text-white/58">
             <span className="h-1.5 w-1.5 rounded-full bg-orange-400/80" />
-            <span>{venue.address}</span>
+            <span className="min-w-0 break-words">{venue.address}</span>
           </div>
         ) : null}
 
@@ -124,7 +124,6 @@ export default function PublicVenueCard({
           className={[
             'mt-5 grid grid-cols-2 text-sm',
             compact ? 'gap-2' : 'gap-3',
-            'sm:flex sm:flex-wrap',
           ].join(' ')}
         >
           <a

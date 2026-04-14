@@ -272,7 +272,7 @@ export default function TodayPage() {
               ) : null}
             </div>
 
-            <div className="no-scrollbar flex gap-2.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+            <div className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap">
               {TIME_FILTERS.map((filter) => {
                 const active = filter.value === timeFilter;
                 return (
@@ -281,7 +281,7 @@ export default function TodayPage() {
                     type="button"
                     onClick={() => setTimeFilter(filter.value)}
                     className={[
-                      'rounded-full border px-4 py-2 text-sm transition sm:px-3 sm:py-1.5 sm:text-xs',
+                      'min-w-0 rounded-full border px-4 py-2 text-sm transition sm:px-3 sm:py-1.5 sm:text-xs',
                       active
                         ? 'border-white/20 bg-white/15 text-white'
                         : 'border-white/10 bg-black/20 text-white/60 hover:bg-white/10',
@@ -295,7 +295,7 @@ export default function TodayPage() {
                 type="button"
                 onClick={() => setShowMap((current) => !current)}
                 className={[
-                  'rounded-full border px-4 py-2 text-sm transition sm:px-3 sm:py-1.5 sm:text-xs',
+                  'min-w-0 rounded-full border px-4 py-2 text-sm transition sm:px-3 sm:py-1.5 sm:text-xs',
                   showMap
                     ? 'border-orange-400/30 bg-orange-500/12 text-orange-100'
                     : 'border-white/10 bg-black/20 text-white/60 hover:bg-white/10',
@@ -306,7 +306,7 @@ export default function TodayPage() {
             </div>
           </div>
 
-            <div className="no-scrollbar mt-3 flex gap-2.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+          <div className="mt-3 grid grid-cols-3 gap-2.5 sm:flex sm:flex-wrap">
             {TODAY_FILTERS.map((filter) => {
               const active = filter.value === activeFilter;
               return (
@@ -315,7 +315,7 @@ export default function TodayPage() {
                   type="button"
                   onClick={() => setActiveFilter(filter.value)}
                   className={[
-                    'rounded-full border px-4 py-2.5 text-sm transition sm:py-2',
+                    'min-w-0 rounded-full border px-3 py-2.5 text-sm transition sm:px-4 sm:py-2',
                     active
                       ? 'border-orange-400 bg-orange-500 text-black'
                       : 'border-white/10 bg-black/30 text-white/75 hover:bg-white/10',
