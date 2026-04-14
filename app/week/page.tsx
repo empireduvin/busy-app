@@ -251,15 +251,15 @@ export default function WeekPage() {
         </section>
 
         <section className="mt-4 rounded-[1.75rem] border border-white/8 bg-white/[0.03] p-3 sm:mt-5 sm:rounded-3xl sm:border-white/10 sm:bg-white/5 sm:p-4">
-          <div className="mb-3 rounded-[1.5rem] border border-orange-400/15 bg-orange-500/[0.08] p-3 sm:mb-4 sm:rounded-3xl sm:border-orange-400/20 sm:bg-orange-500/10 sm:p-5">
+          <div className="mb-3 rounded-[1.5rem] border border-white/8 bg-white/[0.02] p-3 sm:mb-4 sm:rounded-3xl sm:border-orange-400/20 sm:bg-orange-500/10 sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-200/80">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/40 sm:text-orange-200/80">
                   Live options
                 </div>
-                <h2 className="mt-1 text-lg font-semibold text-white sm:text-xl">Need something on right now?</h2>
-                <p className="mt-1 text-[13px] leading-5 text-white/65 sm:hidden">
-                  Switch to the live view for venues happening now.
+                <h2 className="mt-1 text-base font-semibold text-white sm:text-xl">Need something now?</h2>
+                <p className="mt-1 text-[12px] leading-5 text-white/58 sm:hidden">
+                  Live Now is there if you need something happening straight away.
                 </p>
                 <p className="mt-1 hidden max-w-2xl text-[13px] leading-5 text-white/65 sm:block sm:text-sm">
                   Switch to the live view for venues with happy hours and events already happening.
@@ -267,14 +267,14 @@ export default function WeekPage() {
               </div>
               <Link
                 href="/livenow"
-                className="inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-orange-300/30 bg-orange-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-orange-400 sm:w-auto"
+                className="inline-flex min-h-[34px] w-full items-center justify-center rounded-full border border-white/10 bg-transparent px-3 py-1.5 text-[12px] font-medium text-white/68 transition hover:border-white/15 hover:bg-white/[0.05] hover:text-white sm:min-h-[44px] sm:w-auto sm:rounded-2xl sm:border-transparent sm:bg-orange-500 sm:px-4 sm:py-2 sm:text-sm sm:font-semibold sm:text-black sm:hover:bg-orange-400"
               >
-                Open Live Now
+                Browse Live Now
               </Link>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:gap-2.5">
+          <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2.5">
             {dayOptions.map((option) => {
               const active = option.offset === selectedOffset;
               return (
@@ -283,19 +283,19 @@ export default function WeekPage() {
                   type="button"
                   onClick={() => setSelectedOffset(option.offset)}
                   className={[
-                    'min-w-0 rounded-2xl border px-2.5 py-2.5 text-left transition sm:min-w-[92px] sm:px-4 sm:py-3',
+                    'min-w-0 rounded-[1.05rem] border px-2 py-2 text-left transition sm:min-w-[92px] sm:rounded-2xl sm:px-4 sm:py-3',
                     active
-                      ? 'border-orange-400 bg-orange-500 text-black'
-                      : 'border-white/10 bg-black/30 text-white/80 hover:bg-white/10',
+                      ? 'border-orange-400/75 bg-orange-500/90 text-black'
+                      : 'border-white/8 bg-black/22 text-white/74 hover:bg-white/8 hover:text-white',
                   ].join(' ')}
                 >
-                  <div className="text-xs font-semibold sm:text-sm">
+                  <div className="text-[11px] font-semibold sm:text-sm">
                     <span className="sm:hidden">
                       {option.isToday ? 'Today' : option.label.slice(0, 3)}
                     </span>
                     <span className="hidden sm:inline">{option.label}</span>
                   </div>
-                  <div className={active ? 'text-[11px] text-black/70' : 'text-[11px] text-white/50'}>
+                  <div className={active ? 'text-[10px] text-black/70' : 'text-[10px] text-white/46'}>
                     {option.shortDate}
                   </div>
                 </button>
@@ -303,33 +303,33 @@ export default function WeekPage() {
             })}
           </div>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-[minmax(220px,1.2fr)_auto] md:items-center">
+          <div className="mt-3.5 grid gap-2.5 md:mt-4 md:grid-cols-[minmax(220px,1.2fr)_auto] md:items-center md:gap-3">
             <div className="relative">
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder={`Search venue, suburb, or ${selectedDay.isToday ? "today's" : `${selectedDay.label.toLowerCase()}'s`} plan`}
-                className="h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 pr-24 text-sm text-white placeholder:text-white/35"
+                className="h-11 w-full rounded-[1.1rem] border border-white/8 bg-black/30 px-3.5 pr-20 text-[13px] text-white placeholder:text-white/32 sm:h-12 sm:rounded-2xl sm:border-white/10 sm:px-4 sm:pr-24 sm:text-sm"
               />
               {searchTerm.trim() ? (
                 <button
                   type="button"
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-white/70 hover:bg-white/10 hover:text-white"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-[10px] text-white/62 hover:bg-white/10 hover:text-white sm:border-white/10 sm:px-3 sm:text-[11px]"
                 >
                   Clear
                 </button>
               ) : null}
             </div>
 
-            <div className="grid grid-cols-[1fr_1fr_auto] gap-2 sm:hidden">
+            <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5 sm:hidden">
               <label className="min-w-0">
                 <span className="sr-only">Filter by time</span>
                 <select
                   value={timeFilter}
                   onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
-                  className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
+                  className="h-9 w-full rounded-xl border border-white/8 bg-black/22 px-3 text-[12px] text-white/84 outline-none"
                 >
                   {TIME_FILTERS.map((filter) => (
                     <option key={filter.value} value={filter.value}>
@@ -343,7 +343,7 @@ export default function WeekPage() {
                 <select
                   value={activeFilter}
                   onChange={(event) => setActiveFilter(event.target.value as WeekFilter)}
-                  className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
+                  className="h-9 w-full rounded-xl border border-white/8 bg-black/22 px-3 text-[12px] text-white/84 outline-none"
                 >
                   {WEEK_FILTERS.map((filter) => (
                     <option key={filter.value} value={filter.value}>
@@ -356,10 +356,10 @@ export default function WeekPage() {
                 type="button"
                 onClick={() => setShowMap((current) => !current)}
                 className={[
-                  'inline-flex h-10 min-w-[72px] items-center justify-center rounded-xl border px-3 text-xs font-medium transition',
+                  'inline-flex h-9 min-w-[64px] items-center justify-center rounded-xl border px-2.5 text-[11px] font-medium transition',
                   showMap
-                    ? 'border-orange-400/30 bg-orange-500/12 text-orange-100'
-                    : 'border-white/10 bg-black/20 text-white/70 hover:bg-white/10',
+                    ? 'border-orange-400/22 bg-orange-500/[0.10] text-orange-100'
+                    : 'border-white/8 bg-black/18 text-white/62 hover:bg-white/8 hover:text-white',
                 ].join(' ')}
               >
                 {showMap ? 'Map on' : 'Map'}
@@ -606,10 +606,15 @@ export default function WeekPage() {
                               details={
                                 <div className="space-y-3">
                                   {row.dayHappyHourRules.map((rule) => (
-                                    <PublicHappyHourRuleCard key={rule.id} rule={rule} compact />
+                                    <PublicHappyHourRuleCard
+                                      key={rule.id}
+                                      rule={rule}
+                                      compact
+                                      discoverySummary
+                                    />
                                   ))}
                                   {row.dayEventRules.map((rule) => (
-                                    <PublicEventRuleCard key={rule.id} rule={rule} compact />
+                                    <PublicEventRuleCard key={rule.id} rule={rule} compact discoverySummary />
                                   ))}
                                 </div>
                               }
@@ -873,7 +878,7 @@ function StatusPill({
   className: string;
 }) {
   return (
-    <span className={`rounded-full border px-3 py-1 text-xs font-medium ${className}`}>
+    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${className}`}>
       {children}
     </span>
   );
@@ -881,7 +886,7 @@ function StatusPill({
 
 function TimePill({ children }: { children: string }) {
   return (
-    <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] text-white/70">
+    <span className="rounded-full border border-white/8 bg-black/18 px-2.5 py-1 text-[10px] text-white/60">
       {children}
     </span>
   );
@@ -896,7 +901,7 @@ function TopBadge({
 }) {
   return (
     <span
-      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${className}`}
+      className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${className}`}
     >
       {children}
     </span>

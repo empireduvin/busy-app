@@ -235,15 +235,15 @@ export default function TodayPage() {
         </section>
 
         <section className="mt-4 rounded-[1.75rem] border border-white/8 bg-white/[0.03] p-3 sm:mt-5 sm:rounded-3xl sm:border-white/10 sm:bg-white/5 sm:p-4">
-          <div className="mb-3 rounded-[1.5rem] border border-orange-400/15 bg-orange-500/[0.08] p-3 sm:mb-4 sm:rounded-3xl sm:border-orange-400/20 sm:bg-orange-500/10 sm:p-5">
+          <div className="mb-3 rounded-[1.5rem] border border-white/8 bg-white/[0.02] p-3 sm:mb-4 sm:rounded-3xl sm:border-orange-400/20 sm:bg-orange-500/10 sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-200/80">
-                  New
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/40 sm:text-orange-200/80">
+                  Looking ahead?
                 </div>
-                <h2 className="mt-1 text-lg font-semibold text-white sm:text-xl">See the next 7 days</h2>
-                <p className="mt-1 text-[13px] leading-5 text-white/65 sm:hidden">
-                  Jump into the rolling week view and see what&apos;s next.
+                <h2 className="mt-1 text-base font-semibold text-white sm:text-xl">More coming up</h2>
+                <p className="mt-1 text-[12px] leading-5 text-white/58 sm:hidden">
+                  The week view has the next 7 days if you want to plan ahead.
                 </p>
                 <p className="mt-1 hidden max-w-2xl text-[13px] leading-5 text-white/65 sm:block sm:text-sm">
                   Jump from today into the rolling week view to check what&apos;s coming up next across happy hour and events.
@@ -251,40 +251,40 @@ export default function TodayPage() {
               </div>
               <Link
                 href="/week"
-                className="inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-orange-300/30 bg-orange-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-orange-400 sm:w-auto"
+                className="inline-flex min-h-[34px] w-full items-center justify-center rounded-full border border-white/10 bg-transparent px-3 py-1.5 text-[12px] font-medium text-white/68 transition hover:border-white/15 hover:bg-white/[0.05] hover:text-white sm:min-h-[44px] sm:w-auto sm:rounded-2xl sm:border-transparent sm:bg-orange-500 sm:px-4 sm:py-2 sm:text-sm sm:font-semibold sm:text-black sm:hover:bg-orange-400"
               >
-                Open This Week
+                Browse This Week
               </Link>
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[minmax(220px,1.2fr)_auto] md:items-center">
+          <div className="grid gap-2.5 md:grid-cols-[minmax(220px,1.2fr)_auto] md:items-center md:gap-3">
             <div className="relative">
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Search venue, suburb, or today&apos;s plan"
-                className="h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 pr-24 text-sm text-white placeholder:text-white/35"
+                className="h-11 w-full rounded-[1.1rem] border border-white/8 bg-black/30 px-3.5 pr-20 text-[13px] text-white placeholder:text-white/32 sm:h-12 sm:rounded-2xl sm:border-white/10 sm:px-4 sm:pr-24 sm:text-sm"
               />
               {searchTerm.trim() ? (
                 <button
                   type="button"
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-white/70 hover:bg-white/10 hover:text-white"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-[10px] text-white/62 hover:bg-white/10 hover:text-white sm:border-white/10 sm:px-3 sm:text-[11px]"
                 >
                   Clear
                 </button>
               ) : null}
             </div>
 
-            <div className="grid grid-cols-[1fr_1fr_auto] gap-2 sm:hidden">
+            <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5 sm:hidden">
               <label className="min-w-0">
                 <span className="sr-only">Filter by time</span>
                 <select
                   value={timeFilter}
                   onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
-                  className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
+                  className="h-9 w-full rounded-xl border border-white/8 bg-black/22 px-3 text-[12px] text-white/84 outline-none"
                 >
                   {TIME_FILTERS.map((filter) => (
                     <option key={filter.value} value={filter.value}>
@@ -298,7 +298,7 @@ export default function TodayPage() {
                 <select
                   value={activeFilter}
                   onChange={(event) => setActiveFilter(event.target.value as TodayFilter)}
-                  className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
+                  className="h-9 w-full rounded-xl border border-white/8 bg-black/22 px-3 text-[12px] text-white/84 outline-none"
                 >
                   {TODAY_FILTERS.map((filter) => (
                     <option key={filter.value} value={filter.value}>
@@ -311,10 +311,10 @@ export default function TodayPage() {
                 type="button"
                 onClick={() => setShowMap((current) => !current)}
                 className={[
-                  'inline-flex h-10 min-w-[72px] items-center justify-center rounded-xl border px-3 text-xs font-medium transition',
+                  'inline-flex h-9 min-w-[64px] items-center justify-center rounded-xl border px-2.5 text-[11px] font-medium transition',
                   showMap
-                    ? 'border-orange-400/30 bg-orange-500/12 text-orange-100'
-                    : 'border-white/10 bg-black/20 text-white/70 hover:bg-white/10',
+                    ? 'border-orange-400/22 bg-orange-500/[0.10] text-orange-100'
+                    : 'border-white/8 bg-black/18 text-white/62 hover:bg-white/8 hover:text-white',
                 ].join(' ')}
               >
                 {showMap ? 'Map on' : 'Map'}
@@ -360,10 +360,10 @@ export default function TodayPage() {
               const active = filter.value === activeFilter;
               return (
                 <button
-                  key={filter.value}
-                  type="button"
-                  onClick={() => setActiveFilter(filter.value)}
-                  className={[
+                    key={filter.value}
+                    type="button"
+                    onClick={() => setActiveFilter(filter.value)}
+                    className={[
                     'min-w-0 rounded-full border px-3 py-2.5 text-sm transition sm:px-4 sm:py-2',
                     active
                       ? 'border-orange-400 bg-orange-500 text-black'
@@ -553,10 +553,15 @@ export default function TodayPage() {
                               details={
                                 <div className="space-y-3">
                                   {row.todayHappyHourRules.map((rule) => (
-                                    <PublicHappyHourRuleCard key={rule.id} rule={rule} compact />
+                                    <PublicHappyHourRuleCard
+                                      key={rule.id}
+                                      rule={rule}
+                                      compact
+                                      discoverySummary
+                                    />
                                   ))}
                                   {row.todayEventRules.map((rule) => (
-                                    <PublicEventRuleCard key={rule.id} rule={rule} compact />
+                                    <PublicEventRuleCard key={rule.id} rule={rule} compact discoverySummary />
                                   ))}
                                 </div>
                               }
@@ -784,7 +789,7 @@ function StatusPill({
   className: string;
 }) {
   return (
-    <span className={`rounded-full border px-3 py-1 text-xs font-medium ${className}`}>
+    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${className}`}>
       {children}
     </span>
   );
@@ -792,7 +797,7 @@ function StatusPill({
 
 function TimePill({ children }: { children: string }) {
   return (
-    <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] text-white/70">
+    <span className="rounded-full border border-white/8 bg-black/18 px-2.5 py-1 text-[10px] text-white/60">
       {children}
     </span>
   );
@@ -807,7 +812,7 @@ function TopBadge({
 }) {
   return (
     <span
-      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${className}`}
+      className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${className}`}
     >
       {children}
     </span>
