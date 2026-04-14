@@ -35,6 +35,18 @@ export default function PublicVenueCard({
   const venueTypeLabel = getVenueTypeLabel(venue);
   const websiteHref = buildPublicVenueHref(venue);
   const instagramHref = normalizeInstagramUrl(venue.instagram_url);
+  const allBadges = [
+    ...(badges ?? []),
+    ...(normalizeBooleanFlag(venue.shows_sport) ? ['Sport'] : []),
+    ...(normalizeBooleanFlag(venue.shows_sport) && normalizeBooleanFlag(venue.plays_with_sound)
+      ? ['With sound']
+      : []),
+    ...(normalizeBooleanFlag(venue.byo_allowed) ? ['BYO'] : []),
+    ...(normalizeBooleanFlag(venue.dog_friendly) ? ['Dog'] : []),
+    ...(normalizeBooleanFlag(venue.kid_friendly) ? ['Kid'] : []),
+  ];
+  const visibleBadges = compact ? allBadges.slice(0, 3) : allBadges;
+  const hiddenBadgeCount = compact ? Math.max(0, allBadges.length - visibleBadges.length) : 0;
   const toneClasses =
     tone === 'live'
       ? 'border-orange-400/20 bg-[linear-gradient(180deg,rgba(255,111,36,0.16),rgba(255,255,255,0.04)_30%,rgba(255,255,255,0.03))]'
@@ -100,25 +112,25 @@ export default function PublicVenueCard({
         {summary ? <div className="mt-4">{summary}</div> : null}
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {badges?.map((badge) => (
+          {visibleBadges.map((badge) => (
             <MetaPill key={badge}>{badge}</MetaPill>
           ))}
-          {normalizeBooleanFlag(venue.shows_sport) ? <MetaPill>Sport</MetaPill> : null}
-          {normalizeBooleanFlag(venue.shows_sport) && normalizeBooleanFlag(venue.plays_with_sound) ? (
-            <MetaPill>With sound</MetaPill>
-          ) : null}
-          {normalizeBooleanFlag(venue.byo_allowed) ? <MetaPill>BYO</MetaPill> : null}
-          {normalizeBooleanFlag(venue.dog_friendly) ? <MetaPill>Dog</MetaPill> : null}
-          {normalizeBooleanFlag(venue.kid_friendly) ? <MetaPill>Kid</MetaPill> : null}
+          {hiddenBadgeCount > 0 ? <MetaPill>+{hiddenBadgeCount} more</MetaPill> : null}
         </div>
 
         {details ? <div className="mt-4 space-y-3">{details}</div> : null}
 
-        <div className={['mt-5 flex flex-wrap text-sm', compact ? 'gap-2' : 'gap-3'].join(' ')}>
+        <div
+          className={[
+            'mt-5 grid grid-cols-2 text-sm',
+            compact ? 'gap-2' : 'gap-3',
+            'sm:flex sm:flex-wrap',
+          ].join(' ')}
+        >
           <a
             href={websiteHref}
             onClick={(event) => event.stopPropagation()}
-            className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/15 bg-white/6 px-3 py-2 text-white transition hover:bg-white/10"
+            className="col-span-2 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/15 bg-white/6 px-3 py-2 text-white transition hover:bg-white/10 sm:col-span-1"
           >
             Explore venue
           </a>
@@ -128,7 +140,7 @@ export default function PublicVenueCard({
               target="_blank"
               rel="noreferrer"
               onClick={(event) => event.stopPropagation()}
-              className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
             >
               Website
             </a>
@@ -139,7 +151,7 @@ export default function PublicVenueCard({
               target="_blank"
               rel="noreferrer"
               onClick={(event) => event.stopPropagation()}
-              className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
             >
               Instagram
             </a>
@@ -148,7 +160,7 @@ export default function PublicVenueCard({
             <a
               href={`tel:${venue.phone}`}
               onClick={(event) => event.stopPropagation()}
-              className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
             >
               Call
             </a>
@@ -159,7 +171,7 @@ export default function PublicVenueCard({
               target="_blank"
               rel="noreferrer"
               onClick={(event) => event.stopPropagation()}
-              className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
             >
               Maps
             </a>

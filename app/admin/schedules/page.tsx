@@ -1317,7 +1317,7 @@ export default function AdminMasterPage() {
   const [googleResults, setGoogleResults] = useState<GoogleSearchResult[]>([]);
   const [selectedGooglePlaceId, setSelectedGooglePlaceId] = useState<string | null>(null);
   const [activityLog, setActivityLog] = useState<AdminActivityEntry[]>([]);
-  const [showActivityLog, setShowActivityLog] = useState(false);
+  const [showActivityLog, setShowActivityLog] = useState(true);
   const [remoteActivityLogEnabled, setRemoteActivityLogEnabled] = useState(false);
   const [venueForm, setVenueForm] = useState<VenueFormState>(blankVenueForm());
   const [savingVenue, setSavingVenue] = useState(false);
@@ -2987,22 +2987,22 @@ export default function AdminMasterPage() {
       : 'Add to existing will keep current rows and add the new rows alongside them.';
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="admin-shell min-h-screen bg-neutral-100 text-neutral-950">
       <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
             Master Admin
           </h1>
-          <p className="mt-2 text-sm text-neutral-600">
+          <p className="mt-2 text-sm text-neutral-700">
             Manage schedules, create venues, and pull Google venue data from one place.
           </p>
         </div>
 
-        <section className="mb-6 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+        <section className="mb-6 rounded-2xl border border-neutral-300 bg-white p-4 shadow-md">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-neutral-900">Activity Log</h2>
-              <p className="mt-1 text-sm text-neutral-600">
+              <p className="mt-1 text-sm text-neutral-700">
                 Tracks admin updates, loads, Google actions, and whether they succeeded or failed.
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
@@ -3021,14 +3021,14 @@ export default function AdminMasterPage() {
               <button
                 type="button"
                 onClick={() => setShowActivityLog((current) => !current)}
-                className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100"
+                className="min-h-[44px] rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-100"
               >
                 {showActivityLog ? 'Hide log' : 'Show log'}
               </button>
               <button
                 type="button"
                 onClick={clearActivityLog}
-                className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100"
+                className="min-h-[44px] rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-100"
               >
                 Clear log
               </button>
@@ -3042,7 +3042,7 @@ export default function AdminMasterPage() {
                 activityLog.map((entry) => (
                   <div
                     key={entry.id}
-                    className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-3"
+                    className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-3 text-neutral-900"
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <span
@@ -3106,9 +3106,9 @@ export default function AdminMasterPage() {
         ) : null}
 
         {activeAdminTask ? (
-          <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <div className="mb-6 rounded-2xl border border-orange-300/25 bg-orange-500/10 px-4 py-3 text-sm text-orange-50">
             <div className="font-semibold">Working on it</div>
-            <div className="mt-1 text-blue-800">{activeAdminTask}. Please wait for the confirmation message before moving on.</div>
+            <div className="mt-1 text-orange-100/85">{activeAdminTask}. Please wait for the confirmation message before moving on.</div>
           </div>
         ) : null}
 
@@ -3852,7 +3852,7 @@ export default function AdminMasterPage() {
                   onClick={() => updateVenueForm('shows_sport', !venueForm.shows_sport)}
                   className={`rounded-xl border px-3 py-3 text-left text-sm ${
                     venueForm.shows_sport
-                      ? 'border-cyan-300 bg-cyan-50 text-cyan-900'
+                      ? 'border-orange-300 bg-orange-50 text-orange-900'
                       : 'border-neutral-300 hover:bg-neutral-100'
                   }`}
                 >
@@ -3867,7 +3867,7 @@ export default function AdminMasterPage() {
                   disabled={!venueForm.shows_sport && !venueForm.plays_with_sound}
                   className={`rounded-xl border px-3 py-3 text-left text-sm ${
                     venueForm.plays_with_sound
-                      ? 'border-cyan-300 bg-cyan-50 text-cyan-900'
+                      ? 'border-orange-300 bg-orange-50 text-orange-900'
                       : venueForm.shows_sport
                       ? 'border-neutral-300 hover:bg-neutral-100'
                       : 'border-neutral-200 bg-neutral-50 text-neutral-400'
@@ -3887,7 +3887,7 @@ export default function AdminMasterPage() {
                   onClick={() => updateVenueForm('dog_friendly', !venueForm.dog_friendly)}
                   className={`rounded-xl border px-3 py-3 text-left text-sm ${
                     venueForm.dog_friendly
-                      ? 'border-cyan-300 bg-cyan-50 text-cyan-900'
+                      ? 'border-orange-300 bg-orange-50 text-orange-900'
                       : 'border-neutral-300 hover:bg-neutral-100'
                   }`}
                 >
@@ -3901,7 +3901,7 @@ export default function AdminMasterPage() {
                   onClick={() => updateVenueForm('kid_friendly', !venueForm.kid_friendly)}
                   className={`rounded-xl border px-3 py-3 text-left text-sm ${
                     venueForm.kid_friendly
-                      ? 'border-cyan-300 bg-cyan-50 text-cyan-900'
+                      ? 'border-orange-300 bg-orange-50 text-orange-900'
                       : 'border-neutral-300 hover:bg-neutral-100'
                   }`}
                 >
@@ -4049,7 +4049,7 @@ export default function AdminMasterPage() {
                     onClick={() => setPortalUserCurrentVenueOnly((current) => !current)}
                     className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
                       portalUserCurrentVenueOnly
-                        ? 'border-cyan-300 bg-cyan-50 text-cyan-900'
+                        ? 'border-orange-300 bg-orange-50 text-orange-900'
                         : 'border-neutral-300 hover:bg-neutral-100'
                     }`}
                   >
@@ -4264,7 +4264,7 @@ export default function AdminMasterPage() {
                           onClick={() => toggleGlobalVenueAccessVenue(venue.id)}
                           className={`flex items-center justify-between rounded-xl border px-3 py-2 text-left text-sm ${
                             active
-                              ? 'border-cyan-300 bg-cyan-50 text-cyan-900'
+                              ? 'border-orange-300 bg-orange-50 text-orange-900'
                               : 'border-neutral-200 bg-white hover:bg-neutral-50'
                           }`}
                         >

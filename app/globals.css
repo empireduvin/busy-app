@@ -16,4 +16,77 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.admin-shell {
+  background:
+    radial-gradient(circle at top, rgba(255, 128, 32, 0.12), transparent 28%),
+    linear-gradient(180deg, #050505, #090909);
+  color: #f7f2ec;
+}
+
+.admin-shell .bg-white,
+.admin-shell .bg-neutral-50,
+.admin-shell .bg-neutral-100 {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.admin-shell .border-neutral-200,
+.admin-shell .border-neutral-300 {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.admin-shell .divide-neutral-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.admin-shell .text-neutral-900 {
+  color: #ffffff !important;
+}
+
+.admin-shell .text-neutral-800 {
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+.admin-shell .text-neutral-700,
+.admin-shell .text-neutral-600 {
+  color: rgba(255, 255, 255, 0.72) !important;
+}
+
+.admin-shell .text-neutral-500 {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.admin-shell input,
+.admin-shell select,
+.admin-shell textarea {
+  background: rgba(0, 0, 0, 0.28) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.admin-shell input::placeholder,
+.admin-shell textarea::placeholder {
+  color: rgba(255, 255, 255, 0.32);
+}
+
+.admin-shell button {
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.portal-shell {
+  background:
+    radial-gradient(circle at top, rgba(255, 128, 32, 0.1), transparent 28%),
+    linear-gradient(180deg, #050505, #090909);
 }

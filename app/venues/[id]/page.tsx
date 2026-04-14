@@ -259,13 +259,13 @@ export default function PublicVenueDetailPage() {
                 can decide fast and head straight out.
               </p>
 
-              <div className="mt-5 flex flex-wrap gap-3">
+              <div className="mt-5 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
                 {venue.google_maps_uri ? (
                   <a
                     href={venue.google_maps_uri}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-xl border border-orange-400/30 bg-orange-500/12 px-4 py-2 text-sm font-medium text-orange-100 hover:bg-orange-500/18"
+                    className="col-span-2 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-orange-400/30 bg-orange-500/12 px-4 py-2 text-sm font-medium text-orange-100 hover:bg-orange-500/18 sm:col-span-1"
                   >
                     Open in Maps
                   </a>
@@ -275,7 +275,7 @@ export default function PublicVenueDetailPage() {
                     href={venue.booking_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-xl border border-white/15 bg-white/6 px-4 py-2 text-sm text-white hover:bg-white/10"
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/15 bg-white/6 px-4 py-2 text-sm text-white hover:bg-white/10"
                   >
                     Book
                   </a>
@@ -285,7 +285,7 @@ export default function PublicVenueDetailPage() {
                     href={venue.website_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-xl border border-white/15 bg-white/6 px-4 py-2 text-sm text-white hover:bg-white/10"
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/15 bg-white/6 px-4 py-2 text-sm text-white hover:bg-white/10"
                   >
                     Website
                   </a>
@@ -295,7 +295,7 @@ export default function PublicVenueDetailPage() {
                     href={instagramHref}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-xl border border-white/15 bg-white/6 px-4 py-2 text-sm text-white hover:bg-white/10"
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/15 bg-white/6 px-4 py-2 text-sm text-white hover:bg-white/10"
                   >
                     Instagram
                   </a>
@@ -303,14 +303,14 @@ export default function PublicVenueDetailPage() {
                 {venue.phone ? (
                   <a
                     href={`tel:${venue.phone}`}
-                    className="rounded-xl border border-white/15 bg-white/6 px-4 py-2 text-sm text-white hover:bg-white/10"
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/15 bg-white/6 px-4 py-2 text-sm text-white hover:bg-white/10"
                   >
                     Call
                   </a>
                 ) : null}
                 <Link
                   href="/contact"
-                  className="rounded-xl border border-white/15 bg-black/25 px-4 py-2 text-sm text-white/85 hover:bg-white/10 hover:text-white"
+                  className="col-span-2 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/15 bg-black/25 px-4 py-2 text-sm text-white/85 hover:bg-white/10 hover:text-white sm:col-span-1"
                 >
                   Corrections or partner with us
                 </Link>

@@ -209,12 +209,12 @@ export default function VenuePortalPage() {
   }, [search, venues]);
 
   return (
-    <div className="min-h-screen bg-neutral-950 px-4 py-6 text-white sm:px-6 sm:py-8">
+    <div className="portal-shell min-h-screen bg-neutral-950 px-4 py-6 text-white sm:px-6 sm:py-8">
       <div className="mx-auto max-w-6xl">
         <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.35)] sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300/80">
+              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-300/80">
                 Venue Portal
               </div>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">
@@ -273,7 +273,7 @@ export default function VenuePortalPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search by venue name, suburb, type, or role"
-                className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 pr-24 text-sm text-white outline-none focus:border-cyan-300/40"
+                className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 pr-24 text-sm text-white outline-none focus:border-orange-300/40"
               />
               {search.trim() ? (
                 <button
@@ -308,11 +308,11 @@ export default function VenuePortalPage() {
               {filteredVenues.map((row) => (
                 <div
                   key={`${row.venue_id}-${row.role ?? 'manager'}`}
-                  className="group rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-cyan-300/40 hover:bg-white/[0.05]"
+                  className="group rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-orange-300/40 hover:bg-white/[0.05]"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-300/75">
+                      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-orange-300/75">
                         {getVenueTypeLabel(row.venue)}
                       </div>
                       <h3 className="mt-2 text-xl font-semibold tracking-tight text-white">
@@ -359,7 +359,7 @@ export default function VenuePortalPage() {
                     <button
                       type="button"
                       onClick={() => router.push(`/portal/venues/${row.venue_id}`)}
-                      className="inline-flex min-h-[40px] items-center rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-sm font-medium text-cyan-200 transition hover:bg-cyan-400/15 hover:text-cyan-100"
+                      className="inline-flex min-h-[40px] items-center rounded-xl border border-orange-300/25 bg-orange-500/12 px-3 py-2 text-sm font-medium text-orange-100 transition hover:bg-orange-500/18 hover:text-orange-50"
                     >
                       Open workspace
                     </button>

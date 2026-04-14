@@ -1279,7 +1279,7 @@ function VenuesPageContent() {
           </div>
 
           {searchSuggestions.length > 0 ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2.5">
+            <div className="no-scrollbar mt-3 flex items-center gap-2.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
                 Quick matches
               </div>
@@ -1303,7 +1303,7 @@ function VenuesPageContent() {
             </div>
           ) : null}
 
-          <div className="mt-4 flex flex-wrap items-center gap-2.5">
+          <div className="no-scrollbar mt-4 flex items-center gap-2.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
             <CompactToggle label="Open now" checked={openNowOnly} onChange={setOpenNowOnly} />
             <CompactToggle label="Happy hour live" checked={happyHourNowOnly} onChange={setHappyHourNowOnly} />
             <CompactToggle label="Kitchen open" checked={kitchenOpenNowOnly} onChange={setKitchenOpenNowOnly} />
@@ -1816,9 +1816,9 @@ function VenuesPageContent() {
                           </div>
                         ) : null}
 
-                        <div className="mt-4 flex flex-wrap gap-3 text-sm">
+                        <div className="mt-4 grid grid-cols-2 gap-2 text-sm sm:flex sm:flex-wrap sm:gap-3">
                           <a
-                            className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
+                            className="col-span-2 min-h-[44px] rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10 sm:col-span-1"
                             href={buildPublicVenueHref(v)}
                           >
                             Explore venue
@@ -1828,7 +1828,7 @@ function VenuesPageContent() {
                             <button
                               type="button"
                               onClick={() => toggleExpanded(v.id)}
-                              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
+                              className="min-h-[44px] rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
                             >
                               Hide weekly view
                             </button>
@@ -1836,7 +1836,7 @@ function VenuesPageContent() {
 
                           {v.booking_url ? (
                             <a
-                              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
+                              className="min-h-[44px] rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
                               href={v.booking_url}
                               target="_blank"
                               rel="noreferrer"
@@ -1847,7 +1847,7 @@ function VenuesPageContent() {
 
                           {v.website_url ? (
                             <a
-                              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
+                              className="min-h-[44px] rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
                               href={v.website_url}
                               target="_blank"
                               rel="noreferrer"
@@ -1858,7 +1858,7 @@ function VenuesPageContent() {
 
                           {normalizeInstagramUrl(v.instagram_url) ? (
                             <a
-                              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
+                              className="min-h-[44px] rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
                               href={normalizeInstagramUrl(v.instagram_url) ?? undefined}
                               target="_blank"
                               rel="noreferrer"
@@ -1869,7 +1869,7 @@ function VenuesPageContent() {
 
                           {v.phone ? (
                             <a
-                              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
+                              className="min-h-[44px] rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
                               href={`tel:${v.phone}`}
                             >
                               Call
@@ -1878,7 +1878,7 @@ function VenuesPageContent() {
 
                           {v.google_maps_uri ? (
                             <a
-                              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
+                              className="min-h-[44px] rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
                               href={v.google_maps_uri}
                               target="_blank"
                               rel="noreferrer"

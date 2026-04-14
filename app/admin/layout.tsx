@@ -20,6 +20,7 @@ export default function AdminLayout({
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasPortalAccess, setHasPortalAccess] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -130,20 +131,25 @@ export default function AdminLayout({
   }, [pathname, router, supabase]);
 
   async function handleSignOut() {
+    setSigningOut(true);
     if (!supabase) {
       router.replace('/login');
       return;
     }
+
     await supabase.auth.signOut();
     router.replace('/login');
   }
 
   if (guardState === 'checking') {
     return (
-      <div className="min-h-screen bg-neutral-50 px-6 py-10 text-neutral-900">
-        <div className="mx-auto max-w-3xl rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <h1 className="text-xl font-semibold">Checking admin access</h1>
-          <p className="mt-2 text-sm text-neutral-600">
+      <div className="admin-shell min-h-screen px-6 py-10 text-white">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-300/80">
+            First Round Admin
+          </div>
+          <h1 className="mt-3 text-xl font-semibold">Checking admin access</h1>
+          <p className="mt-2 text-sm text-white/65">
             Verifying your Supabase session and admin permissions.
           </p>
         </div>
@@ -153,23 +159,26 @@ export default function AdminLayout({
 
   if (guardState === 'unauthorized') {
     return (
-      <div className="min-h-screen bg-neutral-50 px-6 py-10 text-neutral-900">
-        <div className="mx-auto max-w-3xl rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
-          <h1 className="text-xl font-semibold text-red-700">Admin access required</h1>
-          <p className="mt-2 text-sm text-neutral-700">
+      <div className="admin-shell min-h-screen px-6 py-10 text-white">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-red-500/30 bg-red-500/10 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-red-200/80">
+            Access Check
+          </div>
+          <h1 className="mt-3 text-xl font-semibold text-red-100">Admin access required</h1>
+          <p className="mt-2 text-sm text-white/75">
             This account is not allowed to use the admin area.
           </p>
           {userEmail ? (
-            <p className="mt-2 text-sm text-neutral-500">Signed in as {userEmail}</p>
+            <p className="mt-2 text-sm text-white/55">Signed in as {userEmail}</p>
           ) : null}
           {errorMessage ? (
-            <p className="mt-2 text-sm text-red-600">{errorMessage}</p>
+            <p className="mt-2 text-sm text-red-100">{errorMessage}</p>
           ) : null}
           <div className="mt-4 flex flex-wrap gap-3">
             {hasPortalAccess ? (
               <Link
                 href="/portal"
-                className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
+                className="inline-flex min-h-[44px] items-center rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-black hover:bg-orange-400"
               >
                 Open venue portal
               </Link>
@@ -177,13 +186,14 @@ export default function AdminLayout({
             <button
               type="button"
               onClick={handleSignOut}
-              className="rounded-xl border border-neutral-300 px-4 py-2 text-sm font-semibold hover:bg-neutral-100"
+              disabled={signingOut}
+              className="inline-flex min-h-[44px] items-center rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-white/85 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Sign out
+              {signingOut ? 'Signing out...' : 'Sign out'}
             </button>
             <Link
               href="/venues"
-              className="rounded-xl border border-neutral-300 px-4 py-2 text-sm font-semibold hover:bg-neutral-100"
+              className="inline-flex min-h-[44px] items-center rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-white/85 hover:bg-white/5"
             >
               Go to website
             </Link>
@@ -195,18 +205,19 @@ export default function AdminLayout({
 
   return (
     <>
-      <div className="sticky top-0 z-50 border-b border-neutral-200 bg-white/95 px-4 py-3 text-neutral-900 backdrop-blur">
+      <div className="sticky top-0 z-50 border-b border-white/10 bg-black/90 px-4 py-3 text-white backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
           <div className="text-sm">
             <span className="font-semibold">Admin</span>
-            {userEmail ? <span className="text-neutral-500"> · {userEmail}</span> : null}
+            {userEmail ? <span className="text-white/50"> | {userEmail}</span> : null}
           </div>
           <button
             type="button"
             onClick={handleSignOut}
-            className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100"
+            disabled={signingOut}
+            className="inline-flex min-h-[44px] items-center rounded-xl border border-white/10 px-3 py-2 text-sm font-medium hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Sign out
+            {signingOut ? 'Signing out...' : 'Sign out'}
           </button>
         </div>
       </div>

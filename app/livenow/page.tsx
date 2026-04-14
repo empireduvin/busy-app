@@ -203,26 +203,26 @@ export default function LiveNowPage() {
                 Erskineville.
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-3">
               {headlineStats.map((stat) =>
                 stat.value > 0 ? (
                   <a
                     key={stat.label}
                     href={`#${stat.sectionId}`}
-                    className="min-h-[88px] rounded-2xl border border-white/10 bg-black/30 px-4 py-3 transition hover:border-orange-300/35 hover:bg-orange-500/10"
+                    className="min-h-[76px] rounded-2xl border border-white/10 bg-black/30 px-3 py-3 transition hover:border-orange-300/35 hover:bg-orange-500/10 sm:min-h-[88px] sm:px-4"
                   >
                     <div className="text-lg font-semibold text-white">{stat.value}</div>
-                    <div className="text-xs uppercase tracking-[0.18em] text-white/45">
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-white/45 sm:text-xs sm:tracking-[0.18em]">
                       {stat.label}
                     </div>
                   </a>
                 ) : (
                   <div
                     key={stat.label}
-                    className="min-h-[88px] rounded-2xl border border-white/10 bg-black/20 px-4 py-3 opacity-60"
+                    className="min-h-[76px] rounded-2xl border border-white/10 bg-black/20 px-3 py-3 opacity-60 sm:min-h-[88px] sm:px-4"
                   >
                     <div className="text-lg font-semibold text-white">{stat.value}</div>
-                    <div className="text-xs uppercase tracking-[0.18em] text-white/45">
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-white/45 sm:text-xs sm:tracking-[0.18em]">
                       {stat.emptyLabel}
                     </div>
                   </div>
@@ -247,13 +247,13 @@ export default function LiveNowPage() {
               <div className="flex flex-wrap gap-2.5">
                 <Link
                   href="/today"
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10 sm:w-auto"
                 >
                   Open Today
                 </Link>
                 <Link
                   href="/week"
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border border-orange-300/30 bg-orange-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-orange-400"
+                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-orange-300/30 bg-orange-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-orange-400 sm:w-auto"
                 >
                   Open This Week
                 </Link>
@@ -281,7 +281,7 @@ export default function LiveNowPage() {
               ) : null}
             </div>
 
-            <div className="flex flex-wrap gap-2.5">
+            <div className="no-scrollbar flex gap-2.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
               {TIME_FILTERS.map((filter) => {
                 const active = filter.value === timeFilter;
                 return (
@@ -315,7 +315,7 @@ export default function LiveNowPage() {
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2.5">
+          <div className="no-scrollbar mt-3 flex gap-2.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
             {LIVE_NOW_FILTERS.map((filter) => {
               const active = filter.value === activeFilter;
               return (

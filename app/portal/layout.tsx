@@ -19,6 +19,7 @@ export default function PortalLayout({
   const [guardState, setGuardState] = useState<GuardState>('checking');
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -123,6 +124,7 @@ export default function PortalLayout({
   }, [pathname, router, supabase]);
 
   async function handleSignOut() {
+    setSigningOut(true);
     if (!supabase) {
       router.replace('/login');
       return;
@@ -133,9 +135,12 @@ export default function PortalLayout({
 
   if (guardState === 'checking') {
     return (
-      <div className="min-h-screen bg-neutral-950 px-6 py-10 text-white">
+      <div className="portal-shell min-h-screen px-6 py-10 text-white">
         <div className="mx-auto max-w-4xl rounded-3xl border border-white/10 bg-white/5 p-6">
-          <h1 className="text-xl font-semibold">Checking portal access</h1>
+          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-300/80">
+            Venue Portal
+          </div>
+          <h1 className="mt-3 text-xl font-semibold">Checking portal access</h1>
           <p className="mt-2 text-sm text-white/60">
             Verifying your Supabase session and venue access.
           </p>
@@ -146,9 +151,12 @@ export default function PortalLayout({
 
   if (guardState === 'unauthorized') {
     return (
-      <div className="min-h-screen bg-neutral-950 px-6 py-10 text-white">
+      <div className="portal-shell min-h-screen px-6 py-10 text-white">
         <div className="mx-auto max-w-4xl rounded-3xl border border-red-500/30 bg-red-500/5 p-6">
-          <h1 className="text-xl font-semibold text-red-300">Portal access required</h1>
+          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-red-200/80">
+            Access Check
+          </div>
+          <h1 className="mt-3 text-xl font-semibold text-red-300">Portal access required</h1>
           <p className="mt-2 text-sm text-white/80">
             This account is not assigned to any venues yet.
           </p>
@@ -162,13 +170,14 @@ export default function PortalLayout({
             <button
               type="button"
               onClick={handleSignOut}
-              className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-neutral-950 hover:bg-white/90"
+              disabled={signingOut}
+              className="inline-flex min-h-[44px] items-center rounded-xl bg-white px-4 py-2 text-sm font-semibold text-neutral-950 hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Sign out
+              {signingOut ? 'Signing out...' : 'Sign out'}
             </button>
             <Link
               href="/venues"
-              className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-white hover:bg-white/5"
+              className="inline-flex min-h-[44px] items-center rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-white hover:bg-white/5"
             >
               Go to website
             </Link>
@@ -184,21 +193,22 @@ export default function PortalLayout({
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
           <div className="text-sm">
             <span className="font-semibold">Venue Portal</span>
-            {userEmail ? <span className="text-white/50"> · {userEmail}</span> : null}
+            {userEmail ? <span className="text-white/50"> | {userEmail}</span> : null}
           </div>
           <div className="flex items-center gap-3">
             <Link
               href="/portal"
-              className="rounded-xl border border-white/10 px-3 py-2 text-sm font-medium hover:bg-white/5"
+              className="inline-flex min-h-[44px] items-center rounded-xl border border-white/10 px-3 py-2 text-sm font-medium hover:bg-white/5"
             >
               Dashboard
             </Link>
             <button
               type="button"
               onClick={handleSignOut}
-              className="rounded-xl border border-white/10 px-3 py-2 text-sm font-medium hover:bg-white/5"
+              disabled={signingOut}
+              className="inline-flex min-h-[44px] items-center rounded-xl border border-white/10 px-3 py-2 text-sm font-medium hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Sign out
+              {signingOut ? 'Signing out...' : 'Sign out'}
             </button>
           </div>
         </div>

@@ -429,6 +429,13 @@ export default function PortalVenueDetailPage() {
     () => (venueId ? `portal-schedule-type-${venueId}` : null),
     [venueId]
   );
+  const activePortalTask = savingSchedule
+    ? 'Saving schedule changes'
+    : clearingSchedule
+    ? 'Deleting schedule rows'
+    : savingVenue
+    ? 'Saving venue details'
+    : null;
 
   async function portalAuthedFetch<T extends Record<string, unknown>>(input: string, init?: RequestInit) {
     const {
@@ -984,25 +991,34 @@ export default function PortalVenueDetailPage() {
   }
 
   if (loading) {
-    return <div className="min-h-screen bg-neutral-950 px-4 py-6 text-white sm:px-6 sm:py-8"><div className="mx-auto max-w-6xl rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60 sm:p-6">Loading venue workspace...</div></div>;
+    return <div className="portal-shell min-h-screen bg-neutral-950 px-4 py-6 text-white sm:px-6 sm:py-8"><div className="mx-auto max-w-6xl rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60 sm:p-6">Loading venue workspace...</div></div>;
   }
 
   if (errorMessage || !venue) {
-    return <div className="min-h-screen bg-neutral-950 px-4 py-6 text-white sm:px-6 sm:py-8"><div className="mx-auto max-w-6xl rounded-3xl border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-100 sm:p-6">{errorMessage ?? 'Venue not found.'}</div></div>;
+    return <div className="portal-shell min-h-screen bg-neutral-950 px-4 py-6 text-white sm:px-6 sm:py-8"><div className="mx-auto max-w-6xl rounded-3xl border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-100 sm:p-6">{errorMessage ?? 'Venue not found.'}</div></div>;
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950 px-4 py-6 text-white sm:px-6 sm:py-8">
+    <div className="portal-shell min-h-screen bg-neutral-950 px-4 py-6 text-white sm:px-6 sm:py-8">
       <div className="mx-auto max-w-6xl">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <Link href="/portal" className="text-sm text-cyan-200 hover:text-cyan-100">← Back to portal</Link>
+          <Link href="/portal" className="text-sm text-orange-200 hover:text-orange-100">← Back to portal</Link>
           <Link href={venue ? buildPublicVenueHref(venue) : '/venues'} className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/5">View this venue on website</Link>
         </div>
+
+        {activePortalTask ? (
+          <div className="mb-6 rounded-2xl border border-orange-300/25 bg-orange-500/10 px-4 py-3 text-sm text-orange-50">
+            <div className="font-semibold">Working on it</div>
+            <div className="mt-1 text-orange-100/85">
+              {activePortalTask}. Please wait for the confirmation message before moving on.
+            </div>
+          </div>
+        ) : null}
 
         <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300/80">{getVenueTypeLabel(venue)}</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-300/80">{getVenueTypeLabel(venue)}</div>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">{venue.name ?? 'Untitled venue'}</h1>
               <div className="mt-3 flex flex-wrap gap-2 text-xs uppercase tracking-[0.18em] text-white/50">
                 {venue.suburb ? <span className="rounded-full border border-white/10 px-3 py-1">{venue.suburb}</span> : null}
@@ -1012,8 +1028,8 @@ export default function PortalVenueDetailPage() {
             <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white/65">
               <div>{venue.address ?? 'No address listed yet'}</div>
               {venue.phone ? <div className="mt-2">{venue.phone}</div> : null}
-              {venue.website_url ? <a href={venue.website_url} target="_blank" rel="noreferrer" className="mt-2 block text-cyan-200 hover:text-cyan-100">Website</a> : null}
-              {normalizeInstagramUrl(venue.instagram_url) ? <a href={normalizeInstagramUrl(venue.instagram_url) ?? undefined} target="_blank" rel="noreferrer" className="mt-2 block text-cyan-200 hover:text-cyan-100">Instagram</a> : null}
+              {venue.website_url ? <a href={venue.website_url} target="_blank" rel="noreferrer" className="mt-2 block text-orange-200 hover:text-orange-100">Website</a> : null}
+              {normalizeInstagramUrl(venue.instagram_url) ? <a href={normalizeInstagramUrl(venue.instagram_url) ?? undefined} target="_blank" rel="noreferrer" className="mt-2 block text-orange-200 hover:text-orange-100">Instagram</a> : null}
             </div>
           </div>
         </section>
@@ -1092,25 +1108,25 @@ export default function PortalVenueDetailPage() {
         <section className="mt-8 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
             <h2 className="text-xl font-semibold">Venue profile</h2>
-            <p className="mt-2 text-sm leading-6 text-white/60">Update the public-facing details and venue tags for this venue.</p>
+            <p className="mt-2 text-sm leading-6 text-white/72">Update the public-facing details and venue tags for this venue.</p>
             <div className="mt-5 space-y-4">
-              <div><label className="mb-1 block text-sm font-medium text-white/75">Venue name</label><input type="text" value={venueForm.name} onChange={(event) => updateVenueForm('name', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/75">Suburb</label><input type="text" value={venueForm.suburb} onChange={(event) => updateVenueForm('suburb', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/75">Address</label><input type="text" value={venueForm.address} onChange={(event) => updateVenueForm('address', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/75">Phone</label><input type="text" value={venueForm.phone} onChange={(event) => updateVenueForm('phone', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/75">Website</label><input type="text" value={venueForm.website_url} onChange={(event) => updateVenueForm('website_url', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/75">Instagram</label><input type="text" value={venueForm.instagram_url} onChange={(event) => updateVenueForm('instagram_url', event.target.value)} placeholder="@venuehandle or https://instagram.com/..." className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/75">Sport types</label><input type="text" value={venueForm.sport_types} onChange={(event) => updateVenueForm('sport_types', event.target.value)} placeholder="e.g. AFL, NRL, UFC" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
+              <div><label className="mb-1 block text-sm font-medium text-white/85">Venue name</label><input type="text" value={venueForm.name} onChange={(event) => updateVenueForm('name', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+              <div><label className="mb-1 block text-sm font-medium text-white/85">Suburb</label><input type="text" value={venueForm.suburb} onChange={(event) => updateVenueForm('suburb', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+              <div><label className="mb-1 block text-sm font-medium text-white/85">Address</label><input type="text" value={venueForm.address} onChange={(event) => updateVenueForm('address', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+              <div><label className="mb-1 block text-sm font-medium text-white/85">Phone</label><input type="text" value={venueForm.phone} onChange={(event) => updateVenueForm('phone', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+              <div><label className="mb-1 block text-sm font-medium text-white/85">Website</label><input type="text" value={venueForm.website_url} onChange={(event) => updateVenueForm('website_url', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+              <div><label className="mb-1 block text-sm font-medium text-white/85">Instagram</label><input type="text" value={venueForm.instagram_url} onChange={(event) => updateVenueForm('instagram_url', event.target.value)} placeholder="@venuehandle or https://instagram.com/..." className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+              <div><label className="mb-1 block text-sm font-medium text-white/85">Sport types</label><input type="text" value={venueForm.sport_types} onChange={(event) => updateVenueForm('sport_types', event.target.value)} placeholder="e.g. AFL, NRL, UFC" className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
             </div>
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
-              <button type="button" onClick={() => updateVenueForm('shows_sport', !venueForm.shows_sport)} className={`rounded-xl border px-3 py-3 text-left ${venueForm.shows_sport ? 'border-cyan-300/40 bg-cyan-300/10' : 'border-white/10 bg-black/25 hover:bg-white/[0.04]'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Shows live sport</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{venueForm.shows_sport ? 'Yes' : 'No'}</div></button>
-              <button type="button" onClick={() => updateVenueForm('plays_with_sound', !venueForm.plays_with_sound)} disabled={!venueForm.shows_sport && !venueForm.plays_with_sound} className={`rounded-xl border px-3 py-3 text-left ${venueForm.plays_with_sound ? 'border-cyan-300/40 bg-cyan-300/10' : venueForm.shows_sport ? 'border-white/10 bg-black/25 hover:bg-white/[0.04]' : 'border-white/10 bg-black/10 text-white/40'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Sport with sound</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{!venueForm.shows_sport && !venueForm.plays_with_sound ? 'Enable sport first' : venueForm.plays_with_sound ? 'Yes' : 'No'}</div></button>
-              <button type="button" onClick={() => updateVenueForm('dog_friendly', !venueForm.dog_friendly)} className={`rounded-xl border px-3 py-3 text-left ${venueForm.dog_friendly ? 'border-cyan-300/40 bg-cyan-300/10' : 'border-white/10 bg-black/25 hover:bg-white/[0.04]'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Dog friendly</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{venueForm.dog_friendly ? 'Yes' : 'No'}</div></button>
-              <button type="button" onClick={() => updateVenueForm('kid_friendly', !venueForm.kid_friendly)} className={`rounded-xl border px-3 py-3 text-left ${venueForm.kid_friendly ? 'border-cyan-300/40 bg-cyan-300/10' : 'border-white/10 bg-black/25 hover:bg-white/[0.04]'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Kid friendly</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{venueForm.kid_friendly ? 'Yes' : 'No'}</div></button>
+              <button type="button" onClick={() => updateVenueForm('shows_sport', !venueForm.shows_sport)} className={`rounded-xl border px-3 py-3 text-left ${venueForm.shows_sport ? 'border-orange-300/40 bg-orange-500/10' : 'border-white/10 bg-black/25 hover:bg-white/[0.04]'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Shows live sport</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{venueForm.shows_sport ? 'Yes' : 'No'}</div></button>
+              <button type="button" onClick={() => updateVenueForm('plays_with_sound', !venueForm.plays_with_sound)} disabled={!venueForm.shows_sport && !venueForm.plays_with_sound} className={`rounded-xl border px-3 py-3 text-left ${venueForm.plays_with_sound ? 'border-orange-300/40 bg-orange-500/10' : venueForm.shows_sport ? 'border-white/10 bg-black/25 hover:bg-white/[0.04]' : 'border-white/10 bg-black/10 text-white/40'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Sport with sound</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{!venueForm.shows_sport && !venueForm.plays_with_sound ? 'Enable sport first' : venueForm.plays_with_sound ? 'Yes' : 'No'}</div></button>
+              <button type="button" onClick={() => updateVenueForm('dog_friendly', !venueForm.dog_friendly)} className={`rounded-xl border px-3 py-3 text-left ${venueForm.dog_friendly ? 'border-orange-300/40 bg-orange-500/10' : 'border-white/10 bg-black/25 hover:bg-white/[0.04]'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Dog friendly</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{venueForm.dog_friendly ? 'Yes' : 'No'}</div></button>
+              <button type="button" onClick={() => updateVenueForm('kid_friendly', !venueForm.kid_friendly)} className={`rounded-xl border px-3 py-3 text-left ${venueForm.kid_friendly ? 'border-orange-300/40 bg-orange-500/10' : 'border-white/10 bg-black/25 hover:bg-white/[0.04]'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Kid friendly</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{venueForm.kid_friendly ? 'Yes' : 'No'}</div></button>
             </div>
             {venueSaveMessage ? <div className="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{venueSaveMessage}</div> : null}
             {venueSaveError ? <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{venueSaveError}</div> : null}
-            <div className="mt-5"><button type="button" onClick={handleSaveVenue} disabled={savingVenue} className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60">{savingVenue ? 'Saving...' : 'Save venue details'}</button></div>
+            <div className="mt-5"><button type="button" onClick={handleSaveVenue} disabled={savingVenue} className="min-h-[44px] rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60">{savingVenue ? 'Saving...' : 'Save venue details'}</button></div>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
@@ -1200,9 +1216,9 @@ export default function PortalVenueDetailPage() {
                       key={day.value}
                       type="button"
                       onClick={() => loadDayIntoForm(day.value)}
-                      className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-left transition hover:border-cyan-300/30 hover:bg-white/[0.04]"
+                      className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-left transition hover:border-orange-300/30 hover:bg-white/[0.04]"
                     >
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-300/75">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-300/75">
                         {day.label}
                       </div>
                       <div className="mt-1 text-sm font-medium text-white">{summary}</div>
@@ -1225,8 +1241,8 @@ export default function PortalVenueDetailPage() {
               <div className="space-y-3">
                 {timeBlocks.map((block, index) => (
                   <div key={`${index}-${block.start_time}-${block.end_time}`} className="grid gap-3 rounded-2xl border border-white/10 bg-black/25 p-3 md:grid-cols-[1fr_1fr_auto]">
-                    <input type="time" value={block.start_time} onChange={(event) => updateTimeBlock(index, 'start_time', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" />
-                    <input type="time" value={block.end_time} onChange={(event) => updateTimeBlock(index, 'end_time', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" />
+                    <input type="time" value={block.start_time} onChange={(event) => updateTimeBlock(index, 'start_time', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" />
+                    <input type="time" value={block.end_time} onChange={(event) => updateTimeBlock(index, 'end_time', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" />
                     <button type="button" onClick={() => removeTimeBlock(index)} className="rounded-xl border border-red-500/25 px-3 py-2 text-sm text-red-200 hover:bg-red-500/10">Remove</button>
                   </div>
                 ))}
@@ -1234,14 +1250,14 @@ export default function PortalVenueDetailPage() {
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <div><label className="mb-1 block text-sm font-medium text-white/75">Title</label><input type="text" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Optional title" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/75">Deal text / summary</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder={scheduleType === 'happy_hour' ? 'e.g. $7 schooners / $15 burgers' : 'Optional summary'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
+              <div><label className="mb-1 block text-sm font-medium text-white/75">Title</label><input type="text" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Optional title" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+              <div><label className="mb-1 block text-sm font-medium text-white/75">Deal text / summary</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder={scheduleType === 'happy_hour' ? 'e.g. $7 schooners / $15 burgers' : 'Optional summary'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
             </div>
-            <div className="mt-4"><label className="mb-1 block text-sm font-medium text-white/75">Description</label><textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} placeholder="Optional description" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
-            <div className="mt-4"><label className="mb-1 block text-sm font-medium text-white/75">Notes</label><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Optional notes" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40" /></div>
+            <div className="mt-4"><label className="mb-1 block text-sm font-medium text-white/75">Description</label><textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} placeholder="Optional description" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+            <div className="mt-4"><label className="mb-1 block text-sm font-medium text-white/75">Notes</label><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Optional notes" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
             {scheduleType === 'happy_hour' ? (
               <div className="mt-5 space-y-4">
-                <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 px-4 py-3 text-sm text-cyan-50">
+                <div className="rounded-2xl border border-orange-300/20 bg-orange-500/5 px-4 py-3 text-sm text-orange-50">
                   Add beer, wine, spirits, cocktails, and food items so the public venue page can show structured happy hour deals instead of a single summary line.
                 </div>
                 <div className="grid gap-4 xl:grid-cols-2">
@@ -1340,7 +1356,7 @@ export default function PortalVenueDetailPage() {
                     }
                     rows={3}
                     placeholder="Optional notes shown with the deal details"
-                    className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40"
+                    className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40"
                   />
                 </div>
               </div>
@@ -1417,7 +1433,7 @@ function HappyHourCategoryEditor({
                   value={item.name}
                   onChange={(event) => onUpdateItem(item.id, 'name', event.target.value)}
                   placeholder={`${label} item name`}
-                  className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40"
+                  className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40"
                 />
                 <input
                   type="text"
@@ -1426,7 +1442,7 @@ function HappyHourCategoryEditor({
                     onUpdateItem(item.id, 'description', event.target.value)
                   }
                   placeholder="Optional description"
-                  className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40"
+                  className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40"
                 />
               </div>
               <div className="mt-3 space-y-2">
@@ -1439,7 +1455,7 @@ function HappyHourCategoryEditor({
                         onUpdatePrice(item.id, price.id, 'label', event.target.value)
                       }
                       placeholder="Price label, e.g. schooner"
-                      className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40"
+                      className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40"
                     />
                     <input
                       type="text"
@@ -1448,7 +1464,7 @@ function HappyHourCategoryEditor({
                         onUpdatePrice(item.id, price.id, 'amount', event.target.value)
                       }
                       placeholder="Price"
-                      className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/40"
+                      className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40"
                     />
                     <button
                       type="button"
@@ -1522,7 +1538,7 @@ function PortalSelect<T extends string>({
         onClick={() => setOpen((current) => !current)}
         className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm text-white outline-none transition ${
           open
-            ? 'border-cyan-300/40 bg-black/55'
+            ? 'border-orange-300/40 bg-black/55'
             : 'border-white/10 bg-black/25 hover:bg-black/35'
         }`}
       >
@@ -1538,7 +1554,7 @@ function PortalSelect<T extends string>({
             <div className="max-h-80 overflow-y-auto py-2">
               {groups.map((group) => (
                 <div key={group.label}>
-                  <div className="px-4 pb-2 pt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-300/75">
+                  <div className="px-4 pb-2 pt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-300/75">
                     {group.label}
                   </div>
                   <div className="space-y-1 px-2 pb-1">
@@ -1554,7 +1570,7 @@ function PortalSelect<T extends string>({
                           }}
                           className={`w-full rounded-xl px-3 py-2 text-left text-sm transition ${
                             selected
-                              ? 'bg-cyan-300/20 text-white'
+                              ? 'bg-orange-500/20 text-white'
                               : 'text-white/85 hover:bg-white/8'
                           }`}
                         >
@@ -1580,7 +1596,7 @@ function PortalSelect<T extends string>({
                     }}
                     className={`w-full rounded-xl px-3 py-2 text-left text-sm transition ${
                       selected
-                        ? 'bg-cyan-300/20 text-white'
+                        ? 'bg-orange-500/20 text-white'
                         : 'text-white/85 hover:bg-white/8'
                     }`}
                   >

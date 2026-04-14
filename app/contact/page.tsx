@@ -217,7 +217,7 @@ export default function ContactPage() {
                   />
                 </FieldBlock>
 
-                <FieldBlock label="Reply email" helper="Where should we send the follow-up?">
+                <FieldBlock label="Reply email" helper="Optional. Where should we send the follow-up?">
                   <input
                     type="email"
                     value={email}
@@ -298,17 +298,17 @@ export default function ContactPage() {
                 </div>
               ) : null}
 
-              <div className="flex flex-wrap items-center gap-3 pt-1">
+              <div className="grid gap-3 pt-1 sm:flex sm:flex-wrap sm:items-center">
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-xl border border-orange-400/30 bg-orange-500/12 px-4 py-2.5 text-sm font-medium text-orange-100 transition hover:bg-orange-500/18 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="min-h-[44px] rounded-xl border border-orange-400/30 bg-orange-500/12 px-4 py-2.5 text-sm font-medium text-orange-100 transition hover:bg-orange-500/18 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {submitting ? 'Sending message...' : 'Send message'}
                 </button>
                 <a
                   href={`mailto:${CONTACT_EMAIL}`}
-                  className="rounded-xl border border-white/12 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/12 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
                 >
                   Open email
                 </a>
