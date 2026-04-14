@@ -18,6 +18,16 @@ function normalizeVenueSuburb(value: string | null | undefined) {
   return value?.trim().toUpperCase() || null;
 }
 
+function parseOptionalNumber(value: unknown) {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  const parsed = Number(text);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid numeric value: ${text}`);
+  }
+  return parsed;
+}
+
 function formatVenueTypeId(value: string | null | undefined) {
   if (!value) return '';
   return value
@@ -139,14 +149,12 @@ export async function POST(request: Request) {
       venue_type_id: resolvedVenueTypeId,
       google_place_id: String(venue.google_place_id ?? '').trim() || null,
       address: String(venue.address ?? '').trim() || null,
-      lat: String(venue.lat ?? '').trim() ? Number(venue.lat) : null,
-      lng: String(venue.lng ?? '').trim() ? Number(venue.lng) : null,
+      lat: parseOptionalNumber(venue.lat),
+      lng: parseOptionalNumber(venue.lng),
       phone: String(venue.phone ?? '').trim() || null,
       website_url: String(venue.website_url ?? '').trim() || null,
       instagram_url: normalizeInstagramUrl(String(venue.instagram_url ?? '')),
-      google_rating: String(venue.google_rating ?? '').trim()
-        ? Number(venue.google_rating)
-        : null,
+      google_rating: parseOptionalNumber(venue.google_rating),
       price_level: String(venue.price_level ?? '').trim() || null,
       shows_sport: normalizedShowsSport,
       plays_with_sound: normalizedPlaysWithSound,

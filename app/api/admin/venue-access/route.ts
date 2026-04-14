@@ -44,6 +44,20 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json(
+        { ok: false, error: 'Enter a valid email address.' },
+        { status: 400 }
+      );
+    }
+
+    if (!['manager', 'editor'].includes(role)) {
+      return NextResponse.json(
+        { ok: false, error: 'Choose a valid portal role.' },
+        { status: 400 }
+      );
+    }
+
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id, email, full_name')

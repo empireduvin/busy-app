@@ -452,9 +452,22 @@ export default function PortalVenueDetailPage() {
         ...(init?.headers ?? {}),
       },
     });
-    const json = (await response.json()) as { ok?: boolean; error?: string } & T;
-    if (!response.ok || json?.ok === false) throw new Error(json?.error || `Request failed with status ${response.status}`);
-    return json;
+    let json: ({ ok?: boolean; error?: string } & T) | null = null;
+    try {
+      json = (await response.json()) as { ok?: boolean; error?: string } & T;
+    } catch {
+      json = null;
+    }
+    if (!response.ok || json?.ok === false) {
+      const fallback =
+        response.status === 401
+          ? 'Your venue portal session has expired. Sign in again and retry.'
+          : response.status === 403
+          ? 'This account is not allowed to manage this venue.'
+          : `Request failed with status ${response.status}`;
+      throw new Error(json?.error || fallback);
+    }
+    return (json ?? { ok: true }) as { ok?: boolean; error?: string } & T;
   }
 
   async function loadVenue(background = false) {

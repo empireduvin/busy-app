@@ -26,6 +26,116 @@ type DayOfWeek =
 
 type OpeningHours = Partial<Record<DayOfWeek, Array<{ open: string; close: string }>>>;
 
+const DAY_VALUES: DayOfWeek[] = [
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
+];
+
+const SCHEDULE_TYPE_VALUES: ScheduleType[] = [
+  'opening',
+  'kitchen',
+  'happy_hour',
+  'bottle_shop',
+  'trivia',
+  'live_music',
+  'sport',
+  'comedy',
+  'karaoke',
+  'dj',
+  'special_event',
+];
+
+type IncomingScheduleRow = {
+  venue_id?: string;
+  schedule_type?: string;
+  day_of_week?: string;
+  start_time?: string;
+  end_time?: string;
+  sort_order?: number | null;
+  title?: string | null;
+  description?: string | null;
+  deal_text?: string | null;
+  notes?: string | null;
+  detail_json?: unknown;
+  is_active?: boolean | null;
+  status?: string | null;
+};
+
+function isValidScheduleType(value: string): value is ScheduleType {
+  return SCHEDULE_TYPE_VALUES.includes(value as ScheduleType);
+}
+
+function isValidDayOfWeek(value: string): value is DayOfWeek {
+  return DAY_VALUES.includes(value as DayOfWeek);
+}
+
+function isValidTimeValue(value: string) {
+  return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(value.trim());
+}
+
+function normalizeSelectedDays(value: unknown) {
+  const selectedDays = Array.isArray(value) ? value : [];
+  return selectedDays
+    .map((day) => String(day ?? '').trim().toLowerCase())
+    .filter(isValidDayOfWeek);
+}
+
+function sanitizeScheduleRows(
+  rows: unknown,
+  venueId: string,
+  scheduleType: ScheduleType
+) {
+  const rawRows = Array.isArray(rows) ? rows : [];
+  const sanitized = rawRows.map((row) => {
+    const candidate = (row ?? {}) as IncomingScheduleRow;
+    const dayOfWeek = String(candidate.day_of_week ?? '').trim().toLowerCase();
+    const startTime = String(candidate.start_time ?? '').trim();
+    const endTime = String(candidate.end_time ?? '').trim();
+
+    if (!isValidDayOfWeek(dayOfWeek)) {
+      throw new Error('Each schedule row must include a valid day.');
+    }
+
+    if (!isValidTimeValue(startTime) || !isValidTimeValue(endTime)) {
+      throw new Error('Each schedule row must include valid start and end times.');
+    }
+
+    if (startTime === endTime) {
+      throw new Error('Start and end time cannot be the same.');
+    }
+
+    return {
+      venue_id: venueId,
+      schedule_type: scheduleType,
+      day_of_week: dayOfWeek,
+      start_time: startTime,
+      end_time: endTime,
+      sort_order:
+        typeof candidate.sort_order === 'number' && Number.isFinite(candidate.sort_order)
+          ? candidate.sort_order
+          : null,
+      title: String(candidate.title ?? '').trim() || null,
+      description: String(candidate.description ?? '').trim() || null,
+      deal_text: String(candidate.deal_text ?? '').trim() || null,
+      notes: String(candidate.notes ?? '').trim() || null,
+      detail_json: candidate.detail_json ?? null,
+      is_active: candidate.is_active !== false,
+      status: String(candidate.status ?? 'published').trim() || 'published',
+    };
+  });
+
+  if (!sanitized.length) {
+    throw new Error('Missing schedule payload.');
+  }
+
+  return sanitized;
+}
+
 function buildHoursJsonFromRows(
   scheduleRows: Array<{
     day_of_week: DayOfWeek;
@@ -127,14 +237,23 @@ export async function POST(
     const action = String(body?.action ?? '');
 
     if (action === 'save') {
-      const rows = Array.isArray(body?.rows) ? body.rows : [];
-      const scheduleType = body?.scheduleType as ScheduleType;
+      const rawScheduleType = String(body?.scheduleType ?? '').trim();
+      const scheduleType = rawScheduleType as ScheduleType;
       const saveMode = body?.saveMode === 'replace' ? 'replace' : 'append';
-      const selectedDays = Array.isArray(body?.selectedDays) ? body.selectedDays : [];
+      const selectedDays = normalizeSelectedDays(body?.selectedDays);
 
-      if (!rows.length || !scheduleType) {
+      if (!isValidScheduleType(rawScheduleType)) {
         return NextResponse.json(
-          { ok: false, error: 'Missing schedule payload.' },
+          { ok: false, error: 'Choose a valid schedule type.' },
+          { status: 400 }
+        );
+      }
+
+      const rows = sanitizeScheduleRows(body?.rows, id, scheduleType);
+
+      if (saveMode === 'replace' && !selectedDays.length) {
+        return NextResponse.json(
+          { ok: false, error: 'Choose at least one day to overwrite.' },
           { status: 400 }
         );
       }
@@ -158,8 +277,23 @@ export async function POST(
     }
 
     if (action === 'delete-selected-days') {
-      const scheduleType = body?.scheduleType as ScheduleType;
-      const selectedDays = Array.isArray(body?.selectedDays) ? body.selectedDays : [];
+      const rawScheduleType = String(body?.scheduleType ?? '').trim();
+      const scheduleType = rawScheduleType as ScheduleType;
+      const selectedDays = normalizeSelectedDays(body?.selectedDays);
+
+      if (!isValidScheduleType(rawScheduleType)) {
+        return NextResponse.json(
+          { ok: false, error: 'Choose a valid schedule type.' },
+          { status: 400 }
+        );
+      }
+
+      if (!selectedDays.length) {
+        return NextResponse.json(
+          { ok: false, error: 'Choose at least one day to delete.' },
+          { status: 400 }
+        );
+      }
 
       const { error } = await supabase
         .from('venue_schedule_rules')
@@ -175,7 +309,15 @@ export async function POST(
     }
 
     if (action === 'delete-all') {
-      const scheduleType = body?.scheduleType as ScheduleType;
+      const rawScheduleType = String(body?.scheduleType ?? '').trim();
+      const scheduleType = rawScheduleType as ScheduleType;
+
+      if (!isValidScheduleType(rawScheduleType)) {
+        return NextResponse.json(
+          { ok: false, error: 'Choose a valid schedule type.' },
+          { status: 400 }
+        );
+      }
 
       const { error } = await supabase
         .from('venue_schedule_rules')
