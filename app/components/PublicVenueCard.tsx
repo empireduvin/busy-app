@@ -45,8 +45,47 @@ export default function PublicVenueCard({
     ...(normalizeBooleanFlag(venue.dog_friendly) ? ['Dog'] : []),
     ...(normalizeBooleanFlag(venue.kid_friendly) ? ['Kid'] : []),
   ];
-  const visibleBadges = compact ? allBadges.slice(0, 3) : allBadges;
-  const hiddenBadgeCount = compact ? Math.max(0, allBadges.length - visibleBadges.length) : 0;
+  const visibleBadges = compact ? allBadges.slice(0, 2) : allBadges.slice(0, 4);
+  const hiddenBadgeCount = Math.max(0, allBadges.length - visibleBadges.length);
+  const secondaryActions = [
+    venue.website_url
+      ? {
+          key: 'website',
+          href: venue.website_url,
+          label: 'Website',
+          external: true,
+        }
+      : null,
+    instagramHref
+      ? {
+          key: 'instagram',
+          href: instagramHref,
+          label: 'Instagram',
+          external: true,
+        }
+      : null,
+    venue.phone
+      ? {
+          key: 'call',
+          href: `tel:${venue.phone}`,
+          label: 'Call',
+          external: false,
+        }
+      : null,
+    venue.google_maps_uri
+      ? {
+          key: 'maps',
+          href: venue.google_maps_uri,
+          label: 'Maps',
+          external: true,
+        }
+      : null,
+  ].filter(Boolean) as Array<{
+    key: string;
+    href: string;
+    label: string;
+    external: boolean;
+  }>;
   const toneClasses =
     tone === 'live'
       ? 'border-orange-400/20 bg-[linear-gradient(180deg,rgba(255,111,36,0.16),rgba(255,255,255,0.04)_30%,rgba(255,255,255,0.03))]'
@@ -59,7 +98,7 @@ export default function PublicVenueCard({
       className={[
         'relative overflow-hidden rounded-[28px] border shadow-[0_20px_60px_rgba(0,0,0,0.28)] transition hover:border-white/20 hover:bg-white/[0.07]',
         toneClasses,
-        compact ? 'p-4' : 'p-5',
+        compact ? 'p-3.5 sm:p-4' : 'p-4 sm:p-5',
       ].join(' ')}
       role="link"
       tabIndex={0}
@@ -84,97 +123,67 @@ export default function PublicVenueCard({
           {heroBadge ? <div className="shrink-0">{heroBadge}</div> : null}
         </div>
 
-        <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="mt-3 flex flex-wrap items-start justify-between gap-2.5 sm:gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className={[compact ? 'text-[18px] sm:text-[26px]' : 'text-[22px] sm:text-3xl', 'break-words font-semibold leading-[1.05] text-white'].join(' ')}>
+            <h2 className={[compact ? 'text-[22px] sm:text-[26px]' : 'text-[24px] sm:text-3xl', 'break-words font-semibold leading-[1.02] text-white'].join(' ')}>
               {venue.name || 'Untitled venue'}
             </h2>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/75">
+            <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px] text-white/58 sm:mt-2 sm:gap-2 sm:text-xs sm:text-white/72">
               {venue.suburb ? <MetaPill>{venue.suburb.toUpperCase()}</MetaPill> : null}
               {venueTypeLabel ? <MetaPill>{venueTypeLabel.toUpperCase()}</MetaPill> : null}
             </div>
           </div>
 
           {venue.google_rating ? (
-            <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs text-white/70">
+            <div className="rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-[10px] text-white/58 sm:text-[11px] sm:text-white/68">
               Star {venue.google_rating.toFixed(1)}
             </div>
           ) : null}
         </div>
 
         {venue.address ? (
-          <div className="mt-3 flex min-w-0 items-start gap-2 text-sm text-white/58">
+          <div className="mt-2.5 flex min-w-0 items-start gap-2 text-[13px] text-white/56 sm:mt-3 sm:text-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-orange-400/80" />
             <span className="min-w-0 break-words">{venue.address}</span>
           </div>
         ) : null}
 
-        {summary ? <div className="mt-4">{summary}</div> : null}
+        {summary ? <div className="mt-3.5 sm:mt-4">{summary}</div> : null}
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-4 sm:gap-2">
           {visibleBadges.map((badge) => (
             <MetaPill key={badge}>{badge}</MetaPill>
           ))}
           {hiddenBadgeCount > 0 ? <MetaPill>+{hiddenBadgeCount} more</MetaPill> : null}
         </div>
 
-        {details ? <div className="mt-4 space-y-3">{details}</div> : null}
+        {details ? <div className="mt-3.5 space-y-2.5 sm:mt-4 sm:space-y-3">{details}</div> : null}
 
         <div
           className={[
             'mt-5 grid grid-cols-2 text-sm',
-            compact ? 'gap-2' : 'gap-3',
+            compact ? 'gap-2' : 'gap-2.5 sm:gap-3',
           ].join(' ')}
         >
           <a
             href={websiteHref}
             onClick={(event) => event.stopPropagation()}
-            className="col-span-2 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/15 bg-white/6 px-3 py-2 text-white transition hover:bg-white/10 sm:col-span-1"
+            className="col-span-2 inline-flex min-h-[46px] items-center justify-center rounded-xl bg-orange-500 px-3 py-2 text-sm font-semibold text-black transition hover:bg-orange-400"
           >
             Explore venue
           </a>
-          {venue.website_url ? (
+          {secondaryActions.map((action) => (
             <a
-              href={venue.website_url}
-              target="_blank"
-              rel="noreferrer"
+              key={action.key}
+              href={action.href}
+              target={action.external ? '_blank' : undefined}
+              rel={action.external ? 'noreferrer' : undefined}
               onClick={(event) => event.stopPropagation()}
-              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
+              className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/10 bg-black/15 px-3 py-2 text-[12px] font-medium text-white/72 transition hover:bg-white/8 hover:text-white sm:min-h-[44px] sm:text-sm"
             >
-              Website
+              {action.label}
             </a>
-          ) : null}
-          {instagramHref ? (
-            <a
-              href={instagramHref}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(event) => event.stopPropagation()}
-              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
-            >
-              Instagram
-            </a>
-          ) : null}
-          {venue.phone ? (
-            <a
-              href={`tel:${venue.phone}`}
-              onClick={(event) => event.stopPropagation()}
-              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
-            >
-              Call
-            </a>
-          ) : null}
-          {venue.google_maps_uri ? (
-            <a
-              href={venue.google_maps_uri}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(event) => event.stopPropagation()}
-              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-white/85 transition hover:bg-white/10 hover:text-white"
-            >
-              Maps
-            </a>
-          ) : null}
+          ))}
         </div>
       </div>
     </article>
@@ -183,7 +192,7 @@ export default function PublicVenueCard({
 
 function MetaPill({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs font-medium text-white/75">
+    <span className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-medium tracking-[0.04em] text-white/62 sm:px-3 sm:text-xs sm:text-white/75">
       {children}
     </span>
   );

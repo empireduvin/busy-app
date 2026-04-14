@@ -1173,32 +1173,32 @@ function VenuesPageContent() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-orange-500/20 via-[#120805] to-black p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:p-6">
+      <div className="mx-auto max-w-6xl px-3 py-4 sm:px-6 sm:py-8">
+        <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-orange-500/20 via-[#120805] to-black p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-orange-300/80">
                   INNER WEST
                 </div>
-                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                <h1 className="mt-3 text-[28px] font-semibold tracking-tight text-white sm:text-4xl">
                   Explore the Inner West
                 </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-white/68 sm:text-base">
+                <p className="mt-2.5 max-w-2xl text-[13px] leading-5 text-white/68 sm:mt-3 sm:text-base">
                   Browse pubs, bars, restaurants, and bottle shops across Newtown, Enmore, and
                   Erskineville.
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 self-start sm:grid-cols-2 lg:min-w-[320px]">
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+            <div className="grid grid-cols-1 gap-2.5 self-start sm:grid-cols-2 lg:min-w-[320px]">
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-3 sm:p-4">
                 <div className="text-[11px] uppercase tracking-[0.22em] text-white/45">Live area</div>
-                <div className="mt-2 text-lg font-semibold text-white">Newtown, Enmore, Erskineville</div>
+                <div className="mt-2 text-base font-semibold text-white sm:text-lg">Newtown, Enmore, Erskineville</div>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-3 sm:p-4">
                 <div className="text-[11px] uppercase tracking-[0.22em] text-white/45">Explorer mode</div>
-                <div className="mt-2 text-lg font-semibold text-white">
+                <div className="mt-2 text-base font-semibold text-white sm:text-lg">
                   {showDesktopMap ? 'Map open' : 'List focus'}
                 </div>
               </div>
@@ -1206,7 +1206,7 @@ function VenuesPageContent() {
           </div>
         </div>
 
-        <div className="z-40 mt-5 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.25)] backdrop-blur lg:sticky lg:top-24">
+        <div className="z-40 mt-4 rounded-3xl border border-white/10 bg-white/5 p-3.5 shadow-[0_16px_40px_rgba(0,0,0,0.25)] backdrop-blur sm:mt-5 sm:p-4 lg:sticky lg:top-24">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(260px,1.5fr)_minmax(180px,0.95fr)_minmax(160px,0.9fr)_auto]">
             <div className="relative">
               <input
@@ -1279,7 +1279,7 @@ function VenuesPageContent() {
           </div>
 
           {searchSuggestions.length > 0 ? (
-            <div className="no-scrollbar mt-3 flex items-center gap-2.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
                 Quick matches
               </div>
@@ -1303,7 +1303,7 @@ function VenuesPageContent() {
             </div>
           ) : null}
 
-          <div className="no-scrollbar mt-4 flex items-center gap-2.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <CompactToggle label="Open now" checked={openNowOnly} onChange={setOpenNowOnly} />
             <CompactToggle label="Happy hour live" checked={happyHourNowOnly} onChange={setHappyHourNowOnly} />
             <CompactToggle label="Kitchen open" checked={kitchenOpenNowOnly} onChange={setKitchenOpenNowOnly} />

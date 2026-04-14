@@ -27,7 +27,7 @@ export default function PublicEventRuleCard({
     <div
       className={[
         'rounded-2xl border border-orange-400/20 bg-orange-500/10',
-        compact ? 'p-3' : 'p-4',
+        compact ? 'p-2.5 sm:p-3' : 'p-3 sm:p-4',
       ].join(' ')}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -39,7 +39,7 @@ export default function PublicEventRuleCard({
         </div>
       </div>
 
-      {hasText(extra) ? <div className="mt-2 text-sm text-white/85">{extra}</div> : null}
+      {hasText(extra) ? <div className="mt-2 text-[13px] text-white/82 sm:text-sm">{extra}</div> : null}
     </div>
   );
 }

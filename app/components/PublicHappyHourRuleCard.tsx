@@ -24,7 +24,7 @@ export default function PublicHappyHourRuleCard({
     <div
       className={[
         'rounded-2xl border border-pink-400/20 bg-pink-500/10',
-        compact ? 'p-3' : 'p-4',
+        compact ? 'p-2.5 sm:p-3' : 'p-3 sm:p-4',
       ].join(' ')}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -46,7 +46,7 @@ export default function PublicHappyHourRuleCard({
             return (
               <div
                 key={category.key}
-                className="rounded-xl border border-white/10 bg-black/20 p-3"
+                className="rounded-xl border border-white/10 bg-black/20 p-2.5 sm:p-3"
               >
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                   {category.label}
@@ -59,7 +59,7 @@ export default function PublicHappyHourRuleCard({
                         className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2"
                       >
                         <div className="space-y-2">
-                          <div className="text-sm font-medium leading-5 text-white [overflow-wrap:anywhere] break-words">
+                          <div className="text-[13px] font-medium leading-5 text-white [overflow-wrap:anywhere] break-words sm:text-sm">
                             {item.title}
                           </div>
                           {item.price != null ? (
@@ -85,7 +85,7 @@ export default function PublicHappyHourRuleCard({
                         className="flex items-start justify-between gap-3"
                       >
                         <div className="min-w-0">
-                          <div className="text-sm font-medium leading-5 text-white">{item.title}</div>
+                          <div className="text-[13px] font-medium leading-5 text-white sm:text-sm">{item.title}</div>
                           {item.subtitle ? (
                             <div className="mt-0.5 text-[11px] leading-4 text-white/55">{item.subtitle}</div>
                           ) : null}
@@ -106,7 +106,7 @@ export default function PublicHappyHourRuleCard({
       ) : null}
 
       {!hasStructuredItems && (rule.deal_text?.trim() || rule.description?.trim()) ? (
-        <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/85">
+        <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-[13px] text-white/85 sm:text-sm">
           {rule.deal_text?.trim() || rule.description?.trim()}
         </div>
       ) : null}

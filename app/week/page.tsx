@@ -204,17 +204,20 @@ export default function WeekPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-orange-500/20 via-[#120805] to-black p-5 sm:p-6">
+      <div className="mx-auto max-w-6xl px-3 py-4 sm:px-6 sm:py-8">
+        <section className="rounded-[1.75rem] border border-white/10 bg-gradient-to-br from-orange-500/20 via-[#120805] to-black p-4 sm:rounded-3xl sm:p-6">
           <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-orange-300/80">
             This Week
           </div>
           <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h1 className="text-[28px] font-semibold tracking-tight sm:text-4xl">
                 What&apos;s on this week
               </h1>
-              <p className="mt-3 max-w-2xl text-sm text-white/70 sm:text-base">
+              <p className="mt-2 text-[13px] leading-5 text-white/68 sm:hidden">
+                Start with today, then jump through the next 6 days.
+              </p>
+              <p className="mt-2.5 hidden max-w-2xl text-[13px] leading-5 text-white/68 sm:mt-3 sm:block sm:text-base">
                 Start with today, then jump through the next 6 days to see happy hours and events coming up.
               </p>
             </div>
@@ -224,7 +227,7 @@ export default function WeekPage() {
                   <a
                     key={stat.label}
                     href={`#${stat.sectionId}`}
-                    className="min-h-[76px] rounded-2xl border border-white/10 bg-black/30 px-3 py-3 transition hover:border-orange-300/35 hover:bg-orange-500/10 sm:min-h-[88px] sm:px-4"
+                    className="min-h-[68px] rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5 transition hover:border-orange-300/35 hover:bg-orange-500/10 sm:min-h-[88px] sm:px-4 sm:py-3"
                   >
                     <div className="text-lg font-semibold text-white">{stat.value}</div>
                     <div className="text-[10px] uppercase tracking-[0.14em] text-white/45 sm:text-xs sm:tracking-[0.18em]">
@@ -234,7 +237,7 @@ export default function WeekPage() {
                 ) : (
                   <div
                     key={stat.label}
-                    className="min-h-[76px] rounded-2xl border border-white/10 bg-black/20 px-3 py-3 opacity-60 sm:min-h-[88px] sm:px-4"
+                    className="min-h-[68px] rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 opacity-60 sm:min-h-[88px] sm:px-4 sm:py-3"
                   >
                     <div className="text-lg font-semibold text-white">{stat.value}</div>
                     <div className="text-[10px] uppercase tracking-[0.14em] text-white/45 sm:text-xs sm:tracking-[0.18em]">
@@ -247,15 +250,18 @@ export default function WeekPage() {
           </div>
         </section>
 
-        <section className="mt-5 rounded-3xl border border-white/10 bg-white/5 p-4">
-          <div className="mb-4 rounded-3xl border border-orange-400/20 bg-orange-500/10 p-4 sm:p-5">
+        <section className="mt-4 rounded-[1.75rem] border border-white/8 bg-white/[0.03] p-3 sm:mt-5 sm:rounded-3xl sm:border-white/10 sm:bg-white/5 sm:p-4">
+          <div className="mb-3 rounded-[1.5rem] border border-orange-400/15 bg-orange-500/[0.08] p-3 sm:mb-4 sm:rounded-3xl sm:border-orange-400/20 sm:bg-orange-500/10 sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-200/80">
                   Live options
                 </div>
-                <h2 className="mt-1 text-xl font-semibold text-white">Need something on right now?</h2>
-                <p className="mt-1 max-w-2xl text-sm text-white/65">
+                <h2 className="mt-1 text-lg font-semibold text-white sm:text-xl">Need something on right now?</h2>
+                <p className="mt-1 text-[13px] leading-5 text-white/65 sm:hidden">
+                  Switch to the live view for venues happening now.
+                </p>
+                <p className="mt-1 hidden max-w-2xl text-[13px] leading-5 text-white/65 sm:block sm:text-sm">
                   Switch to the live view for venues with happy hours and events already happening.
                 </p>
               </div>
@@ -268,7 +274,7 @@ export default function WeekPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap">
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:gap-2.5">
             {dayOptions.map((option) => {
               const active = option.offset === selectedOffset;
               return (
@@ -277,14 +283,19 @@ export default function WeekPage() {
                   type="button"
                   onClick={() => setSelectedOffset(option.offset)}
                   className={[
-                    'min-w-0 rounded-2xl border px-3 py-3 text-left transition sm:min-w-[92px] sm:px-4',
+                    'min-w-0 rounded-2xl border px-2.5 py-2.5 text-left transition sm:min-w-[92px] sm:px-4 sm:py-3',
                     active
                       ? 'border-orange-400 bg-orange-500 text-black'
                       : 'border-white/10 bg-black/30 text-white/80 hover:bg-white/10',
                   ].join(' ')}
                 >
-                  <div className="text-sm font-semibold">{option.label}</div>
-                  <div className={active ? 'text-xs text-black/70' : 'text-xs text-white/50'}>
+                  <div className="text-xs font-semibold sm:text-sm">
+                    <span className="sm:hidden">
+                      {option.isToday ? 'Today' : option.label.slice(0, 3)}
+                    </span>
+                    <span className="hidden sm:inline">{option.label}</span>
+                  </div>
+                  <div className={active ? 'text-[11px] text-black/70' : 'text-[11px] text-white/50'}>
                     {option.shortDate}
                   </div>
                 </button>
@@ -312,7 +323,50 @@ export default function WeekPage() {
               ) : null}
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap">
+            <div className="grid grid-cols-[1fr_1fr_auto] gap-2 sm:hidden">
+              <label className="min-w-0">
+                <span className="sr-only">Filter by time</span>
+                <select
+                  value={timeFilter}
+                  onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
+                  className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
+                >
+                  {TIME_FILTERS.map((filter) => (
+                    <option key={filter.value} value={filter.value}>
+                      {filter.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="min-w-0">
+                <span className="sr-only">Filter by category</span>
+                <select
+                  value={activeFilter}
+                  onChange={(event) => setActiveFilter(event.target.value as WeekFilter)}
+                  className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
+                >
+                  {WEEK_FILTERS.map((filter) => (
+                    <option key={filter.value} value={filter.value}>
+                      {filter.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowMap((current) => !current)}
+                className={[
+                  'inline-flex h-10 min-w-[72px] items-center justify-center rounded-xl border px-3 text-xs font-medium transition',
+                  showMap
+                    ? 'border-orange-400/30 bg-orange-500/12 text-orange-100'
+                    : 'border-white/10 bg-black/20 text-white/70 hover:bg-white/10',
+                ].join(' ')}
+              >
+                {showMap ? 'Map on' : 'Map'}
+              </button>
+            </div>
+
+            <div className="hidden sm:flex sm:flex-wrap sm:gap-2.5">
               {TIME_FILTERS.map((filter) => {
                 const active = filter.value === timeFilter;
                 return (
@@ -346,7 +400,7 @@ export default function WeekPage() {
             </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2.5 sm:flex sm:flex-wrap">
+          <div className="hidden sm:flex sm:flex-wrap sm:gap-2.5">
             {WEEK_FILTERS.map((filter) => {
               const active = filter.value === activeFilter;
               return (
@@ -401,7 +455,7 @@ export default function WeekPage() {
         {showMap ? (
           <section
             ref={mapSectionRef}
-            className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-4 sm:p-5"
+            className="mt-4 rounded-[1.75rem] border border-white/8 bg-white/[0.02] p-3 sm:mt-5 sm:rounded-3xl sm:border-white/10 sm:bg-white/[0.03] sm:p-5"
           >
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div>
@@ -466,7 +520,7 @@ export default function WeekPage() {
           ) : null}
 
           {!loading && !error && rows.length > 0 ? (
-            <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/60">
+            <div className="mb-3 px-1 text-sm text-white/60 sm:mb-4 sm:rounded-2xl sm:border sm:border-white/10 sm:bg-white/[0.03] sm:px-4 sm:py-3">
               Showing {rows.length} venue{rows.length === 1 ? '' : 's'}
               {searchTerm.trim() ? ` for "${searchTerm.trim()}"` : ''}
               {activeFilter !== 'all' ? ` in ${getFilterHeading(activeFilter, selectedDay).toLowerCase()}` : ''}
@@ -476,10 +530,10 @@ export default function WeekPage() {
             </div>
           ) : null}
 
-          <div className="space-y-7">
+          <div className="space-y-5 sm:space-y-7">
             {sections.map((section) => (
-              <section key={section.id} id={section.id} className="scroll-mt-28 space-y-4">
-                <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+              <section key={section.id} id={section.id} className="scroll-mt-28 space-y-3 sm:space-y-4">
+                <div className="rounded-[1.75rem] border border-white/8 bg-white/[0.02] p-3.5 sm:rounded-3xl sm:border-white/10 sm:bg-white/[0.03] sm:p-5">
                   <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-300/70">
@@ -495,11 +549,11 @@ export default function WeekPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 space-y-5">
+                  <div className="mt-3.5 space-y-4 sm:mt-4 sm:space-y-5">
                     {groupRowsByTime(section.rows, section.kind).map((group) => (
                       <div key={`${section.id}-${group.label}`} className="space-y-3">
                         <div className="flex items-center gap-3">
-                          <div className="rounded-full border border-orange-400/20 bg-orange-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-orange-100">
+                          <div className="rounded-full border border-orange-400/15 bg-orange-500/[0.08] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-100 sm:border-orange-400/20 sm:bg-orange-500/10 sm:px-3 sm:text-xs sm:tracking-[0.18em]">
                             {group.label}
                           </div>
                           <div className="h-px flex-1 bg-white/10" />
