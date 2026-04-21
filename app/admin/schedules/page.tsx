@@ -1,6 +1,7 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { GroupedScheduleTypeSelector } from '@/app/components/GroupedScheduleTypeSelector';
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import {
@@ -20,13 +21,10 @@ import {
 } from '@/lib/venue-type-rules';
 import {
   DAY_OPTIONS,
-  DEAL_SCHEDULE_TYPES,
   EVENT_SCHEDULE_TYPES,
-  HOURS_SCHEDULE_TYPES,
   SCHEDULE_TYPE_OPTIONS,
-  VENUE_RULE_KIND_OPTIONS,
   getScheduleTypeLabel,
-  getVenueRuleKindLabel,
+  getScheduleTypePickerLabel,
   isDealScheduleType,
   isEventScheduleType,
   isVenueRuleScheduleType,
@@ -1770,6 +1768,18 @@ export default function AdminMasterPage() {
     setHappyHourForm(blankHappyHourForm());
   }
 
+  function handleScheduleTypeSelection(
+    nextScheduleType: ScheduleType,
+    nextVenueRuleKind?: VenueRuleKind
+  ) {
+    resetScheduleForm();
+    setScheduleType(nextScheduleType);
+    if (nextScheduleType === 'venue_rule') {
+      setVenueRuleKind(nextVenueRuleKind ?? 'kid');
+    }
+    setScheduleWorkspaceArmed(true);
+  }
+
   function loadExistingRowsIntoScheduleForm(
     targetScheduleType: ScheduleType,
     rows: ExistingSchedulePreviewRow[],
@@ -1869,53 +1879,6 @@ export default function AdminMasterPage() {
     );
   }
 
-  function renderScheduleTypeOptions() {
-    const hourOptions = SCHEDULE_TYPE_OPTIONS.filter((option) =>
-      HOURS_SCHEDULE_TYPES.includes(option.value)
-    );
-    const dealOptions = SCHEDULE_TYPE_OPTIONS.filter((option) =>
-      DEAL_SCHEDULE_TYPES.includes(option.value)
-    );
-    const eventOptions = SCHEDULE_TYPE_OPTIONS.filter((option) =>
-      isEventScheduleType(option.value)
-    );
-    const venueRuleOptions = SCHEDULE_TYPE_OPTIONS.filter((option) =>
-      option.value === 'venue_rule'
-    );
-
-    return (
-      <>
-        <optgroup label="Hours">
-          {hourOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </optgroup>
-        <optgroup label="Deals">
-          {dealOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </optgroup>
-        <optgroup label="Events">
-          {eventOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </optgroup>
-        <optgroup label="Venue Rules">
-          {venueRuleOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </optgroup>
-      </>
-    );
-  }
 
   function updateVenueForm<K extends keyof VenueFormState>(
     field: K,
@@ -3723,7 +3686,7 @@ export default function AdminMasterPage() {
                 </div>
                 <div className="mt-2 grid gap-3 text-sm text-neutral-700 md:grid-cols-2">
                   <div>
-                    <span className="font-medium">Schedule type:</span> {getScheduleTypeLabel(scheduleType)}
+                    <span className="font-medium">Schedule type:</span> {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}
                   </div>
                   <div>
                     <span className="font-medium">Existing rows:</span>{' '}
@@ -3752,77 +3715,19 @@ export default function AdminMasterPage() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Schedule Type</label>
-                  <div className="mb-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setScheduleType('daily_special');
-                        setScheduleWorkspaceArmed(true);
-                      }}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] ${
-                        scheduleType === 'daily_special'
-                          ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
-                          : 'admin-ghost-button'
-                      }`}
-                    >
-                      Daily specials
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setScheduleType('lunch_special');
-                        setScheduleWorkspaceArmed(true);
-                      }}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] ${
-                        scheduleType === 'lunch_special'
-                          ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
-                          : 'admin-ghost-button'
-                      }`}
-                    >
-                      Lunch specials
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setScheduleType('venue_rule');
-                        setVenueRuleKind('kid');
-                        setScheduleWorkspaceArmed(true);
-                      }}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] ${
-                        scheduleType === 'venue_rule' && venueRuleKind === 'kid'
-                          ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
-                          : 'admin-ghost-button'
-                      }`}
-                    >
-                      Kids allowed
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setScheduleType('venue_rule');
-                        setVenueRuleKind('dog');
-                        setScheduleWorkspaceArmed(true);
-                      }}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] ${
-                        scheduleType === 'venue_rule' && venueRuleKind === 'dog'
-                          ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
-                          : 'admin-ghost-button'
-                      }`}
-                    >
-                      Dog friendly
-                    </button>
-                  </div>
-                  <select
-                    value={scheduleType}
-                    onChange={(e) => setScheduleType(e.target.value as ScheduleType)}
-                    className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                  >
-                    {renderScheduleTypeOptions()}
-                  </select>
+                  <GroupedScheduleTypeSelector
+                    scheduleType={scheduleType}
+                    venueRuleKind={venueRuleKind}
+                    onSelect={handleScheduleTypeSelection}
+                    variant="admin"
+                  />
                   {isEventScheduleType(scheduleType) ? (
                     <div className="mt-2 text-xs text-neutral-500">
                       Event rows only appear on the website when published details exist for that venue and day.
+                    </div>
+                  ) : isVenueRuleScheduleType(scheduleType) ? (
+                    <div className="mt-2 text-xs text-neutral-500">
+                      Public signal: {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}
                     </div>
                   ) : (
                     <div className="mt-2 text-xs text-neutral-500">
@@ -3952,71 +3857,72 @@ export default function AdminMasterPage() {
                   ))}
                 </div>
               </div>
-              {isVenueRuleScheduleType(scheduleType) && (
-                <div className="mt-3.5 grid gap-3 md:grid-cols-2">
+              {(scheduleType === 'daily_special' || scheduleType === 'lunch_special' || isEventScheduleType(scheduleType)) && (
+                <div className="mt-3.5 grid gap-3 md:mt-4 md:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-sm font-medium">Rule type</label>
-                    <select
-                      value={venueRuleKind}
-                      onChange={(e) => setVenueRuleKind(e.target.value as VenueRuleKind)}
+                    <label className="mb-1 block text-sm font-medium">Title</label>
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder={
+                        scheduleType === 'daily_special'
+                          ? 'e.g. Steak Night'
+                          : scheduleType === 'lunch_special'
+                            ? 'e.g. Lunch Special'
+                            : 'Optional event title'
+                      }
                       className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                    >
-                      {VENUE_RULE_KIND_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
-                  <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
-                    Public signal: {getVenueRuleKindLabel(venueRuleKind)}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      {isEventScheduleType(scheduleType) ? 'Summary' : 'Deal text'}
+                    </label>
+                    <input
+                      type="text"
+                      value={dealText}
+                      onChange={(e) => setDealText(e.target.value)}
+                      placeholder={
+                        scheduleType === 'daily_special'
+                          ? 'e.g. Parmi + chips $20'
+                          : scheduleType === 'lunch_special'
+                            ? 'e.g. Lunch special $15'
+                            : 'Short event summary for the public card'
+                      }
+                      className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                    />
                   </div>
                 </div>
               )}
-              <div className="mt-3.5 grid gap-3 md:mt-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Title</label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder={
-                      scheduleType === 'daily_special'
-                        ? 'e.g. Steak Night'
-                        : scheduleType === 'lunch_special'
-                          ? 'e.g. Lunch Special'
-                          : scheduleType === 'venue_rule'
-                            ? 'Optional short label'
-                            : 'Optional public heading'
-                    }
-                    className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">
-                    {isVenueRuleScheduleType(scheduleType) ? 'Public summary' : 'Deal text'}
-                  </label>
+              {isVenueRuleScheduleType(scheduleType) && (
+                <div className="mt-3.5">
+                  <label className="mb-1 block text-sm font-medium">Public summary</label>
                   <input
                     type="text"
                     value={dealText}
                     onChange={(e) => setDealText(e.target.value)}
                     placeholder={
-                      scheduleType === 'happy_hour'
-                        ? 'e.g. $7 schooners / $15 burgers'
-                        : scheduleType === 'daily_special'
-                          ? 'e.g. Parmi + chips $20'
-                          : scheduleType === 'lunch_special'
-                            ? 'e.g. Lunch special $15'
-                            : scheduleType === 'venue_rule'
-                              ? venueRuleKind === 'kid'
-                                ? 'e.g. Kids until 8pm'
-                                : 'e.g. Dogs front bar only'
-                              : 'Short line for the public card'
+                      venueRuleKind === 'kid'
+                        ? 'e.g. Kids until 8pm'
+                        : 'e.g. Dogs front bar only'
                     }
                     className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>
-              </div>
+              )}
+              {scheduleType === 'happy_hour' && (
+                <div className="mt-3.5">
+                  <label className="mb-1 block text-sm font-medium">Deal text</label>
+                  <input
+                    type="text"
+                    value={dealText}
+                    onChange={(e) => setDealText(e.target.value)}
+                    placeholder="e.g. $7 schooners / $15 burgers"
+                    className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              )}
               {(scheduleType === 'daily_special' || scheduleType === 'lunch_special') && (
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <div>
@@ -4037,34 +3943,40 @@ export default function AdminMasterPage() {
                   </div>
                 </div>
               )}
-              <div className="mt-3">
-                <label className="mb-1 block text-sm font-medium">Description</label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder={
-                    isVenueRuleScheduleType(scheduleType)
-                      ? 'Optional public detail if the rule needs more context'
-                      : 'Public-facing detail or context for this activity'
-                  }
-                  rows={3}
-                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                />
-              </div>
-              <div className="mt-3">
-                <label className="mb-1 block text-sm font-medium">Notes</label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder={
-                    isVenueRuleScheduleType(scheduleType)
-                      ? 'Optional nuance such as Beer garden only or Front bar only'
-                      : 'Operator notes, sourcing notes, or reminders'
-                  }
-                  rows={3}
-                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                />
-              </div>
+              {(isDealScheduleType(scheduleType) || isEventScheduleType(scheduleType) || scheduleType === 'happy_hour') && (
+                <div className="mt-3">
+                  <label className="mb-1 block text-sm font-medium">Description</label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder={
+                      isDealScheduleType(scheduleType)
+                        ? 'Public-facing detail or context for this offer'
+                        : isEventScheduleType(scheduleType)
+                          ? 'Optional event detail for the public card or venue page'
+                          : 'Optional happy hour detail if you need more context'
+                    }
+                    rows={3}
+                    className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              )}
+              {(isDealScheduleType(scheduleType) || isEventScheduleType(scheduleType) || isVenueRuleScheduleType(scheduleType) || scheduleType === 'happy_hour') && (
+                <div className="mt-3">
+                  <label className="mb-1 block text-sm font-medium">Notes</label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder={
+                      isVenueRuleScheduleType(scheduleType)
+                        ? 'Optional nuance such as Beer garden only or Front bar only'
+                        : 'Operator notes, sourcing notes, or reminders'
+                    }
+                    rows={3}
+                    className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              )}
               {scheduleType === 'happy_hour' && (
                 <div className="mt-4 rounded-2xl border border-pink-200 bg-pink-50 p-4">
                   <h3 className="mb-3 font-semibold">Happy Hour Items</h3>
@@ -4892,4 +4804,8 @@ function HappyHourCategoryEditor({
     </div>
   );
 }
+
+
+
+
 

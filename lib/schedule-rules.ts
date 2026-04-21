@@ -25,6 +25,18 @@ export type ScheduleType =
 
 export type VenueRuleKind = 'kid' | 'dog';
 
+export type ScheduleTypePickerOption = {
+  id: string;
+  label: string;
+  scheduleType: ScheduleType;
+  venueRuleKind?: VenueRuleKind;
+};
+
+export type ScheduleTypePickerGroup = {
+  label: string;
+  options: ScheduleTypePickerOption[];
+};
+
 export const DAY_OPTIONS: Array<{ value: DayOfWeek; label: string }> = [
   { value: 'monday', label: 'Mon' },
   { value: 'tuesday', label: 'Tue' },
@@ -81,6 +93,54 @@ export const VENUE_RULE_KIND_OPTIONS: Array<{ value: VenueRuleKind; label: strin
   { value: 'dog', label: 'Dog Friendly' },
 ];
 
+export const SCHEDULE_TYPE_PICKER_GROUPS: ScheduleTypePickerGroup[] = [
+  {
+    label: 'Hours',
+    options: [
+      { id: 'opening', label: 'Opening hours', scheduleType: 'opening' },
+      { id: 'kitchen', label: 'Kitchen hours', scheduleType: 'kitchen' },
+      { id: 'happy_hour', label: 'Happy hour', scheduleType: 'happy_hour' },
+      { id: 'bottle_shop', label: 'Bottle shop hours', scheduleType: 'bottle_shop' },
+    ],
+  },
+  {
+    label: 'Deals',
+    options: [
+      { id: 'daily_special', label: 'Daily specials', scheduleType: 'daily_special' },
+      { id: 'lunch_special', label: 'Lunch specials', scheduleType: 'lunch_special' },
+    ],
+  },
+  {
+    label: 'Events',
+    options: [
+      { id: 'trivia', label: 'Trivia', scheduleType: 'trivia' },
+      { id: 'live_music', label: 'Live music', scheduleType: 'live_music' },
+      { id: 'sport', label: 'Sport', scheduleType: 'sport' },
+      { id: 'comedy', label: 'Comedy', scheduleType: 'comedy' },
+      { id: 'karaoke', label: 'Karaoke', scheduleType: 'karaoke' },
+      { id: 'dj', label: 'DJ', scheduleType: 'dj' },
+      { id: 'special_event', label: 'Special event', scheduleType: 'special_event' },
+    ],
+  },
+  {
+    label: 'Venue Rules',
+    options: [
+      {
+        id: 'venue_rule_kid',
+        label: 'Kids allowed',
+        scheduleType: 'venue_rule',
+        venueRuleKind: 'kid',
+      },
+      {
+        id: 'venue_rule_dog',
+        label: 'Dog friendly',
+        scheduleType: 'venue_rule',
+        venueRuleKind: 'dog',
+      },
+    ],
+  },
+];
+
 export function isEventScheduleType(value: ScheduleType) {
   return EVENT_SCHEDULE_TYPES.includes(value);
 }
@@ -103,6 +163,17 @@ export function getScheduleTypeLabel(value: ScheduleType) {
 
 export function getVenueRuleKindLabel(value: VenueRuleKind) {
   return VENUE_RULE_KIND_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
+export function getScheduleTypePickerLabel(
+  scheduleType: ScheduleType,
+  venueRuleKind: VenueRuleKind = 'kid'
+) {
+  if (scheduleType === 'venue_rule') {
+    return getVenueRuleKindLabel(venueRuleKind);
+  }
+
+  return getScheduleTypeLabel(scheduleType);
 }
 
 export function isValidDayOfWeek(value: string): value is DayOfWeek {

@@ -1,15 +1,13 @@
 'use client';
 
+import { GroupedScheduleTypeSelector } from '@/app/components/GroupedScheduleTypeSelector';
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import { buildPublicVenueHref } from '@/lib/public-venue-discovery';
 import {
   DAY_OPTIONS,
-  DEAL_SCHEDULE_TYPES,
   EVENT_SCHEDULE_TYPES,
-  HOURS_SCHEDULE_TYPES,
-  VENUE_RULE_KIND_OPTIONS,
   getScheduleTypeLabel,
-  getVenueRuleKindLabel,
+  getScheduleTypePickerLabel,
   isDealScheduleType,
   isEventScheduleType,
   isVenueRuleScheduleType,
@@ -133,21 +131,6 @@ type PortalSelectGroup<T extends string> = {
   label: string;
   options: PortalSelectOption<T>[];
 };
-
-const HOUR_SCHEDULE_TYPE_OPTIONS: Array<{ value: ScheduleType; label: string }> = HOURS_SCHEDULE_TYPES.map(
-  (value) => ({ value, label: getScheduleTypeLabel(value) })
-);
-
-const DEAL_SCHEDULE_TYPE_OPTIONS: Array<{ value: ScheduleType; label: string }> = DEAL_SCHEDULE_TYPES.map(
-  (value) => ({ value, label: getScheduleTypeLabel(value) })
-);
-
-const EVENT_SCHEDULE_TYPE_OPTIONS: Array<{ value: EventScheduleType; label: string }> =
-  EVENT_SCHEDULE_TYPES.map((value) => ({ value, label: getScheduleTypeLabel(value) }));
-
-const VENUE_RULE_SCHEDULE_TYPE_OPTIONS: Array<{ value: ScheduleType; label: string }> = [
-  { value: 'venue_rule', label: getScheduleTypeLabel('venue_rule') },
-];
 
 function blankVenueForm(): VenueFormState {
   return {
@@ -710,6 +693,17 @@ export default function PortalVenueDetailPage() {
     setScheduleError(null);
   }
 
+  function handleScheduleTypeSelection(
+    nextScheduleType: PortalScheduleType,
+    nextVenueRuleKind?: VenueRuleKind
+  ) {
+    resetScheduleForm();
+    setScheduleType(nextScheduleType);
+    if (nextScheduleType === 'venue_rule') {
+      setVenueRuleKind(nextVenueRuleKind ?? 'kid');
+    }
+  }
+
   function loadDayIntoForm(day: DayOfWeek) {
     const rules = getLiveRules(venue, scheduleType).filter((rule) => rule.day_of_week === day);
     const periods = getExistingHours(venue, scheduleType)?.[day] ?? [];
@@ -745,7 +739,7 @@ export default function PortalVenueDetailPage() {
       }
       setSaveMode('replace');
       setScheduleMessage(
-        `Loaded ${getScheduleTypeLabel(scheduleType)} for ${DAY_OPTIONS.find((option) => option.value === day)?.label}.`
+        `Loaded ${getScheduleTypePickerLabel(scheduleType, venueRuleKind)} for ${DAY_OPTIONS.find((option) => option.value === day)?.label}.`
       );
       setScheduleError(null);
       return;
@@ -911,7 +905,7 @@ export default function PortalVenueDetailPage() {
       setScheduleMessage(`Saved ${getScheduleTypeLabel(scheduleType).toLowerCase()}.`);
       appendActivity(
         'Saved schedule',
-        `${getScheduleTypeLabel(scheduleType)} for ${selectedDays.length} day${selectedDays.length === 1 ? '' : 's'} with ${cleanedTimeBlocks.length} block${cleanedTimeBlocks.length === 1 ? '' : 's'}.`
+        `${getScheduleTypePickerLabel(scheduleType, venueRuleKind)} for ${selectedDays.length} day${selectedDays.length === 1 ? '' : 's'} with ${cleanedTimeBlocks.length} block${cleanedTimeBlocks.length === 1 ? '' : 's'}.`
       );
       resetScheduleForm();
       await loadVenue(true);
@@ -939,7 +933,7 @@ export default function PortalVenueDetailPage() {
       setScheduleMessage(`Deleted selected ${getScheduleTypeLabel(scheduleType).toLowerCase()}.`);
       appendActivity(
         'Deleted selected days',
-        `${getScheduleTypeLabel(scheduleType)} removed for ${selectedDays.length} selected day${selectedDays.length === 1 ? '' : 's'}.`
+        `${getScheduleTypePickerLabel(scheduleType, venueRuleKind)} removed for ${selectedDays.length} selected day${selectedDays.length === 1 ? '' : 's'}.`
       );
       resetScheduleForm();
       await loadVenue(true);
@@ -978,8 +972,8 @@ export default function PortalVenueDetailPage() {
   const currentRules = useMemo(() => getLiveRules(venue, scheduleType), [venue, scheduleType]);
   const liveEventCount = useMemo(
     () =>
-      EVENT_SCHEDULE_TYPE_OPTIONS.reduce(
-        (count, option) => count + getLiveRules(venue, option.value).length,
+      EVENT_SCHEDULE_TYPES.reduce(
+        (count, scheduleType) => count + getLiveRules(venue, scheduleType).length,
         0
       ),
     [venue]
@@ -1083,7 +1077,7 @@ export default function PortalVenueDetailPage() {
     <div className="portal-shell min-h-screen bg-neutral-950 px-4 py-5 text-white sm:px-6 sm:py-8">
       <div className="mx-auto max-w-6xl">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-4">
-          <Link href="/portal" className="text-sm text-orange-200 hover:text-orange-100">← Back to portal</Link>
+          <Link href="/portal" className="text-sm text-orange-200 hover:text-orange-100">â† Back to portal</Link>
           <Link href={venue ? buildPublicVenueHref(venue) : '/venues'} className="portal-ghost-button inline-flex min-h-[40px] items-center whitespace-nowrap rounded-xl border px-4 py-2 text-sm font-semibold">View this venue on website</Link>
         </div>
 
@@ -1126,7 +1120,7 @@ export default function PortalVenueDetailPage() {
           </div>
           <div className="portal-surface-subtle rounded-2xl border p-3.5">
             <div className="text-xs uppercase tracking-[0.2em] text-white/50">Editing</div>
-            <div className="mt-2 text-sm font-semibold">{getScheduleTypeLabel(scheduleType)}</div>
+            <div className="mt-2 text-sm font-semibold">{getScheduleTypePickerLabel(scheduleType, venueRuleKind)}</div>
           </div>
           <div className="portal-surface-subtle rounded-2xl border p-3.5">
             <div className="text-xs uppercase tracking-[0.2em] text-white/50">Last update</div>
@@ -1174,77 +1168,30 @@ export default function PortalVenueDetailPage() {
                 <h2 className="text-xl font-semibold">Hours, deals, events, and venue rules</h2>
                 <p className="mt-2 text-sm leading-6 text-white/76">Manage opening hours, specials, events, and time-based kid or dog access using the existing schedule flow.</p>
               </div>
-              <div className="portal-surface-subtle rounded-2xl border px-4 py-3 text-sm text-white/68">{getScheduleTypeLabel(scheduleType)}</div>
+              <div className="portal-surface-subtle rounded-2xl border px-4 py-3 text-sm text-white/68">{getScheduleTypePickerLabel(scheduleType, venueRuleKind)}</div>
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium text-white/82">Schedule type</label>
-                <div className="mb-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setScheduleType('daily_special')}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] ${
-                      scheduleType === 'daily_special'
-                        ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
-                        : 'portal-ghost-button'
-                    }`}
-                  >
-                    Daily specials
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setScheduleType('lunch_special')}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] ${
-                      scheduleType === 'lunch_special'
-                        ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
-                        : 'portal-ghost-button'
-                    }`}
-                  >
-                    Lunch specials
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setScheduleType('venue_rule');
-                      setVenueRuleKind('kid');
-                    }}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] ${
-                      scheduleType === 'venue_rule' && venueRuleKind === 'kid'
-                        ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
-                        : 'portal-ghost-button'
-                    }`}
-                  >
-                    Kids allowed
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setScheduleType('venue_rule');
-                      setVenueRuleKind('dog');
-                    }}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] ${
-                      scheduleType === 'venue_rule' && venueRuleKind === 'dog'
-                        ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
-                        : 'portal-ghost-button'
-                    }`}
-                  >
-                    Dog friendly
-                  </button>
-                </div>
-                <PortalSelect
-                  value={scheduleType}
-                  groups={[
-                    { label: 'Hours', options: HOUR_SCHEDULE_TYPE_OPTIONS },
-                    { label: 'Deals', options: DEAL_SCHEDULE_TYPE_OPTIONS },
-                    { label: 'Events', options: EVENT_SCHEDULE_TYPE_OPTIONS },
-                    { label: 'Venue Rules', options: VENUE_RULE_SCHEDULE_TYPE_OPTIONS },
-                  ]}
-                  onChange={(value) => {
-                    setScheduleType(value);
-                    resetScheduleForm();
-                  }}
+                <GroupedScheduleTypeSelector
+                  scheduleType={scheduleType}
+                  venueRuleKind={venueRuleKind}
+                  onSelect={handleScheduleTypeSelection}
+                  variant="portal"
                 />
+                {isEventScheduleType(scheduleType) ? (
+                  <div className="mt-2 text-xs text-white/55">
+                    Event rows only show publicly when published details exist for that venue and day.
+                  </div>
+                ) : isVenueRuleScheduleType(scheduleType) ? (
+                  <div className="mt-2 text-xs text-white/55">
+                    Public signal: {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}
+                  </div>
+                ) : (
+                  <div className="mt-2 text-xs text-white/55">
+                    Keep hours, deals, and venue rules tidy here so the public venue page stays in sync.
+                  </div>
+                )}
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-white/82">Mode</label>
@@ -1282,7 +1229,7 @@ export default function PortalVenueDetailPage() {
                   </p>
                 </div>
                 <div className="portal-surface rounded-xl border px-3 py-2 text-xs text-white/66">
-                  {getScheduleTypeLabel(scheduleType)}
+                  {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}
                 </div>
               </div>
 
@@ -1361,29 +1308,18 @@ export default function PortalVenueDetailPage() {
               </div>
             </div>
 
-            {isVenueRuleScheduleType(scheduleType) ? (
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-white/82">Rule type</label>
-                  <PortalSelect
-                    value={venueRuleKind}
-                    options={VENUE_RULE_KIND_OPTIONS.map((option) => ({
-                      value: option.value,
-                      label: option.label,
-                    }))}
-                    onChange={setVenueRuleKind}
-                  />
-                </div>
-                <div className="portal-surface-subtle rounded-2xl border px-4 py-3 text-sm text-white/68">
-                  Active label: {getVenueRuleKindLabel(venueRuleKind)}
-                </div>
+            {(scheduleType === 'daily_special' || scheduleType === 'lunch_special' || isEventScheduleType(scheduleType)) ? (
+              <div className="mt-4 grid gap-3 md:mt-5 md:grid-cols-2">
+                <div><label className="mb-1 block text-sm font-medium text-white/82">Title</label><input type="text" value={title} onChange={(event) => setTitle(event.target.value)} placeholder={scheduleType === 'daily_special' ? 'e.g. Steak Night' : scheduleType === 'lunch_special' ? 'e.g. Lunch Special' : 'Optional event title'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                <div><label className="mb-1 block text-sm font-medium text-white/82">{isEventScheduleType(scheduleType) ? 'Summary' : 'Deal text / summary'}</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder={scheduleType === 'daily_special' ? 'e.g. Parmi + chips $20' : scheduleType === 'lunch_special' ? 'e.g. Lunch special $15' : 'Short event summary for the public card'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
               </div>
             ) : null}
-
-            <div className="mt-4 grid gap-3 md:mt-5 md:grid-cols-2">
-              <div><label className="mb-1 block text-sm font-medium text-white/82">Title</label><input type="text" value={title} onChange={(event) => setTitle(event.target.value)} placeholder={scheduleType === 'daily_special' ? 'e.g. Steak Night' : scheduleType === 'lunch_special' ? 'e.g. Lunch Special' : scheduleType === 'venue_rule' ? 'Optional short label' : 'Optional title'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/82">{isVenueRuleScheduleType(scheduleType) ? 'Public summary' : 'Deal text / summary'}</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder={scheduleType === 'happy_hour' ? 'e.g. $7 schooners / $15 burgers' : scheduleType === 'daily_special' ? 'e.g. Parmi + chips $20' : scheduleType === 'lunch_special' ? 'e.g. Lunch special $15' : scheduleType === 'venue_rule' ? venueRuleKind === 'kid' ? 'e.g. Kids until 8pm' : 'e.g. Dogs front bar only' : 'Optional summary'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-            </div>
+            {isVenueRuleScheduleType(scheduleType) ? (
+              <div className="mt-4"><label className="mb-1 block text-sm font-medium text-white/82">Public summary</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder={venueRuleKind === 'kid' ? 'e.g. Kids until 8pm' : 'e.g. Dogs front bar only'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+            ) : null}
+            {scheduleType === 'happy_hour' ? (
+              <div className="mt-4"><label className="mb-1 block text-sm font-medium text-white/82">Deal text / summary</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder="e.g. $7 schooners / $15 burgers" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+            ) : null}
             {(scheduleType === 'daily_special' || scheduleType === 'lunch_special') ? (
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <div>
@@ -1395,8 +1331,12 @@ export default function PortalVenueDetailPage() {
                 </div>
               </div>
             ) : null}
-            <div className="mt-3.5"><label className="mb-1 block text-sm font-medium text-white/82">Description</label><textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} placeholder={isVenueRuleScheduleType(scheduleType) ? 'Optional public detail if the rule needs more context' : 'Optional description'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-            <div className="mt-3.5"><label className="mb-1 block text-sm font-medium text-white/82">Notes</label><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder={isVenueRuleScheduleType(scheduleType) ? 'Optional nuance such as Beer garden only or Front bar only' : 'Optional notes'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+            {(isDealScheduleType(scheduleType) || isEventScheduleType(scheduleType) || scheduleType === 'happy_hour') ? (
+              <div className="mt-3.5"><label className="mb-1 block text-sm font-medium text-white/82">Description</label><textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} placeholder={isDealScheduleType(scheduleType) ? 'Optional detail for this special or offer' : isEventScheduleType(scheduleType) ? 'Optional event detail for the public card or venue page' : 'Optional happy hour detail if you need more context'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+            ) : null}
+            {(isDealScheduleType(scheduleType) || isEventScheduleType(scheduleType) || isVenueRuleScheduleType(scheduleType) || scheduleType === 'happy_hour') ? (
+              <div className="mt-3.5"><label className="mb-1 block text-sm font-medium text-white/82">Notes</label><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder={isVenueRuleScheduleType(scheduleType) ? 'Optional nuance such as Beer garden only or Front bar only' : 'Optional notes'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+            ) : null}
             {scheduleType === 'happy_hour' ? (
               <div className="mt-5 space-y-4">
                 <div className="portal-surface-subtle rounded-2xl border border-orange-300/20 px-4 py-3 text-sm text-orange-50">
@@ -1513,7 +1453,7 @@ export default function PortalVenueDetailPage() {
                 <button type="button" onClick={handleSaveSchedule} disabled={savingSchedule || clearingSchedule} className="portal-primary-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{savingSchedule ? 'Saving...' : 'Save entry'}</button>
                 <button type="button" onClick={resetScheduleForm} disabled={savingSchedule || clearingSchedule} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">Clear form</button>
                 <button type="button" onClick={handleDeleteSelectedDays} disabled={savingSchedule || clearingSchedule} className="portal-danger-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{clearingSchedule ? 'Working...' : 'Delete selected days'}</button>
-                <button type="button" onClick={handleDeleteAllForType} disabled={savingSchedule || clearingSchedule} className="portal-danger-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">Delete all {getScheduleTypeLabel(scheduleType)}</button>
+                <button type="button" onClick={handleDeleteAllForType} disabled={savingSchedule || clearingSchedule} className="portal-danger-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">Delete all {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}</button>
               </div>
             </div>
           </div>
@@ -1812,4 +1752,7 @@ function PortalSelect<T extends string>({
     </div>
   );
 }
+
+
+
 
