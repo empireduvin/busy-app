@@ -1,6 +1,6 @@
 'use client';
 
-import { getTodayHoursText, formatTimeForUi, type WeeklyHours } from '@/lib/opening-hours';
+import { getTodayHoursText, type WeeklyHours } from '@/lib/opening-hours';
 
 type Props = {
   openingHours: WeeklyHours | null | undefined;
@@ -10,8 +10,8 @@ type Props = {
   timezone?: string;
 };
 
-const WINDOW_START = 8 * 60; // 08:00
-const WINDOW_END = 28 * 60; // 04:00 next day
+const WINDOW_START = 8 * 60;
+const WINDOW_END = 28 * 60;
 const WINDOW_TOTAL = WINDOW_END - WINDOW_START;
 
 const TICKS = [
@@ -88,10 +88,9 @@ function getSegments(
       return {
         left: toPercent(clampedStart),
         width: ((clampedEnd - clampedStart) / WINDOW_TOTAL) * 100,
-        timeRange: `${formatTimeForUi(period.open)} – ${formatTimeForUi(period.close)}`,
       };
     })
-    .filter(Boolean) as Array<{ left: number; width: number; timeRange: string }>;
+    .filter(Boolean) as Array<{ left: number; width: number }>;
 }
 
 function hasAnyHours(hours: WeeklyHours | null | undefined) {
@@ -119,49 +118,38 @@ function TimelineRow({
   const showNow = nowLeft !== null && nowLeft >= 0 && nowLeft <= 100;
 
   return (
-    <div className="grid grid-cols-[80px_1fr] gap-4">
-      <div className="pt-1 text-sm text-white/75">{label}</div>
+    <div className="grid grid-cols-[78px_1fr] gap-3 sm:grid-cols-[88px_1fr] sm:gap-4">
+      <div className="pt-5 text-sm text-white/78">{label}</div>
 
       <div>
-        <div className="relative" style={{ paddingTop: '20px' }}>
-          <div className="relative h-8 rounded-md border border-white/10 bg-white/[0.03]">
-            {TICKS.slice(1, -1).map((tick) => (
-              <div
-                key={tick.label}
-                className="absolute top-0 bottom-0 w-px bg-white/10"
-                style={{ left: `${toPercent(tick.minute)}%` }}
-              />
-            ))}
+        <div className="mb-1.5 text-[11px] font-medium text-white/56">{text}</div>
+        <div className="relative h-8 rounded-md border border-white/10 bg-white/[0.03]">
+          {TICKS.slice(1, -1).map((tick) => (
+            <div
+              key={tick.label}
+              className="absolute bottom-0 top-0 w-px bg-white/10"
+              style={{ left: `${toPercent(tick.minute)}%` }}
+            />
+          ))}
 
-            {segments.map((segment, index) => (
-              <div key={index} className="absolute inset-0">
-                <div
-                  className={`absolute top-0 bottom-0 rounded-md ${colorClass}`}
-                  style={{
-                    left: `${segment.left}%`,
-                    width: `${segment.width}%`,
-                  }}
-                />
-                <div
-                  className="absolute text-xs font-semibold text-white whitespace-nowrap"
-                  style={{
-                    left: `${segment.left + segment.width / 2}%`,
-                    top: `-18px`,
-                    transform: 'translateX(-50%)',
-                  }}
-                >
-                  {segment.timeRange}
-                </div>
-              </div>
-            ))}
-
-            {showNow ? (
+          {segments.map((segment, index) => (
+            <div key={index} className="absolute inset-0">
               <div
-                className="absolute top-0 bottom-0 z-20 w-[2px] bg-cyan-400"
-                style={{ left: `${nowLeft}%` }}
+                className={`absolute bottom-0 top-0 rounded-md ${colorClass}`}
+                style={{
+                  left: `${segment.left}%`,
+                  width: `${segment.width}%`,
+                }}
               />
-            ) : null}
-          </div>
+            </div>
+          ))}
+
+          {showNow ? (
+            <div
+              className="absolute bottom-0 top-0 z-20 w-[2px] bg-cyan-400"
+              style={{ left: `${nowLeft}%` }}
+            />
+          ) : null}
         </div>
       </div>
     </div>
@@ -177,7 +165,7 @@ export default function TodayHoursSummary({
 }: Props) {
   const openText = getTodayHoursText(openingHours, timezone, { emptyLabel: 'Closed' });
   const kitchenText = getTodayHoursText(kitchenHours, timezone, { emptyLabel: 'Closed' });
-  const happyHourText = getTodayHoursText(happyHourHours, timezone, { emptyLabel: 'Closed' });
+  const happyHourText = getTodayHoursText(happyHourHours, timezone, { emptyLabel: 'None' });
   const bottleShopText = getTodayHoursText(bottleShopHours, timezone, { emptyLabel: 'Closed' });
 
   const rows = [
@@ -201,22 +189,7 @@ export default function TodayHoursSummary({
         </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-[80px_1fr] gap-4">
-        <div />
-        <div className="relative h-5 text-xs text-white/50">
-          {TICKS.map((tick) => (
-            <div
-              key={tick.label}
-              className="absolute -translate-x-1/2"
-              style={{ left: `${toPercent(tick.minute)}%` }}
-            >
-              {tick.label}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-6">
+      <div className="space-y-5">
         {rows.map((row) => (
           <TimelineRow
             key={row.label}

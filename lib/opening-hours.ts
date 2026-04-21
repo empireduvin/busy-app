@@ -223,7 +223,7 @@ export function getDisplayRows(
       periods,
       text: periods.length
         ? periods
-            .map((p) => `${formatTimeForUi(p.open)}–${formatTimeForUi(p.close)}`)
+            .map((p) => `${formatTimeForUi(p.open)} - ${formatTimeForUi(p.close)}`)
             .join(', ')
         : emptyLabel,
     };
@@ -244,11 +244,10 @@ export function getTodayHoursText(
   if (!periods.length) return emptyLabel;
 
   return periods
-    .map((p) => `${formatTimeForUi(p.open)}–${formatTimeForUi(p.close)}`)
+    .map((p) => `${formatTimeForUi(p.open)} - ${formatTimeForUi(p.close)}`)
     .join(', ');
 }
 
-/* Backward-compatible names */
 export type OpeningPeriod = TimePeriod;
 export type OpeningHours = WeeklyHours;
 

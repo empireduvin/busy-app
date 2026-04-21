@@ -12,12 +12,15 @@ function LoginPageContent() {
   const searchParams = useSearchParams();
   const nextPath = getSafeNextPath(searchParams.get('next'));
 
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [signupMessage, setSignupMessage] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -27,6 +30,45 @@ function LoginPageContent() {
     }
     setSubmitting(true);
     setErrorMessage(null);
+    setSignupMessage(null);
+
+    if (mode === 'signup') {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            full_name: fullName.trim() || null,
+          },
+        },
+      });
+
+      if (error) {
+        setErrorMessage(error.message);
+        setSubmitting(false);
+        return;
+      }
+
+      if (data.session?.access_token) {
+        await fetch('/api/public-profile', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${data.session.access_token}`,
+          },
+        }).catch(() => null);
+
+        router.replace(nextPath);
+        router.refresh();
+        return;
+      }
+
+      setSignupMessage(
+        'Account created. Check your email for a confirmation link, then sign in to save venues.'
+      );
+      setSubmitting(false);
+      return;
+    }
 
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
@@ -86,16 +128,63 @@ function LoginPageContent() {
           <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-orange-300/80">
             First Round
           </div>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Admin Login</h1>
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">
+            {mode === 'signup' ? 'Create your account' : 'Log in'}
+          </h1>
           <p className="mt-2 text-sm leading-6 text-white/65">
-            Sign in with the Supabase user you created for admin or venue access.
+            Save venues you want to come back to. Admin and venue users can still use this same login.
           </p>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-black/20 p-1">
+          <button
+            type="button"
+            onClick={() => {
+              setMode('login');
+              setErrorMessage(null);
+              setSignupMessage(null);
+            }}
+            className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
+              mode === 'login'
+                ? 'bg-orange-500 text-black'
+                : 'text-white/70 hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            Log in
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('signup');
+              setErrorMessage(null);
+              setSignupMessage(null);
+            }}
+            className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
+              mode === 'signup'
+                ? 'bg-orange-500 text-black'
+                : 'text-white/70 hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            Sign up
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           {!supabase ? (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">
               {BROWSER_SUPABASE_ENV_ERROR}
+            </div>
+          ) : null}
+          {mode === 'signup' ? (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-white/80">Name</label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+                autoComplete="name"
+                className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none focus:border-orange-300/40"
+              />
             </div>
           ) : null}
           <div>
@@ -136,28 +225,42 @@ function LoginPageContent() {
             </div>
           ) : null}
 
+          {signupMessage ? (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+              {signupMessage}
+            </div>
+          ) : null}
+
           <button
             type="submit"
             disabled={submitting || !supabase}
             className="flex h-11 w-full items-center justify-center rounded-xl bg-orange-500 px-4 text-sm font-semibold text-black hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {submitting ? 'Signing in...' : 'Sign in'}
+            {submitting
+              ? mode === 'signup'
+                ? 'Creating account...'
+                : 'Signing in...'
+              : mode === 'signup'
+                ? 'Create account'
+                : 'Sign in'}
           </button>
         </form>
 
-        <form onSubmit={handlePasswordReset} className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-          <div className="text-sm font-medium text-white/80">Forgot your password?</div>
-          <p className="mt-1 text-sm leading-6 text-white/55">
-            Enter your email above, then send yourself a secure password reset link.
-          </p>
-          <button
-            type="submit"
-            disabled={sendingReset || !supabase}
-            className="mt-4 inline-flex h-10 items-center justify-center rounded-xl border border-white/10 px-4 text-sm font-semibold text-white/80 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {sendingReset ? 'Sending reset link...' : 'Send reset link'}
-          </button>
-        </form>
+        {mode === 'login' ? (
+          <form onSubmit={handlePasswordReset} className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+            <div className="text-sm font-medium text-white/80">Forgot your password?</div>
+            <p className="mt-1 text-sm leading-6 text-white/55">
+              Enter your email above, then send yourself a secure password reset link.
+            </p>
+            <button
+              type="submit"
+              disabled={sendingReset || !supabase}
+              className="mt-4 inline-flex h-10 items-center justify-center rounded-xl border border-white/10 px-4 text-sm font-semibold text-white/80 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {sendingReset ? 'Sending reset link...' : 'Send reset link'}
+            </button>
+          </form>
+        ) : null}
 
         <div className="mt-4 text-sm text-white/50">
           Public site:{' '}
@@ -172,9 +275,9 @@ function LoginPageContent() {
 
 function getSafeNextPath(nextPath: string | null) {
   const candidate = (nextPath ?? '').trim();
-  if (!candidate) return '/admin';
-  if (!candidate.startsWith('/')) return '/admin';
-  if (candidate.startsWith('//')) return '/admin';
+  if (!candidate) return '/saved';
+  if (!candidate.startsWith('/')) return '/saved';
+  if (candidate.startsWith('//')) return '/saved';
   return candidate;
 }
 

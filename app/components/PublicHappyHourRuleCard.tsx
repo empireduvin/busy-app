@@ -39,7 +39,7 @@ export default function PublicHappyHourRuleCard({
         <div
           className={[
             'text-[11px] font-semibold uppercase tracking-[0.18em]',
-            discoverySummary ? 'text-white/58' : 'text-pink-100/75',
+            discoverySummary ? 'text-white/66' : 'text-pink-100/80',
           ].join(' ')}
         >
           Happy Hour
@@ -48,7 +48,7 @@ export default function PublicHappyHourRuleCard({
           className={[
             'rounded-full px-2.5 py-0.5 text-[11px] font-semibold',
             discoverySummary
-              ? 'border border-white/8 bg-black/18 text-white/62'
+              ? 'border border-white/8 bg-black/18 text-white/68'
               : 'border border-pink-300/25 bg-pink-400/10 text-pink-100',
           ].join(' ')}
         >
@@ -57,18 +57,18 @@ export default function PublicHappyHourRuleCard({
       </div>
 
       {discoverySummary ? (
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
+        <div className="mt-2 flex flex-wrap gap-1.5">
           {summaryLabel.length > 0 ? (
             summaryLabel.map((label) => (
               <span
                 key={label}
-                className="inline-flex items-center rounded-full border border-white/8 bg-black/16 px-2.5 py-1 text-[10px] font-medium text-white/64"
+                className="inline-flex items-center rounded-full border border-white/8 bg-black/16 px-2 py-0.5 text-[10px] font-medium text-white/72"
               >
                 {label}
               </span>
             ))
           ) : (
-            <div className="rounded-xl border border-white/8 bg-black/16 px-3 py-2 text-[12px] text-white/56 sm:text-[13px]">
+            <div className="rounded-xl border border-white/8 bg-black/16 px-3 py-2 text-[12px] text-white/66 sm:text-[13px]">
               Specials listed. Open the venue page for full detail.
             </div>
           )}
@@ -90,30 +90,30 @@ export default function PublicHappyHourRuleCard({
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                   {category.label}
                 </div>
-                <div className="mt-2 space-y-2">
+                <div className="mt-2 space-y-1.5">
                   {items.map((item, index) =>
                     isFoodCategory ? (
                       <div
                         key={`${category.key}-${index}-${item.title}`}
                         className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2"
                       >
-                        <div className="space-y-2">
-                          <div className="text-[13px] font-medium leading-5 text-white [overflow-wrap:anywhere] break-words sm:text-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 text-[13px] font-medium leading-5 text-white [overflow-wrap:anywhere] break-words sm:text-sm">
                             {item.title}
                           </div>
                           {item.price != null ? (
-                            <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-amber-200">
+                            <div className="mt-0.5 shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-amber-200">
                               {`$${item.price}`}
                             </div>
                           ) : null}
                         </div>
                         {item.priceLabel ? (
-                          <div className="mt-1 text-[11px] leading-4 text-amber-200/90 [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
+                          <div className="mt-0.5 text-[11px] leading-4 text-amber-200/90 [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
                             {item.priceLabel}
                           </div>
                         ) : null}
                         {item.description ? (
-                          <div className="mt-1 text-[11px] leading-4 text-amber-100/90 [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
+                          <div className="mt-0.5 text-[11px] leading-4 text-amber-100/90 [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
                             {item.description}
                           </div>
                         ) : null}
@@ -126,7 +126,7 @@ export default function PublicHappyHourRuleCard({
                         <div className="min-w-0">
                           <div className="text-[13px] font-medium leading-5 text-white sm:text-sm">{item.title}</div>
                           {item.subtitle ? (
-                            <div className="mt-0.5 text-[11px] leading-4 text-white/55">{item.subtitle}</div>
+                            <div className="mt-0.5 text-[11px] leading-4 text-white/64">{item.subtitle}</div>
                           ) : null}
                         </div>
                         {item.price != null ? (
@@ -151,7 +151,7 @@ export default function PublicHappyHourRuleCard({
       ) : null}
 
       {!discoverySummary && hasText(rule.detail_json?.notes) ? (
-        <div className="mt-3 text-[11px] leading-4 text-white/50">{rule.detail_json?.notes}</div>
+        <div className="mt-3 text-[11px] leading-4 text-white/60">{rule.detail_json?.notes}</div>
       ) : null}
     </div>
   );

@@ -31,25 +31,23 @@ body {
 }
 
 .admin-shell {
-  background:
-    radial-gradient(circle at top, rgba(255, 128, 32, 0.12), transparent 28%),
-    linear-gradient(180deg, #050505, #090909);
-  color: #f7f2ec;
+  background: #0d0f12;
+  color: #f5f7fa;
 }
 
 .admin-shell .bg-white,
 .admin-shell .bg-neutral-50,
 .admin-shell .bg-neutral-100 {
-  background: rgba(255, 255, 255, 0.04) !important;
+  background: #161a20 !important;
 }
 
 .admin-shell .border-neutral-200,
 .admin-shell .border-neutral-300 {
-  border-color: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 .admin-shell .divide-neutral-200 > :not([hidden]) ~ :not([hidden]) {
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.04) !important;
 }
 
 .admin-shell .text-neutral-900 {
@@ -62,32 +60,177 @@ body {
 
 .admin-shell .text-neutral-700,
 .admin-shell .text-neutral-600 {
-  color: rgba(255, 255, 255, 0.72) !important;
+  color: rgba(255, 255, 255, 0.82) !important;
 }
 
 .admin-shell .text-neutral-500 {
-  color: rgba(255, 255, 255, 0.5) !important;
+  color: rgba(255, 255, 255, 0.62) !important;
 }
 
 .admin-shell input,
 .admin-shell select,
 .admin-shell textarea {
-  background: rgba(0, 0, 0, 0.28) !important;
+  background: #10141a !important;
   color: #ffffff !important;
   border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
 .admin-shell input::placeholder,
 .admin-shell textarea::placeholder {
-  color: rgba(255, 255, 255, 0.32);
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .admin-shell button {
   transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 
+.admin-shell .admin-surface {
+  background: #161a20 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: none !important;
+}
+
+.admin-shell .admin-surface-subtle {
+  background: #11161c !important;
+  border-color: rgba(255, 255, 255, 0.07) !important;
+}
+
+.admin-shell .admin-zebra > *:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.admin-shell .admin-ghost-button {
+  background: transparent !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: rgba(255, 255, 255, 0.88) !important;
+}
+
+.admin-shell .admin-ghost-button:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.admin-shell .admin-primary-button {
+  background: #e8ecf1 !important;
+  color: #0d0f12 !important;
+  border-color: transparent !important;
+}
+
+.admin-shell .admin-primary-button:hover {
+  background: #ffffff !important;
+}
+
+.admin-shell .admin-surface input:focus,
+.admin-shell .admin-surface select:focus,
+.admin-shell .admin-surface textarea:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.admin-shell .admin-danger-button {
+  background: transparent !important;
+  border-color: rgba(248, 113, 113, 0.38) !important;
+  color: #fca5a5 !important;
+}
+
+.admin-shell .admin-danger-button:hover {
+  background: rgba(248, 113, 113, 0.08) !important;
+}
+
+.admin-shell .admin-focus-band,
+.portal-shell .portal-focus-band {
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 20;
+  backdrop-filter: blur(14px);
+}
+
 .portal-shell {
-  background:
-    radial-gradient(circle at top, rgba(255, 128, 32, 0.1), transparent 28%),
-    linear-gradient(180deg, #050505, #090909);
+  background: #0d0f12;
+  color: #f5f7fa;
+}
+
+.portal-shell input,
+.portal-shell select,
+.portal-shell textarea {
+  background: #10141a !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.portal-shell input::placeholder,
+.portal-shell textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.portal-shell button,
+.portal-shell a {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.portal-shell .portal-surface {
+  background: #161a20 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: none !important;
+}
+
+.portal-shell .portal-surface-subtle {
+  background: #11161c !important;
+  border-color: rgba(255, 255, 255, 0.07) !important;
+}
+
+.portal-shell .portal-zebra > *:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.portal-shell .portal-ghost-button {
+  background: transparent !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: rgba(255, 255, 255, 0.88) !important;
+}
+
+.portal-shell .portal-ghost-button:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.portal-shell .portal-primary-button {
+  background: #e8ecf1 !important;
+  color: #0d0f12 !important;
+  border-color: transparent !important;
+}
+
+.portal-shell .portal-primary-button:hover {
+  background: #ffffff !important;
+}
+
+.portal-shell .portal-surface input:focus,
+.portal-shell .portal-surface select:focus,
+.portal-shell .portal-surface textarea:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.portal-shell .portal-danger-button {
+  background: transparent !important;
+  border-color: rgba(248, 113, 113, 0.38) !important;
+  color: #fca5a5 !important;
+}
+
+.portal-shell .portal-danger-button:hover {
+  background: rgba(248, 113, 113, 0.08) !important;
+}
+
+@media (min-width: 640px) {
+  .admin-shell .admin-focus-band,
+  .portal-shell .portal-focus-band {
+    position: static;
+    backdrop-filter: none;
+  }
 }

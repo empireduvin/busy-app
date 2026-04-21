@@ -70,6 +70,12 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
   const [status, setStatus] = useState<string>("Loading map...");
   const [mapReady, setMapReady] = useState(false);
 
+  function refreshMapLayout() {
+    const map = mapRef.current;
+    if (!map || !window.google?.maps) return;
+    window.google.maps.event.trigger(map, "resize");
+  }
+
   useEffect(() => {
     if (window.google?.maps) {
       setStatus("");
@@ -179,24 +185,45 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
   }, [mapReady, venues]);
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !window.google?.maps) return;
+    if (!mapRef.current || !window.google?.maps) return;
 
     const handleResize = () => {
-      window.google.maps.event.trigger(map, "resize");
+      refreshMapLayout();
     };
 
     window.addEventListener("resize", handleResize);
 
-    const timeout = window.setTimeout(() => {
-      handleResize();
-    }, 200);
+    const timeout = window.setTimeout(handleResize, 200);
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" && mapDivRef.current
+        ? new ResizeObserver(() => {
+            handleResize();
+          })
+        : null;
+
+    if (resizeObserver && mapDivRef.current) {
+      resizeObserver.observe(mapDivRef.current);
+    }
 
     return () => {
       window.removeEventListener("resize", handleResize);
       window.clearTimeout(timeout);
+      resizeObserver?.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    if (!mapReady) return;
+
+    const first = window.setTimeout(() => refreshMapLayout(), 80);
+    const second = window.setTimeout(() => refreshMapLayout(), 260);
+
+    return () => {
+      window.clearTimeout(first);
+      window.clearTimeout(second);
+    };
+  }, [mapReady, venues.length]);
 
   return (
     <div className="grid gap-3">

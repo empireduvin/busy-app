@@ -1,16 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { getSupabaseBrowserClientResult } from '@/lib/supabase-browser';
-import { BROWSER_SUPABASE_ENV_ERROR } from '@/lib/public-env';
 import {
-  fetchPublicVenues,
   splitVenuesByLaunchArea,
   type Venue,
 } from '@/lib/public-venue-discovery';
 
 export function usePublicVenueCollections() {
-  const supabase = useMemo(() => getSupabaseBrowserClientResult().client, []);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,26 +18,23 @@ export function usePublicVenueCollections() {
       setLoading(true);
       setError(null);
 
-      if (!supabase) {
-        setError(
-          `${BROWSER_SUPABASE_ENV_ERROR} Restart the app after updating your env.`
-        );
-        setVenues([]);
-        setLoading(false);
-        return;
-      }
-
-      const { data, error: loadError } = await fetchPublicVenues(supabase, {
-        orderByName: true,
+      const response = await fetch('/api/public-venues', {
+        method: 'GET',
+        cache: 'no-store',
       });
+      const payload = (await response.json()) as {
+        ok: boolean;
+        data?: Venue[];
+        error?: string;
+      };
 
       if (cancelled) return;
 
-      if (loadError) {
-        setError(loadError.message);
+      if (!response.ok || !payload.ok) {
+        setError(payload.error ?? 'Unable to load venues right now.');
         setVenues([]);
       } else {
-        setVenues(((data ?? []) as unknown) as Venue[]);
+        setVenues(payload.data ?? []);
       }
 
       setLoading(false);
@@ -52,7 +45,7 @@ export function usePublicVenueCollections() {
     return () => {
       cancelled = true;
     };
-  }, [supabase]);
+  }, []);
 
   const split = useMemo(() => splitVenuesByLaunchArea(venues), [venues]);
 

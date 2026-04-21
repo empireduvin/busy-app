@@ -42,10 +42,13 @@ export async function POST(
       shows_sport: normalizedShowsSport,
       plays_with_sound: normalizedPlaysWithSound,
       sport_types: String(venue.sport_types ?? '').trim() || null,
+      sport_notes: String(venue.sport_notes ?? '').trim() || null,
       dog_friendly:
         typeof venue.dog_friendly === 'boolean' ? venue.dog_friendly : null,
+      dog_friendly_notes: String(venue.dog_friendly_notes ?? '').trim() || null,
       kid_friendly:
         typeof venue.kid_friendly === 'boolean' ? venue.kid_friendly : null,
+      kid_friendly_notes: String(venue.kid_friendly_notes ?? '').trim() || null,
     };
 
     const { data, error } = await supabase
@@ -53,7 +56,7 @@ export async function POST(
       .update(payload)
       .eq('id', id)
       .select(
-        'id, name, suburb, address, phone, website_url, instagram_url, shows_sport, plays_with_sound, sport_types, dog_friendly, kid_friendly'
+        'id, name, suburb, address, phone, website_url, instagram_url, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes'
       )
       .single();
 

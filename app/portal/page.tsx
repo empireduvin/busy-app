@@ -209,32 +209,31 @@ export default function VenuePortalPage() {
   }, [search, venues]);
 
   return (
-    <div className="portal-shell min-h-screen bg-neutral-950 px-4 py-6 text-white sm:px-6 sm:py-8">
+    <div className="portal-shell min-h-screen bg-neutral-950 px-4 py-5 text-white sm:px-6 sm:py-8">
       <div className="mx-auto max-w-6xl">
-        <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.35)] sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <section className="portal-surface rounded-[24px] border p-4 sm:rounded-[28px] sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-300/80">
                 Venue Portal
               </div>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-                Your venues at a glance
+              <h1 className="mt-2 text-[1.55rem] font-semibold tracking-tight sm:text-3xl">
+                Pick a venue and edit fast
               </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/65">
-                Review the venues linked to your account, then open each one to
-                manage current details, trading hours, happy hour deals, and events.
+              <p className="mt-1.5 max-w-2xl text-sm leading-6 text-white/68">
+                Search your venues, open the right workspace, and update details or schedules on the fly.
               </p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white/70 sm:min-w-[220px]">
+            <div className="portal-surface-subtle rounded-2xl border px-3.5 py-3 text-sm text-white/78 sm:min-w-[220px]">
               <div>{userEmail ?? 'Loading user...'}</div>
-              <div className="mt-1 text-xs uppercase tracking-[0.2em] text-white/40">
+              <div className="mt-1 text-xs uppercase tracking-[0.2em] text-white/50">
                 {isAdmin ? 'Admin access also enabled' : 'Venue manager access'}
               </div>
             </div>
           </div>
 
           {isAdmin ? (
-            <div className="mt-5 rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
+            <div className="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
               This account is also a full admin. You can still use the venue portal
               for scoped testing, or open{' '}
               <Link href="/admin" className="font-semibold underline underline-offset-4">
@@ -251,35 +250,35 @@ export default function VenuePortalPage() {
           ) : null}
         </section>
 
-        <section className="mt-8">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <section className="mt-6 sm:mt-8">
+          <div className="mb-3 flex flex-col gap-2.5 sm:mb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Assigned venues</h2>
-              <p className="mt-1 text-sm text-white/55">
-                Use the search to narrow your venues quickly, then open the right workspace.
+              <p className="mt-1 text-sm text-white/58">
+                Search first, then jump straight into the venue you need.
               </p>
             </div>
-            <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70">
+            <div className="portal-surface-subtle rounded-full border px-3.5 py-2 text-sm text-white/78">
               {filteredVenues.length}
               {filteredVenues.length !== venues.length ? ` of ${venues.length}` : ''} venue
               {filteredVenues.length === 1 ? '' : 's'}
             </div>
           </div>
 
-          <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_auto]">
+          <div className="mb-4 grid gap-2.5 lg:grid-cols-[1fr_auto]">
             <div className="relative">
               <input
                 type="text"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search by venue name, suburb, type, or role"
-                className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 pr-24 text-sm text-white outline-none focus:border-orange-300/40"
+                placeholder="Search venue, suburb, type, or role"
+                className="h-11 w-full rounded-2xl border px-4 pr-24 text-sm text-white outline-none focus:border-orange-300/40"
               />
               {search.trim() ? (
                 <button
                   type="button"
                   onClick={() => setSearch('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-white/70 hover:bg-white/10 hover:text-white"
+                  className="portal-ghost-button absolute right-2 top-1/2 -translate-y-1/2 rounded-full border px-3 py-1 text-[11px]"
                 >
                   Clear
                 </button>
@@ -287,28 +286,28 @@ export default function VenuePortalPage() {
             </div>
             <Link
               href="/venues"
-              className="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-white/80 hover:bg-white/[0.06]"
+              className="portal-ghost-button inline-flex min-h-[42px] items-center justify-center whitespace-nowrap rounded-2xl border px-4 py-2.5 text-sm font-semibold"
             >
               Open public website
             </Link>
           </div>
 
           {loading ? (
-            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 text-sm text-white/60">
+            <div className="portal-surface rounded-3xl border p-6 text-sm text-white/70">
               Loading assigned venues...
             </div>
           ) : filteredVenues.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-6 text-sm text-white/60">
+            <div className="portal-surface rounded-3xl border border-dashed p-6 text-sm text-white/70">
               {venues.length === 0
                 ? 'No venues are linked to this account yet.'
                 : 'No assigned venues match this search.'}
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {filteredVenues.map((row) => (
                 <div
                   key={`${row.venue_id}-${row.role ?? 'manager'}`}
-                  className="group rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-orange-300/40 hover:bg-white/[0.05]"
+                  className="portal-surface group rounded-3xl border p-4 transition hover:border-orange-300/30 hover:bg-white/[0.02] sm:p-5"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -319,53 +318,53 @@ export default function VenuePortalPage() {
                         {row.venue?.name ?? 'Untitled venue'}
                       </h3>
                     </div>
-                    <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs uppercase tracking-[0.18em] text-white/60">
+                    <div className="portal-surface-subtle rounded-full border px-3 py-1 text-xs uppercase tracking-[0.18em] text-white/68">
                       {row.role ?? 'manager'}
                     </div>
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2 text-xs uppercase tracking-[0.18em] text-white/55">
                     {row.venue?.suburb ? (
-                      <span className="rounded-full border border-white/10 px-3 py-1">
+                      <span className="portal-surface-subtle rounded-full border px-3 py-1">
                         {row.venue.suburb}
                       </span>
                     ) : null}
                   </div>
 
-                  <div className="mt-4 space-y-2 text-sm text-white/65">
+                  <div className="mt-4 space-y-2 text-sm text-white/72">
                     {row.venue?.address ? <div>{row.venue.address}</div> : null}
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/80">
                     {normalizeBooleanFlag(row.venue?.shows_sport) ? (
-                      <span className="rounded-full border border-white/10 px-2.5 py-1">🏈 Sport</span>
+                      <span className="portal-surface-subtle rounded-full border px-2.5 py-1">{'\u{1F3C8}'} Sport</span>
                     ) : null}
                     {normalizeBooleanFlag(row.venue?.shows_sport) &&
                     normalizeBooleanFlag(row.venue?.plays_with_sound) ? (
-                      <span className="rounded-full border border-white/10 px-2.5 py-1">🏈 Sound</span>
+                      <span className="portal-surface-subtle rounded-full border px-2.5 py-1">{'\u{1F50A}'} Sound</span>
                     ) : null}
                     {normalizeBooleanFlag(row.venue?.dog_friendly) ? (
-                      <span className="rounded-full border border-white/10 px-2.5 py-1">🐶 Dog</span>
+                      <span className="portal-surface-subtle rounded-full border px-2.5 py-1">{'\u{1F436}'} Dog</span>
                     ) : null}
                     {normalizeBooleanFlag(row.venue?.kid_friendly) ? (
-                      <span className="rounded-full border border-white/10 px-2.5 py-1">🧒 Kid</span>
+                      <span className="portal-surface-subtle rounded-full border px-2.5 py-1">{'\u{1F9D2}'} Kid</span>
                     ) : null}
                     {normalizeBooleanFlag(row.venue?.byo_allowed) ? (
-                      <span className="rounded-full border border-white/10 px-2.5 py-1">🍾 BYO</span>
+                      <span className="portal-surface-subtle rounded-full border px-2.5 py-1">{'\u{1F37E}'} BYO</span>
                     ) : null}
                   </div>
 
-                  <div className="mt-5 flex flex-wrap gap-3">
+                  <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => router.push(`/portal/venues/${row.venue_id}`)}
-                      className="inline-flex min-h-[40px] items-center rounded-xl border border-orange-300/25 bg-orange-500/12 px-3 py-2 text-sm font-medium text-orange-100 transition hover:bg-orange-500/18 hover:text-orange-50"
+                      className="portal-primary-button inline-flex min-h-[40px] items-center rounded-xl border px-3 py-2 text-sm font-medium"
                     >
                       Open workspace
                     </button>
                     <Link
                       href={row.venue ? buildPublicVenueHref(row.venue) : '/venues'}
-                      className="inline-flex min-h-[40px] items-center rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/70 transition hover:bg-white/[0.08] hover:text-white"
+                      className="portal-ghost-button inline-flex min-h-[40px] items-center rounded-xl border px-3 py-2 text-sm font-medium"
                     >
                       View on website
                     </Link>
@@ -379,3 +378,5 @@ export default function VenuePortalPage() {
     </div>
   );
 }
+
+

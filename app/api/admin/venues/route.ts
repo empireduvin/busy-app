@@ -14,6 +14,19 @@ type OpeningHours = {
   sunday?: Array<{ open: string; close: string }>;
 };
 
+const VENUE_SELECT =
+  'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours, kitchen_hours, happy_hour_hours, venue_schedule_rules(id, venue_id, schedule_type, day_of_week, start_time, end_time, sort_order, title, description, deal_text, notes, detail_json, is_active, status)';
+
+const VENUE_TYPE_ATTEMPTS = [
+  { select: 'id, name', field: 'name' },
+  { select: 'id, label', field: 'label' },
+  { select: 'id, title', field: 'title' },
+  { select: 'id, venue_type', field: 'venue_type' },
+  { select: 'id, slug', field: 'slug' },
+  { select: 'id, type_name', field: 'type_name' },
+  { select: 'id, display_name', field: 'display_name' },
+] as const;
+
 function normalizeVenueSuburb(value: string | null | undefined) {
   return value?.trim().toUpperCase() || null;
 }
@@ -84,6 +97,77 @@ async function ensureVenueTypeId(
   }
 
   return String(inserted.id);
+}
+
+function mergeVenueTypeRows(rows: Array<{ id: string; display_name: string; raw_value: string }>) {
+  const merged = new Map<string, { id: string; display_name: string; raw_value: string }>();
+
+  rows.forEach((row) => {
+    const key =
+      normalizeText(row.raw_value) ||
+      normalizeText(row.display_name) ||
+      normalizeText(row.id);
+    if (!key || merged.has(key)) return;
+    merged.set(key, row);
+  });
+
+  return Array.from(merged.values()).sort((a, b) =>
+    a.display_name.localeCompare(b.display_name)
+  );
+}
+
+export async function GET(request: Request) {
+  try {
+    const { supabase } = await requireAdminRequest(request);
+
+    const [{ data: venues, error: venuesError }] = await Promise.all([
+      supabase.from('venues').select(VENUE_SELECT).order('name', { ascending: true }),
+    ]);
+
+    if (venuesError) {
+      throw new Error(venuesError.message);
+    }
+
+    let venueTypes: Array<{ id: string; display_name: string; raw_value: string }> = [];
+    let venueTypeError = '';
+
+    for (const attempt of VENUE_TYPE_ATTEMPTS) {
+      const { data, error } = await supabase
+        .from('venue_types')
+        .select(attempt.select)
+        .order(attempt.field, { ascending: true });
+
+      if (!error && data) {
+        venueTypes = mergeVenueTypeRows(
+          (data as Array<Record<string, unknown>>)
+            .map((row) => ({
+              id: String(row.id ?? ''),
+              display_name: String(row[attempt.field] ?? ''),
+              raw_value: String(row[attempt.field] ?? ''),
+            }))
+            .filter((row) => row.id && row.display_name)
+        );
+        venueTypeError = '';
+        break;
+      }
+
+      if (error) {
+        venueTypeError = error.message;
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      venues: venues ?? [],
+      venueTypes,
+      venueTypeError: venueTypeError || null,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { status: getErrorStatus(error) }
+    );
+  }
 }
 
 export async function POST(request: Request) {
@@ -159,10 +243,13 @@ export async function POST(request: Request) {
       shows_sport: normalizedShowsSport,
       plays_with_sound: normalizedPlaysWithSound,
       sport_types: String(venue.sport_types ?? '').trim() || null,
+      sport_notes: String(venue.sport_notes ?? '').trim() || null,
       dog_friendly:
         typeof venue.dog_friendly === 'boolean' ? venue.dog_friendly : null,
+      dog_friendly_notes: String(venue.dog_friendly_notes ?? '').trim() || null,
       kid_friendly:
         typeof venue.kid_friendly === 'boolean' ? venue.kid_friendly : null,
+      kid_friendly_notes: String(venue.kid_friendly_notes ?? '').trim() || null,
       opening_hours: openingHours,
       kitchen_hours: getEffectiveKitchenHours(
         venueTypeName,
@@ -190,7 +277,7 @@ export async function POST(request: Request) {
         .update(payload)
         .eq('id', existingVenueId)
         .select(
-          'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, dog_friendly, kid_friendly, opening_hours'
+          'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
         )
         .single();
 
@@ -207,7 +294,7 @@ export async function POST(request: Request) {
       .from('venues')
       .insert(payload)
       .select(
-        'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, dog_friendly, kid_friendly, opening_hours'
+        'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
       )
       .single();
 

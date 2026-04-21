@@ -22,6 +22,13 @@ export type HappyHourDetailJson = {
   notes?: string | null;
 };
 
+export type VenueRuleKind = 'kid' | 'dog';
+
+export type ScheduleRuleDetailJson = HappyHourDetailJson & {
+  rule_kind?: VenueRuleKind | null;
+  special_price?: number | null;
+};
+
 const VALID_SUBURBS = [
   'NEWTOWN',
   'ENMORE',
@@ -80,6 +87,27 @@ export function normalizeHappyHourDetailJson(
       normalized.notes = trimmed;
     }
   }
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+export function normalizeScheduleRuleDetailJson(
+  value: ScheduleRuleDetailJson | null | undefined
+): ScheduleRuleDetailJson | null {
+  if (!value || typeof value !== 'object') return null;
+
+  const normalizedHappyHour = normalizeHappyHourDetailJson(value);
+  const normalized: ScheduleRuleDetailJson = normalizedHappyHour
+    ? { ...normalizedHappyHour }
+    : {};
+
+  if (value.rule_kind === 'kid' || value.rule_kind === 'dog') {
+    normalized.rule_kind = value.rule_kind;
+  }
+
+  if (typeof value.special_price === 'number' && Number.isFinite(value.special_price)) {
+    normalized.special_price = value.special_price;
+  }
+
   return Object.keys(normalized).length > 0 ? normalized : null;
 }
 

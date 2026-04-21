@@ -1,9 +1,16 @@
 'use client';
 
 import { formatTimeForUi } from '@/lib/opening-hours';
-import { hasText, type ScheduleType, type VenueScheduleRule } from '@/lib/public-venue-discovery';
+import { type ScheduleType } from '@/lib/schedule-rules';
+import { hasText, type VenueScheduleRule } from '@/lib/public-venue-discovery';
 
-const EVENT_LABELS: Record<Exclude<ScheduleType, 'opening' | 'kitchen' | 'happy_hour' | 'bottle_shop'>, string> = {
+const EVENT_LABELS: Record<
+  Exclude<
+    ScheduleType,
+    'opening' | 'kitchen' | 'happy_hour' | 'bottle_shop' | 'daily_special' | 'lunch_special' | 'venue_rule'
+  >,
+  string
+> = {
   trivia: 'Trivia',
   live_music: 'Live Music',
   sport: 'Sport Event',
@@ -38,7 +45,7 @@ export default function PublicEventRuleCard({
         <div
           className={[
             'text-[11px] font-semibold uppercase tracking-[0.18em]',
-            discoverySummary ? 'text-white/58' : 'text-orange-100/80',
+            discoverySummary ? 'text-white/66' : 'text-orange-100/84',
           ].join(' ')}
         >
           {label}
@@ -47,7 +54,7 @@ export default function PublicEventRuleCard({
           className={[
             'rounded-full px-2.5 py-0.5 text-[11px] font-semibold',
             discoverySummary
-              ? 'border border-white/8 bg-black/18 text-white/62'
+              ? 'border border-white/8 bg-black/18 text-white/68'
               : 'border border-orange-300/25 bg-orange-400/10 text-orange-100',
           ].join(' ')}
         >
@@ -59,7 +66,7 @@ export default function PublicEventRuleCard({
         <div
           className={[
             'mt-2',
-            discoverySummary ? 'text-[12px] text-white/68 sm:text-[13px]' : 'text-[13px] text-white/82 sm:text-sm',
+            discoverySummary ? 'text-[12px] text-white/76 sm:text-[13px]' : 'text-[13px] text-white/84 sm:text-sm',
           ].join(' ')}
         >
           {extra}

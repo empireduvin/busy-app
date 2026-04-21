@@ -1,9 +1,15 @@
 'use client';
 
+import SaveVenueButton from '@/app/components/SaveVenueButton';
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import { isBottleShopVenueType } from '@/lib/venue-type-rules';
 import {
+  getCompactSpecialLine,
+  getSpecialPrice,
+  getCompactVenueRuleSignal,
   fetchPublicVenues,
+  getPublishedDealRules,
+  getPublishedVenueRulesByKind,
   splitVenuesByLaunchArea,
 } from '@/lib/public-venue-discovery';
 import { buildPublicVenueHref } from '@/lib/public-venue-discovery';
@@ -17,9 +23,8 @@ import {
 } from '@/lib/opening-hours';
 import type { ReactNode } from 'react';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { getSupabaseBrowserClientResult } from '@/lib/supabase-browser';
-import { BROWSER_SUPABASE_ENV_ERROR } from '@/lib/public-env';
 import { normalizeInstagramUrl } from '@/lib/social-links';
+import type { HappyHourDetailItem, HappyHourPrice, ScheduleRuleDetailJson } from '@/lib/venue-data';
 import GoogleMap from '../components/GoogleMap';
 import TodayHoursSummary from '../components/TodayHoursSummary';
 import WeeklyTimelineChart from '../components/WeeklyTimelineChart';
@@ -54,6 +59,9 @@ type ScheduleType =
   | 'kitchen'
   | 'happy_hour'
   | 'bottle_shop'
+  | 'daily_special'
+  | 'lunch_special'
+  | 'venue_rule'
   | 'trivia'
   | 'live_music'
   | 'sport'
@@ -68,27 +76,7 @@ type VenueTypeLookup = {
   slug?: string | null;
 };
 
-type HappyHourPrice = {
-  label?: string | null;
-  amount: number | null;
-};
-
-type HappyHourDetailItem = {
-  item?: string | null;
-  name?: string | null;
-  description?: string | null;
-  price?: number | null;
-  prices?: HappyHourPrice[] | null;
-};
-
-type HappyHourDetailJson = {
-  beer?: HappyHourDetailItem[] | string | null;
-  wine?: HappyHourDetailItem[] | string | null;
-  spirits?: HappyHourDetailItem[] | string | null;
-  cocktails?: HappyHourDetailItem[] | string | null;
-  food?: HappyHourDetailItem[] | string | null;
-  notes?: string | null;
-};
+type HappyHourDetailJson = ScheduleRuleDetailJson;
 
 type DisplayHappyHourItem = {
   title: string;
@@ -112,7 +100,7 @@ type VenueScheduleRule = {
   notes: string | null;
   is_active: boolean | null;
   status: string | null;
-  detail_json?: HappyHourDetailJson | null;
+  detail_json?: ScheduleRuleDetailJson | null;
 };
 
 type Venue = {
@@ -140,12 +128,15 @@ type Venue = {
   shows_sport: boolean | null;
   plays_with_sound?: boolean | null;
   sport_types: string | null;
+  sport_notes: string | null;
 
   byo_allowed: boolean | null;
   byo_notes: string | null;
 
   dog_friendly: boolean | null;
+  dog_friendly_notes: string | null;
   kid_friendly: boolean | null;
+  kid_friendly_notes: string | null;
 
   opening_hours: any | null;
   kitchen_hours: OpeningHours | null;
@@ -166,8 +157,6 @@ type SearchSuggestion = {
   value: string;
   helper: string;
 };
-
-const supabase = getSupabaseBrowserClientResult().client;
 
 const DAY_ORDER: DayOfWeek[] = [
   'monday',
@@ -193,11 +182,11 @@ const HAPPY_HOUR_CATEGORIES: Array<{
   key: keyof Omit<HappyHourDetailJson, 'notes'>;
   label: string;
 }> = [
-  { key: 'beer', label: '🍺 Beer' },
-  { key: 'wine', label: '🍷 Wine' },
-  { key: 'spirits', label: '🥃 Spirits' },
-  { key: 'cocktails', label: '🍸 Cocktails' },
-  { key: 'food', label: '🍔 Food' },
+  { key: 'beer', label: '\u{1F37A} Beer' },
+  { key: 'wine', label: '\u{1F377} Wine' },
+  { key: 'spirits', label: '\u{1F943} Spirits' },
+  { key: 'cocktails', label: '\u{1F378} Cocktails' },
+  { key: 'food', label: '\u{1F354} Food' },
 ];
 
 const EVENT_SCHEDULE_TYPES: ScheduleType[] = [
@@ -211,13 +200,13 @@ const EVENT_SCHEDULE_TYPES: ScheduleType[] = [
 ];
 
 const EVENT_FILTER_OPTIONS: Array<{ type: ScheduleType; label: string }> = [
-  { type: 'trivia', label: '❓ Trivia' },
-  { type: 'live_music', label: '🎸 Live Music' },
-  { type: 'sport', label: '🏟️ Sport Events' },
-  { type: 'comedy', label: '😂 Comedy' },
-  { type: 'karaoke', label: '🎤 Karaoke' },
-  { type: 'dj', label: '🎧 DJ' },
-  { type: 'special_event', label: '✨ Special Event' },
+  { type: 'trivia', label: '\u2753 Trivia' },
+  { type: 'live_music', label: '\u{1F3B8} Live Music' },
+  { type: 'sport', label: '\u{1F3DF}\uFE0F Sport Events' },
+  { type: 'comedy', label: '\u{1F602} Comedy' },
+  { type: 'karaoke', label: '\u{1F3A4} Karaoke' },
+  { type: 'dj', label: '\u{1F3A7} DJ' },
+  { type: 'special_event', label: '\u2728 Special Event' },
 ];
 
 const DEFAULT_VENUE_TYPE_FILTERS = ['Cafe', 'Bottle Shop'];
@@ -360,16 +349,25 @@ function matchesSearchTerm(venue: Venue, searchTerm: string): boolean {
 
   const venueTypeLabel = getVenueTypeLabel(venue);
 
-  const eventFields = (venue.venue_schedule_rules ?? [])
+  const scheduleFields = (venue.venue_schedule_rules ?? [])
     .filter(
       (rule) =>
-        EVENT_SCHEDULE_TYPES.includes(rule.schedule_type) &&
+        (EVENT_SCHEDULE_TYPES.includes(rule.schedule_type) ||
+          rule.schedule_type === 'daily_special' ||
+          rule.schedule_type === 'lunch_special' ||
+          rule.schedule_type === 'venue_rule') &&
         rule.is_active === true &&
         rule.status === 'published'
     )
     .flatMap((rule) => [rule.title, rule.description, rule.deal_text, rule.notes]);
 
-  const searchableFields = [venue.name, venue.suburb, venue.address, venueTypeLabel, ...eventFields];
+  const searchableFields = [
+    venue.name,
+    venue.suburb,
+    venue.address,
+    venueTypeLabel,
+    ...scheduleFields,
+  ];
 
   return searchableFields.some((field) => normalizeSearchValue(field).includes(term));
 }
@@ -588,6 +586,19 @@ function getOverallMinHappyHourPrice(rules: VenueScheduleRule[]): number | null 
   return Math.min(...prices);
 }
 
+function getMinSpecialPrice(
+  rules: VenueScheduleRule[],
+  scheduleType?: 'daily_special' | 'lunch_special'
+): number | null {
+  const prices = rules
+    .filter((rule) => (scheduleType ? rule.schedule_type === scheduleType : true))
+    .map((rule) => getSpecialPrice(rule))
+    .filter((price): price is number => typeof price === 'number' && !Number.isNaN(price));
+
+  if (!prices.length) return null;
+  return Math.min(...prices);
+}
+
 function matchesMaxPrice(value: number | null, selected: string): boolean {
   if (selected === 'ALL') return true;
   if (value == null) return false;
@@ -607,12 +618,17 @@ function VenuesPageContent() {
   const [openNowOnly, setOpenNowOnly] = useState(false);
   const [openLateOnly, setOpenLateOnly] = useState(false);
   const [happyHourNowOnly, setHappyHourNowOnly] = useState(false);
+  const [foodDealsNowOnly, setFoodDealsNowOnly] = useState(false);
+  const [lunchSpecialsOnly, setLunchSpecialsOnly] = useState(false);
+  const [specialsTodayOnly, setSpecialsTodayOnly] = useState(false);
   const [kitchenOpenNowOnly, setKitchenOpenNowOnly] = useState(false);
 
   const [filterSport, setFilterSport] = useState(false);
   const [filterBYO, setFilterBYO] = useState(false);
   const [filterDog, setFilterDog] = useState(false);
   const [filterKid, setFilterKid] = useState(false);
+  const [filterDogNow, setFilterDogNow] = useState(false);
+  const [filterKidNow, setFilterKidNow] = useState(false);
   const [eventsOnly, setEventsOnly] = useState(false);
   const [eventFilters, setEventFilters] = useState<Record<string, boolean>>({
     trivia: false,
@@ -635,6 +651,8 @@ function VenuesPageContent() {
   const [cocktailMaxPrice, setCocktailMaxPrice] = useState<string>('ALL');
   const [foodMaxPrice, setFoodMaxPrice] = useState<string>('ALL');
   const [overallHhMaxPrice, setOverallHhMaxPrice] = useState<string>('ALL');
+  const [dailySpecialMaxPrice, setDailySpecialMaxPrice] = useState<string>('ALL');
+  const [lunchSpecialMaxPrice, setLunchSpecialMaxPrice] = useState<string>('ALL');
 
   const [minGoogleRating, setMinGoogleRating] = useState<string>('ALL');
   const [priceFilter, setPriceFilter] = useState<string>('ALL');
@@ -656,27 +674,23 @@ function VenuesPageContent() {
     async function load() {
       setLoading(true);
       setError(null);
-
-      if (!supabase) {
-        setError(
-          `${BROWSER_SUPABASE_ENV_ERROR} Restart the app after updating your env.`
-        );
-        setVenues([]);
-        setLoading(false);
-        return;
-      }
-
-      const { data, error } = await fetchPublicVenues(supabase, {
-        orderByName: true,
+      const response = await fetch('/api/public-venues', {
+        method: 'GET',
+        cache: 'no-store',
       });
+      const payload = (await response.json()) as {
+        ok: boolean;
+        data?: Venue[];
+        error?: string;
+      };
 
       if (cancelled) return;
 
-      if (error) {
-        setError(error.message);
+      if (!response.ok || !payload.ok) {
+        setError(payload.error ?? 'Unable to load venues right now.');
         setVenues([]);
       } else {
-        setVenues(splitVenuesByLaunchArea((((data ?? []) as unknown) as Venue[])).live);
+        setVenues(splitVenuesByLaunchArea(payload.data ?? []).live);
       }
 
       setLoading(false);
@@ -711,6 +725,11 @@ function VenuesPageContent() {
 
     if (suburb !== 'ALL') count += 1;
     if (openLateOnly) count += 1;
+    if (foodDealsNowOnly) count += 1;
+    if (lunchSpecialsOnly) count += 1;
+    if (specialsTodayOnly) count += 1;
+    if (filterDogNow) count += 1;
+    if (filterKidNow) count += 1;
     if (minGoogleRating !== 'ALL') count += 1;
     if (priceFilter !== 'ALL') count += 1;
     if (hhWine) count += 1;
@@ -723,6 +742,8 @@ function VenuesPageContent() {
     if (cocktailMaxPrice !== 'ALL') count += 1;
     if (foodMaxPrice !== 'ALL') count += 1;
     if (overallHhMaxPrice !== 'ALL') count += 1;
+    if (dailySpecialMaxPrice !== 'ALL') count += 1;
+    if (lunchSpecialMaxPrice !== 'ALL') count += 1;
 
     Object.values(eventFilters).forEach((value) => {
       if (value) count += 1;
@@ -732,6 +753,11 @@ function VenuesPageContent() {
   }, [
     suburb,
     openLateOnly,
+    foodDealsNowOnly,
+    lunchSpecialsOnly,
+    specialsTodayOnly,
+    filterDogNow,
+    filterKidNow,
     minGoogleRating,
     priceFilter,
     hhWine,
@@ -744,6 +770,8 @@ function VenuesPageContent() {
     cocktailMaxPrice,
     foodMaxPrice,
     overallHhMaxPrice,
+    dailySpecialMaxPrice,
+    lunchSpecialMaxPrice,
     eventFilters,
   ]);
 
@@ -755,11 +783,16 @@ function VenuesPageContent() {
       openNowOnly ||
       openLateOnly ||
       happyHourNowOnly ||
+      foodDealsNowOnly ||
+      lunchSpecialsOnly ||
+      specialsTodayOnly ||
       kitchenOpenNowOnly ||
       filterSport ||
       filterBYO ||
       filterDog ||
       filterKid ||
+      filterDogNow ||
+      filterKidNow ||
       eventsOnly ||
       Object.values(eventFilters).some(Boolean) ||
       hhWine ||
@@ -772,6 +805,8 @@ function VenuesPageContent() {
       cocktailMaxPrice !== 'ALL' ||
       foodMaxPrice !== 'ALL' ||
       overallHhMaxPrice !== 'ALL' ||
+      dailySpecialMaxPrice !== 'ALL' ||
+      lunchSpecialMaxPrice !== 'ALL' ||
       minGoogleRating !== 'ALL' ||
       priceFilter !== 'ALL' ||
       sortBy !== 'NAME',
@@ -782,8 +817,11 @@ function VenuesPageContent() {
       eventsOnly,
       filterBYO,
       filterDog,
+      filterDogNow,
       filterKid,
+      filterKidNow,
       filterSport,
+      foodDealsNowOnly,
       foodMaxPrice,
       happyHourNowOnly,
       hhBeer,
@@ -792,13 +830,17 @@ function VenuesPageContent() {
       hhSpirits,
       hhWine,
       kitchenOpenNowOnly,
+      lunchSpecialsOnly,
       minGoogleRating,
       openLateOnly,
       openNowOnly,
       overallHhMaxPrice,
+      dailySpecialMaxPrice,
+      lunchSpecialMaxPrice,
       priceFilter,
       searchTerm,
       sortBy,
+      specialsTodayOnly,
       suburb,
       venueType,
       wineMaxPrice,
@@ -814,11 +856,16 @@ function VenuesPageContent() {
     if (openNowOnly) labels.push('Open now');
     if (openLateOnly) labels.push('Open late');
     if (happyHourNowOnly) labels.push('Happy hour live');
+    if (foodDealsNowOnly) labels.push('Food deals now');
+    if (lunchSpecialsOnly) labels.push('Lunch specials');
+    if (specialsTodayOnly) labels.push('Specials today');
     if (kitchenOpenNowOnly) labels.push('Kitchen open');
     if (filterSport) labels.push('Sport');
     if (filterBYO) labels.push('BYO');
     if (filterDog) labels.push('Dog');
     if (filterKid) labels.push('Kid');
+    if (filterDogNow) labels.push('Dog friendly now');
+    if (filterKidNow) labels.push('Kid friendly now');
     if (eventsOnly) labels.push('Any events');
 
     Object.entries(eventFilters).forEach(([key, enabled]) => {
@@ -837,6 +884,8 @@ function VenuesPageContent() {
     if (cocktailMaxPrice !== 'ALL') labels.push(`Cocktails <= $${cocktailMaxPrice}`);
     if (foodMaxPrice !== 'ALL') labels.push(`Food <= $${foodMaxPrice}`);
     if (overallHhMaxPrice !== 'ALL') labels.push(`Any deal <= $${overallHhMaxPrice}`);
+    if (dailySpecialMaxPrice !== 'ALL') labels.push(`Daily special <= $${dailySpecialMaxPrice}`);
+    if (lunchSpecialMaxPrice !== 'ALL') labels.push(`Lunch special <= $${lunchSpecialMaxPrice}`);
     if (minGoogleRating !== 'ALL') labels.push(`Rating ${minGoogleRating}+`);
     if (priceFilter !== 'ALL') labels.push(`Price ${priceFilter}`);
     if (sortBy !== 'NAME') {
@@ -861,8 +910,11 @@ function VenuesPageContent() {
     eventsOnly,
     filterBYO,
     filterDog,
+    filterDogNow,
     filterKid,
+    filterKidNow,
     filterSport,
+    foodDealsNowOnly,
     foodMaxPrice,
     happyHourNowOnly,
     hhBeer,
@@ -871,6 +923,8 @@ function VenuesPageContent() {
     hhSpirits,
     hhWine,
     kitchenOpenNowOnly,
+    lunchSpecialsOnly,
+    lunchSpecialMaxPrice,
     minGoogleRating,
     overallHhMaxPrice,
     openLateOnly,
@@ -878,9 +932,11 @@ function VenuesPageContent() {
     priceFilter,
     searchTerm,
     sortBy,
+    specialsTodayOnly,
     suburb,
     venueType,
     wineMaxPrice,
+    dailySpecialMaxPrice,
   ]);
 
   const filtered = useMemo(() => {
@@ -892,7 +948,21 @@ function VenuesPageContent() {
       const effectiveBottleShopHours = getEffectiveScheduleHours(v, 'bottle_shop');
       const primaryHours = normalizedOpeningHours ?? effectiveBottleShopHours ?? null;
       const happyHourRules = getPublishedRulesByType(v, 'happy_hour');
+      const dealRules = getPublishedDealRules(v);
       const eventRules = getPublishedEventRules(v);
+      const timezone = v.timezone ?? 'Australia/Sydney';
+      const todayDealRules = getTodayRulesForType(dealRules, timezone);
+      const liveDealRules = todayDealRules.filter((rule) =>
+        isRuleLiveNow(rule, timezone)
+      );
+      const liveFoodDealRules = liveDealRules.filter(isFoodDealRule);
+      const lunchSpecialRules = dealRules.filter((rule) => rule.schedule_type === 'lunch_special');
+      const activeDogRule = getTodayRulesForType(getPublishedVenueRulesByKind(v, 'dog'), timezone).find(
+        (rule) => isRuleLiveNow(rule, timezone)
+      );
+      const activeKidRule = getTodayRulesForType(getPublishedVenueRulesByKind(v, 'kid'), timezone).find(
+        (rule) => isRuleLiveNow(rule, timezone)
+      );
 
       if (v.status && !['active', 'open', 'published'].includes(v.status.toLowerCase())) {
         return false;
@@ -968,6 +1038,14 @@ function VenuesPageContent() {
         return false;
       }
 
+      if (!matchesMaxPrice(getMinSpecialPrice(dealRules, 'daily_special'), dailySpecialMaxPrice)) {
+        return false;
+      }
+
+      if (!matchesMaxPrice(getMinSpecialPrice(dealRules, 'lunch_special'), lunchSpecialMaxPrice)) {
+        return false;
+      }
+
       if (
         openNowOnly &&
         !isVenueOpenNow(
@@ -990,10 +1068,16 @@ function VenuesPageContent() {
 
       if (
         kitchenOpenNowOnly &&
-        !isOpenNow(effectiveKitchenHours, v.timezone ?? 'Australia/Sydney')
+        !isOpenNow(effectiveKitchenHours, timezone)
       ) {
         return false;
       }
+
+      if (foodDealsNowOnly && liveFoodDealRules.length === 0) return false;
+      if (lunchSpecialsOnly && lunchSpecialRules.length === 0) return false;
+      if (specialsTodayOnly && todayDealRules.length === 0) return false;
+      if (filterDogNow && !activeDogRule) return false;
+      if (filterKidNow && !activeKidRule) return false;
 
       if (!matchesMinRating(v.google_rating, minGoogleRating)) return false;
       if (!matchesPriceLevel(v.price_level, priceFilter)) return false;
@@ -1043,10 +1127,17 @@ function VenuesPageContent() {
     cocktailMaxPrice,
     foodMaxPrice,
     overallHhMaxPrice,
+    dailySpecialMaxPrice,
+    lunchSpecialMaxPrice,
     openNowOnly,
     openLateOnly,
     happyHourNowOnly,
+    foodDealsNowOnly,
+    lunchSpecialsOnly,
+    specialsTodayOnly,
     kitchenOpenNowOnly,
+    filterDogNow,
+    filterKidNow,
     minGoogleRating,
     priceFilter,
     sortBy,
@@ -1134,11 +1225,16 @@ function VenuesPageContent() {
     setOpenNowOnly(false);
     setOpenLateOnly(false);
     setHappyHourNowOnly(false);
+    setFoodDealsNowOnly(false);
+    setLunchSpecialsOnly(false);
+    setSpecialsTodayOnly(false);
     setKitchenOpenNowOnly(false);
     setFilterSport(false);
     setFilterBYO(false);
     setFilterDog(false);
     setFilterKid(false);
+    setFilterDogNow(false);
+    setFilterKidNow(false);
     setEventsOnly(false);
     setEventFilters({
       trivia: false,
@@ -1159,6 +1255,8 @@ function VenuesPageContent() {
     setCocktailMaxPrice('ALL');
     setFoodMaxPrice('ALL');
     setOverallHhMaxPrice('ALL');
+    setDailySpecialMaxPrice('ALL');
+    setLunchSpecialMaxPrice('ALL');
     setMinGoogleRating('ALL');
     setPriceFilter('ALL');
     setSortBy('NAME');
@@ -1172,55 +1270,43 @@ function VenuesPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen overflow-x-clip bg-black text-white">
       <div className="mx-auto max-w-6xl px-3 py-4 sm:px-6 sm:py-8">
-        <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-orange-500/20 via-[#120805] to-black p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:p-6">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-2xl">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-orange-300/80">
-                  INNER WEST
-                </div>
-                <h1 className="mt-3 text-[28px] font-semibold tracking-tight text-white sm:text-4xl">
-                  Explore the Inner West
-                </h1>
-                <p className="mt-2.5 max-w-2xl text-[13px] leading-5 text-white/68 sm:mt-3 sm:text-base">
-                  Browse pubs, bars, restaurants, and bottle shops across Newtown, Enmore, and
-                  Erskineville.
-                </p>
-              </div>
+        <div className="rounded-[1.45rem] border border-white/9 bg-white/[0.03] px-3.5 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur sm:rounded-3xl sm:px-5 sm:py-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.26em] text-orange-300/78">
+            {'\u{1F37B} Venues'}
+          </div>
+          <div className="mt-1.5 flex flex-col gap-1.5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="text-[22px] font-semibold tracking-tight text-white sm:text-[32px]">
+                Where to go tonight
+              </h1>
+              <p className="max-w-2xl text-[13px] leading-5 text-white/66 sm:text-sm">
+                Search Newtown, Enmore, and Erskineville by suburb, venue type, and what matters
+                right now.
+              </p>
             </div>
-
-            <div className="grid grid-cols-1 gap-2.5 self-start sm:grid-cols-2 lg:min-w-[320px]">
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-3 sm:p-4">
-                <div className="text-[11px] uppercase tracking-[0.22em] text-white/45">Live area</div>
-                <div className="mt-2 text-base font-semibold text-white sm:text-lg">Newtown, Enmore, Erskineville</div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-3 sm:p-4">
-                <div className="text-[11px] uppercase tracking-[0.22em] text-white/45">Explorer mode</div>
-                <div className="mt-2 text-base font-semibold text-white sm:text-lg">
-                  {showDesktopMap ? 'Map open' : 'List focus'}
-                </div>
-              </div>
+            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/42">
+              Search first. Map if you need it.
             </div>
           </div>
         </div>
 
-        <div className="z-40 mt-4 rounded-3xl border border-white/10 bg-white/5 p-3.5 shadow-[0_16px_40px_rgba(0,0,0,0.25)] backdrop-blur sm:mt-5 sm:p-4 lg:sticky lg:top-24">
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(260px,1.5fr)_minmax(180px,0.95fr)_minmax(160px,0.9fr)_auto]">
+        <div className="z-40 mt-3 rounded-[1.4rem] border border-white/9 bg-white/[0.04] p-2.5 shadow-[0_16px_36px_rgba(0,0,0,0.2)] backdrop-blur sm:mt-4 sm:rounded-3xl sm:p-4 lg:sticky lg:top-24">
+          <div className="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(260px,1.45fr)_minmax(170px,0.9fr)_minmax(170px,0.95fr)_auto]">
             <div className="relative">
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search venue, suburb, or what you're after"
-                className="h-11 w-full rounded-xl border border-white/10 bg-black px-3 pr-20 text-sm text-white placeholder:text-white/35"
+                className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 pr-20 text-sm text-white placeholder:text-white/38"
               />
               {searchTerm.trim() ? (
                 <button
                   type="button"
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-white/70 hover:bg-white/10 hover:text-white"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-white/72 hover:bg-white/10 hover:text-white"
                 >
                   Clear
                 </button>
@@ -1230,7 +1316,7 @@ function VenuesPageContent() {
             <select
               value={suburb}
               onChange={(e) => setSuburb(e.target.value)}
-              className="h-11 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
+              className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
             >
               {suburbs.map((s) => (
                 <option key={s} value={s}>
@@ -1240,38 +1326,39 @@ function VenuesPageContent() {
             </select>
 
             <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="h-11 min-w-0 rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
+              value={venueType}
+              onChange={(e) => setVenueType(e.target.value)}
+              className="h-10 min-w-0 rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
             >
-              <option value="NAME">Sort by venue</option>
-              <option value="RATING_DESC">Highest Rated</option>
-              <option value="REVIEWS_DESC">Most Reviews</option>
-              <option value="PRICE_ASC">Cheapest</option>
-              <option value="PRICE_DESC">Most Expensive</option>
+              {venueTypes.map((typeOption) => (
+                <option key={typeOption} value={typeOption}>
+                  {typeOption === 'ALL' ? 'All venue types' : typeOption}
+                </option>
+              ))}
             </select>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
                 onClick={() => setShowFilters((prev) => !prev)}
-                className="rounded-xl border border-orange-400/30 bg-orange-500/10 px-4 py-2.5 text-sm font-medium text-orange-100 hover:bg-orange-500/15"
+                className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[13px] font-medium text-white/78 transition hover:border-white/16 hover:bg-white/[0.08] hover:text-white"
               >
-                {showFilters ? 'Close filters' : 'Advanced filters'}
+                {showFilters ? 'Hide advanced filters' : 'Advanced filters'}
                 {advancedFilterCount > 0 ? ` (${advancedFilterCount})` : ''}
               </button>
 
               <button
                 type="button"
                 onClick={() => setShowDesktopMap((prev) => !prev)}
-                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm text-white hover:bg-white/10"
+                className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[13px] text-white/78 transition hover:border-white/16 hover:bg-white/[0.08] hover:text-white"
               >
-                {showDesktopMap ? 'Hide map' : 'Show map'}
+                {showDesktopMap ? 'Hide map' : 'Map'}
               </button>
 
               <button
+                type="button"
                 onClick={clearFilters}
-                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm text-white hover:bg-white/10"
+                className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[13px] text-white/78 transition hover:border-white/16 hover:bg-white/[0.08] hover:text-white"
               >
                 Clear all
               </button>
@@ -1279,9 +1366,9 @@ function VenuesPageContent() {
           </div>
 
           {searchSuggestions.length > 0 ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5 overflow-hidden">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
-                Quick matches
+                Quick picks
               </div>
               {searchSuggestions.map((suggestion) => (
                 <button
@@ -1294,41 +1381,60 @@ function VenuesPageContent() {
                       setSearchTerm(suggestion.value);
                     }
                   }}
-                  className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-left text-xs text-white/78 transition hover:border-orange-300/35 hover:bg-orange-500/10 hover:text-white"
+                  className="max-w-full rounded-full border border-white/10 bg-black/22 px-3 py-1 text-left text-[11px] text-white/78 transition hover:border-orange-300/35 hover:bg-orange-500/10 hover:text-white"
                 >
-                  <span className="font-medium">{suggestion.label}</span>
-                  <span className="ml-2 text-white/45">{suggestion.helper}</span>
+                  <span className="block break-words font-medium">{suggestion.label}</span>
+                  <span className="block break-words text-white/48 sm:inline sm:ml-2">{suggestion.helper}</span>
                 </button>
               ))}
             </div>
           ) : null}
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <CompactToggle label="Open now" checked={openNowOnly} onChange={setOpenNowOnly} />
-            <CompactToggle label="Happy hour live" checked={happyHourNowOnly} onChange={setHappyHourNowOnly} />
-            <CompactToggle label="Kitchen open" checked={kitchenOpenNowOnly} onChange={setKitchenOpenNowOnly} />
-            <CompactToggle label="Sport" checked={filterSport} onChange={setFilterSport} />
-            <CompactToggle label="BYO" checked={filterBYO} onChange={setFilterBYO} />
-            <CompactToggle label="Dog" checked={filterDog} onChange={setFilterDog} />
-            <CompactToggle label="Kid" checked={filterKid} onChange={setFilterKid} />
-            <CompactToggle label="Events" checked={eventsOnly} onChange={setEventsOnly} />
+          <div className="mt-2 space-y-2">
+            <div>
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/42">
+                Best bets
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <CompactToggle label={'\u{1F7E2} Open now'} checked={openNowOnly} onChange={setOpenNowOnly} />
+                <CompactToggle label={'\u{1F37A} Drinks deals'} checked={happyHourNowOnly} onChange={setHappyHourNowOnly} />
+                <CompactToggle label={'\u{1F354} Food deals now'} checked={foodDealsNowOnly} onChange={setFoodDealsNowOnly} />
+              </div>
+            </div>
+            <div>
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/32">
+                Quick extras
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 opacity-90">
+                <CompactToggle label={'\u2600\uFE0F Lunch specials'} checked={lunchSpecialsOnly} onChange={setLunchSpecialsOnly} />
+                <CompactToggle label={'\u{1F525} Specials today'} checked={specialsTodayOnly} onChange={setSpecialsTodayOnly} />
+                <CompactToggle label={'\u{1F37D}\uFE0F Kitchen open'} checked={kitchenOpenNowOnly} onChange={setKitchenOpenNowOnly} />
+                <CompactToggle label={'\u2728 Live events'} checked={eventsOnly} onChange={setEventsOnly} />
+                <CompactToggle label={'\u26BD Sport'} checked={filterSport} onChange={setFilterSport} />
+                <CompactToggle label={'\u{1F377} BYO'} checked={filterBYO} onChange={setFilterBYO} />
+                <CompactToggle label={'\u{1F436} Dog'} checked={filterDog} onChange={setFilterDog} />
+                <CompactToggle label={'\u{1F476} Kid'} checked={filterKid} onChange={setFilterKid} />
+                <CompactToggle label={'\u{1F476} Kid friendly now'} checked={filterKidNow} onChange={setFilterKidNow} />
+                <CompactToggle label={'\u{1F436} Dog friendly now'} checked={filterDogNow} onChange={setFilterDogNow} />
+              </div>
+            </div>
           </div>
 
           {hasActiveFilters ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2.5">
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
-                Applied
+                Filters on
               </span>
               {appliedFilterLabels.slice(0, 8).map((label) => (
                 <span
                   key={label}
-                  className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs text-white/70"
+                  className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs text-white/74"
                 >
                   {label}
                 </span>
               ))}
               {appliedFilterLabels.length > 8 ? (
-                <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs text-white/55">
+                <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs text-white/62">
                   +{appliedFilterLabels.length - 8} more
                 </span>
               ) : null}
@@ -1350,7 +1456,7 @@ function VenuesPageContent() {
                     <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-300/75">
                       Advanced filters
                     </div>
-                    <div className="mt-1 text-sm text-white/55">
+                    <div className="mt-1 text-sm text-white/62">
                       Ratings, pricing, event subtypes, and detailed happy hour filters.
                     </div>
                   </div>
@@ -1516,16 +1622,16 @@ function VenuesPageContent() {
           <section
             ref={mapSectionRef}
             id="map-section"
-            className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-4 sm:p-5"
+            className="mt-4 rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-3.5 sm:mt-5 sm:rounded-3xl sm:p-5"
           >
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-300/70">
-                  Map view
+                  Map
                 </div>
-                <h2 className="mt-1 text-xl font-semibold text-white">Venues</h2>
+                <h2 className="mt-1 text-lg font-semibold text-white sm:text-xl">See what&apos;s nearby</h2>
               </div>
-              <div className="text-xs uppercase tracking-[0.18em] text-white/35">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-white/35">
                 {mapVenues.length} mapped venue{mapVenues.length === 1 ? '' : 's'}
               </div>
             </div>
@@ -1542,7 +1648,7 @@ function VenuesPageContent() {
           </section>
         ) : null}
 
-        <div className="mt-8">
+        <div className="mt-6 sm:mt-8">
           <div>
             {loading && <div className="text-white/70">Loading venues...</div>}
 
@@ -1556,7 +1662,7 @@ function VenuesPageContent() {
             {!loading && !error && filtered.length === 0 && (
               <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] p-6 text-white/70">
                 <div>Nothing matches this filter mix right now.</div>
-                <div className="mt-2 text-white/55">
+                <div className="mt-2 text-white/62">
                   Clear a few filters or open advanced filters to widen the search.
                 </div>
                 {hasActiveFilters ? (
@@ -1573,8 +1679,10 @@ function VenuesPageContent() {
 
             {!loading && !error && filtered.length > 0 && (
               <>
-                <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/60">
-                  Showing {filtered.length} venue{filtered.length === 1 ? '' : 's'}
+                <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/64">
+                  <span className="font-medium text-white">
+                    {filtered.length} place{filtered.length === 1 ? '' : 's'} to choose from
+                  </span>
                   {searchTerm.trim() ? ` for "${searchTerm.trim()}"` : ''}
                   {suburb !== 'ALL' ? ` in ${suburb}` : ''}
                   {venueType !== 'ALL' ? ` for ${venueType.toLowerCase()}` : ''}
@@ -1594,9 +1702,25 @@ function VenuesPageContent() {
                       effectiveBottleShopHours ??
                       null;
                     const happyHourRules = getPublishedRulesByType(v, 'happy_hour');
+                    const dealRules = getPublishedDealRules(v);
                     const eventRules = getPublishedEventRules(v);
                     const todayHappyHourRules = getTodayRulesForType(happyHourRules, timezone);
+                    const todayDealRules = getTodayRulesForType(dealRules, timezone);
                     const todayEventRules = getTodayRulesForType(eventRules, timezone);
+                    const liveDealRules = todayDealRules.filter((rule) => isRuleLiveNow(rule, timezone));
+                    const featuredSpecialRule = liveDealRules[0] ?? todayDealRules[0] ?? null;
+                    const activeKidRule = getTodayRulesForType(
+                      getPublishedVenueRulesByKind(v, 'kid'),
+                      timezone
+                    ).find((rule) => isRuleLiveNow(rule, timezone));
+                    const activeDogRule = getTodayRulesForType(
+                      getPublishedVenueRulesByKind(v, 'dog'),
+                      timezone
+                    ).find((rule) => isRuleLiveNow(rule, timezone));
+                    const venueRuleSignals = [activeKidRule, activeDogRule]
+                      .map((rule) => (rule ? getVenueRuleBadge(rule) : null))
+                      .filter((value): value is string => Boolean(value))
+                      .slice(0, 2);
                     const todayLabel = DAY_LABELS[getTodayDayOfWeek(timezone)];
 
                     const openNow = isVenueOpenNow(
@@ -1712,9 +1836,31 @@ function VenuesPageContent() {
                               <Pill>🏈 Sound</Pill>
                             ) : null}
                             {v.byo_allowed ? <Pill>🍾 BYO</Pill> : null}
-                            {normalizeBooleanFlag(v.dog_friendly) ? <Pill>🐶 Dog</Pill> : null}
-                            {normalizeBooleanFlag(v.kid_friendly) ? <Pill>🧒 Kid</Pill> : null}
                           </div>
+
+                          {featuredSpecialRule ? (
+                            <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200/80">
+                                {liveDealRules.length > 0 ? 'Special live now' : 'Specials today'}
+                              </div>
+                              <div className="mt-1 font-medium text-white">
+                                {getSpecialBadge(featuredSpecialRule)}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {venueRuleSignals.length > 0 ? (
+                            <div className="flex flex-wrap gap-2 text-sm">
+                              {venueRuleSignals.map((signal) => (
+                                <StatusPill
+                                  key={signal}
+                                  className="border-white/15 bg-white/5 text-white/80"
+                                >
+                                  {signal}
+                                </StatusPill>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className="mt-4">
@@ -1739,6 +1885,23 @@ function VenuesPageContent() {
                                   key={rule.id}
                                   rule={rule}
                                   dayLabel={todayLabel}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {todayDealRules.length > 0 ? (
+                          <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-4">
+                            <div className="text-sm font-semibold text-white/80">Specials Today</div>
+
+                            <div className="mt-3 space-y-2">
+                              {todayDealRules.map((rule) => (
+                                <SpecialRuleCard
+                                  key={rule.id}
+                                  rule={rule}
+                                  dayLabel={todayLabel}
+                                  highlightLive={isRuleLiveNow(rule, timezone)}
                                 />
                               ))}
                             </div>
@@ -1789,11 +1952,18 @@ function VenuesPageContent() {
                                 const dayHappyHourRules = happyHourRules.filter(
                                   (rule) => rule.day_of_week === dayKey
                                 );
+                                const dayDealRules = dealRules.filter(
+                                  (rule) => rule.day_of_week === dayKey
+                                );
                                 const dayEventRules = eventRules.filter(
                                   (rule) => rule.day_of_week === dayKey
                                 );
 
-                                if (dayHappyHourRules.length === 0 && dayEventRules.length === 0) {
+                                if (
+                                  dayHappyHourRules.length === 0 &&
+                                  dayDealRules.length === 0 &&
+                                  dayEventRules.length === 0
+                                ) {
                                   return null;
                                 }
 
@@ -1804,6 +1974,14 @@ function VenuesPageContent() {
                                         key={rule.id}
                                         rule={rule}
                                         dayLabel={undefined}
+                                      />
+                                    ))}
+                                    {dayDealRules.map((rule) => (
+                                      <SpecialRuleCard
+                                        key={rule.id}
+                                        rule={rule}
+                                        dayLabel={undefined}
+                                        highlightLive={false}
                                       />
                                     ))}
                                     {dayEventRules.map((rule) => (
@@ -1821,8 +1999,12 @@ function VenuesPageContent() {
                             className="col-span-2 min-h-[44px] rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10 sm:col-span-1"
                             href={buildPublicVenueHref(v)}
                           >
-                            Explore venue
+                            View venue
                           </a>
+
+                          <div className="col-span-2 sm:col-span-1">
+                            <SaveVenueButton venueId={v.id} variant="detail" />
+                          </div>
 
                           {isExpanded ? (
                             <button
@@ -1928,15 +2110,15 @@ function VenuesPageContent() {
                     </div>
                     <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
                       <select
-                        value={venueType}
-                        onChange={(e) => setVenueType(e.target.value)}
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
                         className="h-10 w-full rounded-xl border border-white/10 bg-black px-3 text-sm text-white"
                       >
-                        {venueTypes.map((t) => (
-                          <option key={t} value={t}>
-                            {t === 'ALL' ? 'All venue types' : t.toUpperCase()}
-                          </option>
-                        ))}
+                        <option value="NAME">Sort by venue</option>
+                        <option value="RATING_DESC">Highest rated</option>
+                        <option value="REVIEWS_DESC">Most reviews</option>
+                        <option value="PRICE_ASC">Cheapest first</option>
+                        <option value="PRICE_DESC">Most expensive</option>
                       </select>
 
                       <select
@@ -1969,6 +2151,43 @@ function VenuesPageContent() {
 
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <CompactToggle label="Open late" checked={openLateOnly} onChange={setOpenLateOnly} />
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                      Specials and venue rules
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <CompactToggle label="Food deals now" checked={foodDealsNowOnly} onChange={setFoodDealsNowOnly} />
+                      <CompactToggle label="Lunch specials" checked={lunchSpecialsOnly} onChange={setLunchSpecialsOnly} />
+                      <CompactToggle label="Specials today" checked={specialsTodayOnly} onChange={setSpecialsTodayOnly} />
+                      <CompactToggle label="Kid friendly now" checked={filterKidNow} onChange={setFilterKidNow} />
+                      <CompactToggle label="Dog friendly now" checked={filterDogNow} onChange={setFilterDogNow} />
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                      <select
+                        value={dailySpecialMaxPrice}
+                        onChange={(e) => setDailySpecialMaxPrice(e.target.value)}
+                        className="h-9 rounded-xl border border-white/10 bg-black px-3 text-xs text-white"
+                      >
+                        <option value="ALL">Daily special price</option>
+                        <option value="10">Daily special &lt;= $10</option>
+                        <option value="15">Daily special &lt;= $15</option>
+                        <option value="20">Daily special &lt;= $20</option>
+                        <option value="25">Daily special &lt;= $25</option>
+                      </select>
+                      <select
+                        value={lunchSpecialMaxPrice}
+                        onChange={(e) => setLunchSpecialMaxPrice(e.target.value)}
+                        className="h-9 rounded-xl border border-white/10 bg-black px-3 text-xs text-white"
+                      >
+                        <option value="ALL">Lunch special price</option>
+                        <option value="10">Lunch special &lt;= $10</option>
+                        <option value="15">Lunch special &lt;= $15</option>
+                        <option value="20">Lunch special &lt;= $20</option>
+                        <option value="25">Lunch special &lt;= $25</option>
+                      </select>
                     </div>
                   </div>
 
@@ -2098,22 +2317,22 @@ function CompactToggle({
       type="button"
       onClick={() => onChange(!checked)}
       className={[
-        'inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-[13px] leading-none sm:h-9 sm:gap-1.5 sm:px-2.5 sm:text-xs',
+        'inline-flex min-h-[32px] max-w-full items-center gap-1.5 rounded-[0.95rem] border px-2.25 py-1 text-[11px] leading-tight sm:min-h-[34px] sm:px-2.5 sm:text-xs',
         checked
-          ? 'border-white/30 bg-white/15'
-          : 'border-white/10 bg-white/5 hover:bg-white/10',
+          ? 'border-white/16 bg-white/[0.08] text-white'
+          : 'border-white/10 bg-white/[0.025] text-white/68 hover:bg-white/[0.08] hover:text-white',
       ].join(' ')}
       aria-pressed={checked}
     >
       <span
         className={[
-          'inline-flex h-3.5 w-3.5 items-center justify-center rounded border text-[9px]',
-          checked ? 'border-white bg-white text-black' : 'border-white/30 bg-transparent',
+          'inline-flex h-3 w-3 items-center justify-center rounded border text-[8px]',
+          checked ? 'border-white bg-white text-black' : 'border-white/20 bg-transparent',
         ].join(' ')}
       >
         {checked ? 'x' : ''}
       </span>
-      <span className="whitespace-nowrap select-none">{label}</span>
+      <span className="break-words text-left select-none">{label}</span>
     </button>
   );
 }
@@ -2225,7 +2444,7 @@ function HappyHourRuleCard({
                         <div className="min-w-0">
                           <div className="text-sm font-medium leading-5 text-white">{item.title}</div>
                           {item.subtitle ? (
-                            <div className="mt-0.5 text-[11px] leading-4 text-white/55">{item.subtitle}</div>
+                            <div className="mt-0.5 text-[11px] leading-4 text-white/64">{item.subtitle}</div>
                           ) : null}
                         </div>
                         {item.price != null ? (
@@ -2254,6 +2473,48 @@ function HappyHourRuleCard({
           {rule.detail_json?.notes}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function SpecialRuleCard({
+  rule,
+  dayLabel,
+  highlightLive,
+}: {
+  rule: VenueScheduleRule;
+  dayLabel?: string;
+  highlightLive: boolean;
+}) {
+  const label = rule.schedule_type === 'lunch_special' ? 'Lunch Special' : 'Daily Special';
+  const detail = [rule.description?.trim(), rule.notes?.trim()]
+    .filter((value): value is string => Boolean(value))
+    .join(' | ');
+
+  return (
+    <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-200/75">
+            {label}
+          </div>
+          <div className="mt-1 text-sm font-semibold text-white">{getSpecialBadge(rule)}</div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {highlightLive ? (
+            <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
+              Live now
+            </span>
+          ) : null}
+          <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
+            {dayLabel ? `${dayLabel} | ` : ''}
+            {formatRuleTime(rule.start_time)} - {formatRuleTime(rule.end_time)}
+          </span>
+        </div>
+      </div>
+
+      {detail ? <div className="mt-2 text-sm text-white/85">{detail}</div> : null}
     </div>
   );
 }
@@ -2299,7 +2560,7 @@ function EventRuleCard({
         </div>
 
         <span className="rounded-full border border-violet-300/25 bg-violet-400/10 px-2 py-0.5 text-[11px] font-semibold text-violet-100">
-          {dayLabel ? `${dayLabel} • ` : ''}
+          {dayLabel ? `${dayLabel} | ` : ''}
           {formatRuleTime(rule.start_time)} - {formatRuleTime(rule.end_time)}
         </span>
       </div>
@@ -2319,13 +2580,16 @@ function getScheduleTypeDisplayLabel(type: ScheduleType): string {
     kitchen: 'Kitchen Hours',
     happy_hour: 'Happy Hour',
     bottle_shop: 'Bottle Shop Hours',
-    trivia: '❓ Trivia',
-    live_music: '🎸 Live Music',
-    sport: '🏟️ Sport Events',
-    comedy: '😂 Comedy',
-    karaoke: '🎤 Karaoke',
-    dj: '🎧 DJ',
-    special_event: '✨ Special Event',
+    daily_special: 'Daily Special',
+    lunch_special: 'Lunch Special',
+    venue_rule: 'Venue Rule',
+    trivia: '\u2753 Trivia',
+    live_music: '\u{1F3B8} Live Music',
+    sport: '\u{1F3DF}\uFE0F Sport Events',
+    comedy: '\u{1F602} Comedy',
+    karaoke: '\u{1F3A4} Karaoke',
+    dj: '\u{1F3A7} DJ',
+    special_event: '\u2728 Special Event',
   }[type];
 }
 
@@ -2335,6 +2599,9 @@ function getScheduleTypeBaseLabel(type: ScheduleType): string {
     kitchen: 'Kitchen Hours',
     happy_hour: 'Happy Hour',
     bottle_shop: 'Bottle Shop Hours',
+    daily_special: 'Daily Special',
+    lunch_special: 'Lunch Special',
+    venue_rule: 'Venue Rule',
     trivia: 'Trivia',
     live_music: 'Live Music',
     sport: 'Sport Events',
@@ -2366,8 +2633,16 @@ function formatEventRuleSummary(rule: VenueScheduleRule): string | null {
     rule.description?.trim() || null,
   ].filter((value): value is string => Boolean(value));
 
-  if (parts.length > 0) return parts.join(' • ');
+  if (parts.length > 0) return parts.join(' | ');
   return rule.notes?.trim() || null;
+}
+
+function getVenueRuleBadge(rule: VenueScheduleRule): string | null {
+  return getCompactVenueRuleSignal(rule);
+}
+
+function getSpecialBadge(rule: VenueScheduleRule): string | null {
+  return getCompactSpecialLine(rule);
 }
 
 function getTodayRulesForType(
@@ -2377,6 +2652,44 @@ function getTodayRulesForType(
   const today = getTodayDayOfWeek(timezone);
   return rules.filter((rule) => rule.day_of_week === today);
 }
+
+function isRuleLiveNow(rule: Pick<VenueScheduleRule, 'start_time' | 'end_time'>, timezone: string) {
+  const hours = buildHoursJsonFromRules([
+    {
+      id: 'temp',
+      venue_id: 'temp',
+      schedule_type: 'daily_special',
+      day_of_week: getTodayDayOfWeek(timezone),
+      start_time: rule.start_time,
+      end_time: rule.end_time,
+      sort_order: 0,
+      title: null,
+      description: null,
+      deal_text: null,
+      notes: null,
+      is_active: true,
+      status: 'published',
+      detail_json: null,
+    },
+  ]);
+
+  return isOpenNow(hours, timezone, false);
+}
+
+function isFoodDealRule(rule: VenueScheduleRule) {
+  const text = [rule.title, rule.deal_text, rule.description, rule.notes]
+    .map((value) => normalizeComparisonText(value))
+    .join(' ');
+
+  if (rule.schedule_type === 'lunch_special') return true;
+
+  return ['steak', 'parmi', 'burger', 'pizza', 'chips', 'food', 'lunch', 'meal'].some((term) =>
+    text.includes(term)
+  );
+}
+
+
+
 
 
 

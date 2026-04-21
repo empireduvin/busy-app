@@ -135,12 +135,11 @@ export default function ContactPage() {
           <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_auto] lg:items-end">
             <div className="max-w-3xl">
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                Fix a listing, get venue access, or feature what&apos;s on
+                Correct your venue page, get access, or get what&apos;s on noticed
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-white/68 sm:text-base">
-                Use this page if something on First Round needs updating, if your venue wants its
-                own login, or if you want more visibility for your events, happy hours, and venue
-                page.
+                Reach out if your listing needs correcting, if your venue wants login access to
+                update details, or if you want your events and happy hours seen by more locals.
               </p>
             </div>
 
@@ -164,8 +163,8 @@ export default function ContactPage() {
               </div>
               <h2 className="text-xl font-semibold text-white">Send a message to First Round</h2>
               <p className="text-sm leading-6 text-white/58">
-                Pick the reason, add a few details, and send it straight from the site. If sending
-                is not available, you can still open your email app instead.
+                Tell us what needs fixing, what access you need, or what you want featured, and
+                send it straight from the site.
               </p>
             </div>
 
@@ -337,7 +336,7 @@ export default function ContactPage() {
               />
               <InfoBlock
                 title="Promote your venue, events, or specials"
-                text="Want more visibility on First Round? Reach out if you want your venue, happy hours, or upcoming events featured."
+                text="Reach out if you want more visibility for your venue, upcoming events, happy hours, or key weekly specials."
               />
             </div>
 

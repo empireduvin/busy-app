@@ -1,4 +1,17 @@
 import { isBottleShopVenueType } from '@/lib/venue-type-rules';
+import {
+  DAY_OPTIONS,
+  DEAL_SCHEDULE_TYPES,
+  EVENT_SCHEDULE_TYPES,
+  getScheduleTypeLabel,
+  type DayOfWeek,
+  type ScheduleType,
+  type VenueRuleKind,
+} from '@/lib/schedule-rules';
+import {
+  type ScheduleRuleDetailJson,
+  normalizeScheduleRuleDetailJson,
+} from '@/lib/venue-data';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type OpeningPeriod = {
@@ -15,28 +28,6 @@ export type OpeningHours = {
   saturday?: OpeningPeriod[];
   sunday?: OpeningPeriod[];
 };
-
-export type DayOfWeek =
-  | 'monday'
-  | 'tuesday'
-  | 'wednesday'
-  | 'thursday'
-  | 'friday'
-  | 'saturday'
-  | 'sunday';
-
-export type ScheduleType =
-  | 'opening'
-  | 'kitchen'
-  | 'happy_hour'
-  | 'bottle_shop'
-  | 'trivia'
-  | 'live_music'
-  | 'sport'
-  | 'comedy'
-  | 'karaoke'
-  | 'dj'
-  | 'special_event';
 
 export type VenueTypeLookup = {
   id: string;
@@ -88,7 +79,7 @@ export type VenueScheduleRule = {
   notes: string | null;
   is_active: boolean | null;
   status: string | null;
-  detail_json?: HappyHourDetailJson | null;
+  detail_json?: ScheduleRuleDetailJson | null;
 };
 
 export type Venue = {
@@ -111,10 +102,13 @@ export type Venue = {
   shows_sport: boolean | null;
   plays_with_sound?: boolean | null;
   sport_types: string | null;
+  sport_notes: string | null;
   byo_allowed: boolean | null;
   byo_notes: string | null;
   dog_friendly: boolean | null;
+  dog_friendly_notes: string | null;
   kid_friendly: boolean | null;
+  kid_friendly_notes: string | null;
   opening_hours: unknown | null;
   kitchen_hours: OpeningHours | null;
   happy_hour_hours: OpeningHours | null;
@@ -149,10 +143,13 @@ export const PUBLIC_VENUE_SELECT = `
   shows_sport,
   plays_with_sound,
   sport_types,
+  sport_notes,
   byo_allowed,
   byo_notes,
   dog_friendly,
+  dog_friendly_notes,
   kid_friendly,
+  kid_friendly_notes,
   opening_hours,
   kitchen_hours,
   happy_hour_hours,
@@ -201,10 +198,13 @@ export const PUBLIC_VENUE_SELECT_WITH_BOTTLE_SHOP = `
   shows_sport,
   plays_with_sound,
   sport_types,
+  sport_notes,
   byo_allowed,
   byo_notes,
   dog_friendly,
+  dog_friendly_notes,
   kid_friendly,
+  kid_friendly_notes,
   opening_hours,
   kitchen_hours,
   happy_hour_hours,
@@ -232,25 +232,7 @@ export const PUBLIC_VENUE_SELECT_WITH_BOTTLE_SHOP = `
 
 export const INNER_WEST_LIVE_SUBURBS = ['NEWTOWN', 'ENMORE', 'ERSKINEVILLE'] as const;
 
-export const EVENT_SCHEDULE_TYPES: ScheduleType[] = [
-  'trivia',
-  'live_music',
-  'sport',
-  'comedy',
-  'karaoke',
-  'dj',
-  'special_event',
-];
-
-export const DAY_ORDER: DayOfWeek[] = [
-  'monday',
-  'tuesday',
-  'wednesday',
-  'thursday',
-  'friday',
-  'saturday',
-  'sunday',
-];
+export const DAY_ORDER: DayOfWeek[] = DAY_OPTIONS.map((option) => option.value);
 
 export const DAY_LABELS: Record<DayOfWeek, string> = {
   monday: 'Mon',
@@ -353,6 +335,29 @@ export function getPublishedRulesByType(venue: Venue, scheduleType: ScheduleType
   );
 }
 
+export function getPublishedVenueRulesByKind(venue: Venue, kind: VenueRuleKind) {
+  return sortScheduleRules(
+    (venue.venue_schedule_rules ?? []).filter(
+      (rule) =>
+        rule.schedule_type === 'venue_rule' &&
+        rule.is_active === true &&
+        rule.status === 'published' &&
+        getVenueRuleKind(rule) === kind
+    )
+  );
+}
+
+export function getPublishedDealRules(venue: Venue) {
+  return sortScheduleRules(
+    (venue.venue_schedule_rules ?? []).filter(
+      (rule) =>
+        DEAL_SCHEDULE_TYPES.includes(rule.schedule_type) &&
+        rule.is_active === true &&
+        rule.status === 'published'
+    )
+  );
+}
+
 export function getPublishedEventRules(venue: Venue): VenueScheduleRule[] {
   return sortScheduleRules(
     (venue.venue_schedule_rules ?? []).filter(
@@ -445,6 +450,92 @@ export function getTodayRulesForType(rules: VenueScheduleRule[], timezone: strin
 
 export function getRulesForDay(rules: VenueScheduleRule[], day: DayOfWeek) {
   return rules.filter((rule) => rule.day_of_week === day);
+}
+
+export function getVenueRuleKind(rule: Pick<VenueScheduleRule, 'detail_json'>): VenueRuleKind | null {
+  const normalized = normalizeScheduleRuleDetailJson(rule.detail_json);
+  return normalized?.rule_kind === 'kid' || normalized?.rule_kind === 'dog'
+    ? normalized.rule_kind
+    : null;
+}
+
+export function getVenueRuleDisplayLabel(kind: VenueRuleKind) {
+  return kind === 'kid' ? 'Kids allowed' : 'Dog friendly';
+}
+
+export function getSpecialPrice(
+  rule: Pick<VenueScheduleRule, 'detail_json'>
+): number | null {
+  const normalized = normalizeScheduleRuleDetailJson(rule.detail_json);
+  return typeof normalized?.special_price === 'number' &&
+    Number.isFinite(normalized.special_price)
+    ? normalized.special_price
+    : null;
+}
+
+function formatMoneyCompact(amount: number) {
+  return Number.isInteger(amount) ? `$${amount}` : `$${amount.toFixed(2).replace(/\.?0+$/, '')}`;
+}
+
+function textAlreadyHasPrice(text: string) {
+  return /\$\s*\d/.test(text);
+}
+
+function prefixSignalWithEmoji(kind: VenueRuleKind | null, text: string | null) {
+  if (!kind || !text) return text;
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  const emoji = kind === 'kid' ? '👶' : '🐶';
+  if (trimmed.startsWith(emoji)) return trimmed;
+  return `${emoji} ${trimmed}`;
+}
+
+export function getCompactVenueRuleSignal(
+  rule: Pick<VenueScheduleRule, 'deal_text' | 'description' | 'notes' | 'detail_json'>
+) {
+  const kind = getVenueRuleKind(rule);
+  const fallback = kind === 'kid' ? 'Kids allowed now' : kind === 'dog' ? 'Dog friendly now' : null;
+  return prefixSignalWithEmoji(
+    kind,
+    rule.deal_text?.trim() || rule.description?.trim() || rule.notes?.trim() || fallback
+  );
+}
+
+export function getCompactSpecialLine(
+  rule: Pick<
+    VenueScheduleRule,
+    'deal_text' | 'description' | 'title' | 'schedule_type' | 'detail_json'
+  >
+) {
+  const specialPrice = getSpecialPrice(rule);
+  const dealText = rule.deal_text?.trim() || null;
+  const title = rule.title?.trim() || null;
+  const description = rule.description?.trim() || null;
+  const primaryText = dealText || title || description;
+
+  if (primaryText && (specialPrice == null || textAlreadyHasPrice(primaryText))) {
+    return primaryText;
+  }
+
+  if (specialPrice != null) {
+    const priceLabel = formatMoneyCompact(specialPrice);
+    if (rule.schedule_type === 'lunch_special') {
+      if (dealText && !textAlreadyHasPrice(dealText)) return `${dealText} ${priceLabel}`;
+      if (title && !textAlreadyHasPrice(title)) return `${title} ${priceLabel}`;
+      if (description && !textAlreadyHasPrice(description)) return `${description} ${priceLabel}`;
+      return `Lunch special ${priceLabel}`;
+    }
+
+    if (dealText && !textAlreadyHasPrice(dealText)) return `${dealText} ${priceLabel}`;
+    if (title && !textAlreadyHasPrice(title)) return `${priceLabel} ${title}`;
+    if (description && !textAlreadyHasPrice(description)) return `${description} ${priceLabel}`;
+    return `Daily special ${priceLabel}`;
+  }
+
+  if (rule.schedule_type === 'daily_special') return 'Daily special';
+  if (rule.schedule_type === 'lunch_special') return 'Lunch special';
+  return getScheduleTypeLabel(rule.schedule_type);
 }
 
 export function buildPublicVenueHref(venue: Pick<Venue, 'id' | 'name' | 'suburb'>) {

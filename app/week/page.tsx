@@ -1,18 +1,23 @@
 'use client';
 
 import GoogleMap from '@/app/components/GoogleMap';
-import PublicEventRuleCard from '@/app/components/PublicEventRuleCard';
-import PublicHappyHourRuleCard from '@/app/components/PublicHappyHourRuleCard';
 import PublicVenueCard from '@/app/components/PublicVenueCard';
+import SaveVenueButton from '@/app/components/SaveVenueButton';
 import { usePublicVenueCollections } from '@/app/components/usePublicVenueCollections';
 import { formatTimeForUi } from '@/lib/opening-hours';
+import { type DayOfWeek } from '@/lib/schedule-rules';
 import {
+  HAPPY_HOUR_CATEGORIES,
+  getCompactSpecialLine,
+  getCompactVenueRuleSignal,
   getDayOfWeekForOffset,
+  getPublishedDealRules,
+  getDisplayHappyHourItems,
   getPublishedEventRules,
   getPublishedRulesByType,
+  getPublishedVenueRulesByKind,
   getRulesForDay,
   hasText,
-  type DayOfWeek,
   type Venue,
   type VenueScheduleRule,
 } from '@/lib/public-venue-discovery';
@@ -22,6 +27,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 type WeekFilter =
   | 'all'
   | 'happy_hour'
+  | 'specials'
+  | 'lunch_specials'
+  | 'kid_friendly_now'
+  | 'dog_friendly_now'
   | 'events'
   | 'trivia'
   | 'live_music'
@@ -43,6 +52,10 @@ type DayOption = {
 const WEEK_FILTERS: Array<{ value: WeekFilter; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'happy_hour', label: 'Happy Hour' },
+  { value: 'specials', label: 'Specials' },
+  { value: 'lunch_specials', label: 'Lunch Specials' },
+  { value: 'kid_friendly_now', label: 'Kid Friendly' },
+  { value: 'dog_friendly_now', label: 'Dog Friendly' },
   { value: 'events', label: 'Events' },
   { value: 'trivia', label: 'Trivia' },
   { value: 'live_music', label: 'Live Music' },
@@ -61,7 +74,7 @@ const DISPLAY_TIMEZONE = 'Australia/Sydney';
 
 export default function WeekPage() {
   const { liveVenues, loading, error } = usePublicVenueCollections();
-  const [selectedOffset, setSelectedOffset] = useState(0);
+  const [selectedOffset, setSelectedOffset] = useState(1);
   const [activeFilter, setActiveFilter] = useState<WeekFilter>('all');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('any');
   const [searchTerm, setSearchTerm] = useState('');
@@ -203,78 +216,89 @@ export default function WeekPage() {
   }, [showMap]);
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="mx-auto max-w-6xl px-3 py-4 sm:px-6 sm:py-8">
-        <section className="rounded-[1.75rem] border border-white/10 bg-gradient-to-br from-orange-500/20 via-[#120805] to-black p-4 sm:rounded-3xl sm:p-6">
+    <div className="min-h-screen overflow-x-clip bg-black text-white">
+      <div className="mx-auto max-w-6xl px-3 py-3.5 sm:px-6 sm:py-8">
+        <section className="rounded-[1.4rem] border border-white/9 bg-gradient-to-br from-orange-500/14 via-[#120805] to-black p-3 sm:rounded-3xl sm:p-6">
           <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-orange-300/80">
-            This Week
+            📅 This week
           </div>
-          <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h1 className="text-[28px] font-semibold tracking-tight sm:text-4xl">
-                What&apos;s on this week
+          <div className="mt-2 flex flex-col gap-2.5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <h1 className="text-[24px] font-semibold tracking-tight sm:text-4xl">
+                Line up the next good move
               </h1>
-              <p className="mt-2 text-[13px] leading-5 text-white/68 sm:hidden">
-                Start with today, then jump through the next 6 days.
-              </p>
-              <p className="mt-2.5 hidden max-w-2xl text-[13px] leading-5 text-white/68 sm:mt-3 sm:block sm:text-base">
-                Start with today, then jump through the next 6 days to see happy hours and events coming up.
+              <p className="mt-1.5 text-[13px] leading-5 text-white/70 sm:text-base">
+                Start with tomorrow, then scan the next six days for the right venue.
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-3">
-              {headlineStats.map((stat) =>
-                stat.value > 0 ? (
-                  <a
-                    key={stat.label}
-                    href={`#${stat.sectionId}`}
-                    className="min-h-[68px] rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5 transition hover:border-orange-300/35 hover:bg-orange-500/10 sm:min-h-[88px] sm:px-4 sm:py-3"
-                  >
-                    <div className="text-lg font-semibold text-white">{stat.value}</div>
-                    <div className="text-[10px] uppercase tracking-[0.14em] text-white/45 sm:text-xs sm:tracking-[0.18em]">
-                      {stat.label}
-                    </div>
-                  </a>
-                ) : (
-                  <div
-                    key={stat.label}
-                    className="min-h-[68px] rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 opacity-60 sm:min-h-[88px] sm:px-4 sm:py-3"
-                  >
-                    <div className="text-lg font-semibold text-white">{stat.value}</div>
-                    <div className="text-[10px] uppercase tracking-[0.14em] text-white/45 sm:text-xs sm:tracking-[0.18em]">
-                      {stat.emptyLabel}
-                    </div>
-                  </div>
-                )
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-4 rounded-[1.75rem] border border-white/8 bg-white/[0.03] p-3 sm:mt-5 sm:rounded-3xl sm:border-white/10 sm:bg-white/5 sm:p-4">
-          <div className="mb-3 rounded-[1.5rem] border border-white/8 bg-white/[0.02] p-3 sm:mb-4 sm:rounded-3xl sm:border-orange-400/20 sm:bg-orange-500/10 sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/40 sm:text-orange-200/80">
-                  Live options
-                </div>
-                <h2 className="mt-1 text-base font-semibold text-white sm:text-xl">Need something now?</h2>
-                <p className="mt-1 text-[12px] leading-5 text-white/58 sm:hidden">
-                  Live Now is there if you need something happening straight away.
-                </p>
-                <p className="mt-1 hidden max-w-2xl text-[13px] leading-5 text-white/65 sm:block sm:text-sm">
-                  Switch to the live view for venues with happy hours and events already happening.
-                </p>
-              </div>
+            <div className="flex flex-wrap gap-2">
               <Link
                 href="/livenow"
-                className="inline-flex min-h-[34px] w-full items-center justify-center rounded-full border border-white/10 bg-transparent px-3 py-1.5 text-[12px] font-medium text-white/68 transition hover:border-white/15 hover:bg-white/[0.05] hover:text-white sm:min-h-[44px] sm:w-auto sm:rounded-2xl sm:border-transparent sm:bg-orange-500 sm:px-4 sm:py-2 sm:text-sm sm:font-semibold sm:text-black sm:hover:bg-orange-400"
+                className="inline-flex min-h-[30px] items-center justify-center rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1 text-[11px] font-medium text-white/58 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-white"
               >
-                Browse Live Now
+                See live now
+              </Link>
+              <Link
+                href="/today"
+                className="inline-flex min-h-[30px] items-center justify-center rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1 text-[11px] font-medium text-white/58 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-white"
+              >
+                See today
               </Link>
             </div>
           </div>
+          <div className="mt-2.5 grid grid-cols-3 gap-1.5 sm:max-w-[420px] sm:gap-2">
+            {headlineStats.map((stat) =>
+              stat.value > 0 ? (
+                <a
+                  key={stat.label}
+                  href={`#${stat.sectionId}`}
+                  className="rounded-2xl border border-white/9 bg-black/22 px-2.5 py-2 transition hover:border-orange-300/25 hover:bg-orange-500/8 sm:px-3"
+                >
+                  <div className="text-base font-semibold text-white">{stat.value}</div>
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-white/46">
+                    {stat.label}
+                  </div>
+                </a>
+              ) : (
+                <div
+                  key={stat.label}
+                  className="rounded-2xl border border-white/9 bg-black/16 px-2.5 py-2 opacity-60 sm:px-3"
+                >
+                  <div className="text-base font-semibold text-white">{stat.value}</div>
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-white/46">
+                    {stat.emptyLabel}
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        </section>
 
-          <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2.5">
+        <section className="mt-3.5 rounded-[1.4rem] border border-white/7 bg-white/[0.025] p-3 sm:mt-5 sm:rounded-3xl sm:border-white/10 sm:bg-white/5 sm:p-4">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/40">
+                Filters
+              </div>
+              <p className="mt-1 text-[12px] leading-5 text-white/62 sm:text-sm">
+                Pick a day, narrow the time window, then scan the feed.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowMap((current) => !current)}
+              className={[
+                'hidden rounded-full border px-2.5 py-1 text-[11px] font-medium transition sm:inline-flex',
+                showMap
+                  ? 'border-orange-400/30 bg-orange-500/12 text-orange-100'
+                  : 'border-white/8 bg-black/18 text-white/62 hover:bg-white/10',
+              ].join(' ')}
+            >
+              {showMap ? 'Hide map' : 'Show map'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1 sm:flex sm:flex-wrap sm:gap-1.5">
             {dayOptions.map((option) => {
               const active = option.offset === selectedOffset;
               return (
@@ -283,19 +307,19 @@ export default function WeekPage() {
                   type="button"
                   onClick={() => setSelectedOffset(option.offset)}
                   className={[
-                    'min-w-0 rounded-[1.05rem] border px-2 py-2 text-left transition sm:min-w-[92px] sm:rounded-2xl sm:px-4 sm:py-3',
+                    'min-w-0 rounded-[0.95rem] border px-2 py-1 text-left transition sm:min-w-[84px] sm:rounded-2xl sm:px-3 sm:py-1.5',
                     active
-                      ? 'border-orange-400/75 bg-orange-500/90 text-black'
-                      : 'border-white/8 bg-black/22 text-white/74 hover:bg-white/8 hover:text-white',
+                      ? 'border-orange-400/45 bg-orange-500/18 text-orange-50'
+                      : 'border-white/7 bg-black/18 text-white/62 hover:bg-white/8 hover:text-white',
                   ].join(' ')}
                 >
-                  <div className="text-[11px] font-semibold sm:text-sm">
+                  <div className="text-[10px] font-semibold sm:text-[13px]">
                     <span className="sm:hidden">
                       {option.isToday ? 'Today' : option.label.slice(0, 3)}
                     </span>
                     <span className="hidden sm:inline">{option.label}</span>
                   </div>
-                  <div className={active ? 'text-[10px] text-black/70' : 'text-[10px] text-white/46'}>
+                  <div className={active ? 'text-[10px] text-orange-100/72' : 'text-[10px] text-white/40'}>
                     {option.shortDate}
                   </div>
                 </button>
@@ -303,14 +327,14 @@ export default function WeekPage() {
             })}
           </div>
 
-          <div className="mt-3.5 grid gap-2.5 md:mt-4 md:grid-cols-[minmax(220px,1.2fr)_auto] md:items-center md:gap-3">
+          <div className="mt-3 grid gap-2 md:mt-3.5 md:grid-cols-[minmax(220px,1.2fr)_auto] md:items-center md:gap-3">
             <div className="relative">
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder={`Search venue, suburb, or ${selectedDay.isToday ? "today's" : `${selectedDay.label.toLowerCase()}'s`} plan`}
-                className="h-11 w-full rounded-[1.1rem] border border-white/8 bg-black/30 px-3.5 pr-20 text-[13px] text-white placeholder:text-white/32 sm:h-12 sm:rounded-2xl sm:border-white/10 sm:px-4 sm:pr-24 sm:text-sm"
+                className="h-10 w-full rounded-[1rem] border border-white/8 bg-black/28 px-3.5 pr-20 text-[13px] text-white placeholder:text-white/36 sm:h-11 sm:rounded-2xl sm:border-white/10 sm:px-4 sm:pr-24 sm:text-sm"
               />
               {searchTerm.trim() ? (
                 <button
@@ -323,13 +347,13 @@ export default function WeekPage() {
               ) : null}
             </div>
 
-            <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5 sm:hidden">
+            <div className="grid grid-cols-[1fr_1fr_auto] gap-1 sm:hidden">
               <label className="min-w-0">
                 <span className="sr-only">Filter by time</span>
                 <select
                   value={timeFilter}
                   onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
-                  className="h-9 w-full rounded-xl border border-white/8 bg-black/22 px-3 text-[12px] text-white/84 outline-none"
+                  className="h-8 w-full rounded-[0.95rem] border border-white/7 bg-black/18 px-2.5 text-[11px] text-white/78 outline-none"
                 >
                   {TIME_FILTERS.map((filter) => (
                     <option key={filter.value} value={filter.value}>
@@ -343,7 +367,7 @@ export default function WeekPage() {
                 <select
                   value={activeFilter}
                   onChange={(event) => setActiveFilter(event.target.value as WeekFilter)}
-                  className="h-9 w-full rounded-xl border border-white/8 bg-black/22 px-3 text-[12px] text-white/84 outline-none"
+                  className="h-8 w-full rounded-[0.95rem] border border-white/7 bg-black/18 px-2.5 text-[11px] text-white/78 outline-none"
                 >
                   {WEEK_FILTERS.map((filter) => (
                     <option key={filter.value} value={filter.value}>
@@ -356,17 +380,17 @@ export default function WeekPage() {
                 type="button"
                 onClick={() => setShowMap((current) => !current)}
                 className={[
-                  'inline-flex h-9 min-w-[64px] items-center justify-center rounded-xl border px-2.5 text-[11px] font-medium transition',
+                  'inline-flex h-8 min-w-[56px] items-center justify-center rounded-[0.95rem] border px-2 text-[10px] font-medium transition',
                   showMap
                     ? 'border-orange-400/22 bg-orange-500/[0.10] text-orange-100'
-                    : 'border-white/8 bg-black/18 text-white/62 hover:bg-white/8 hover:text-white',
+                    : 'border-white/7 bg-black/15 text-white/54 hover:bg-white/8 hover:text-white',
                 ].join(' ')}
               >
                 {showMap ? 'Map on' : 'Map'}
               </button>
             </div>
 
-            <div className="hidden sm:flex sm:flex-wrap sm:gap-2.5">
+            <div className="hidden sm:flex sm:flex-wrap sm:gap-1.5">
               {TIME_FILTERS.map((filter) => {
                 const active = filter.value === timeFilter;
                 return (
@@ -375,32 +399,20 @@ export default function WeekPage() {
                     type="button"
                     onClick={() => setTimeFilter(filter.value)}
                     className={[
-                      'min-w-0 rounded-full border px-4 py-2 text-sm transition sm:px-3 sm:py-1.5 sm:text-xs',
+                      'min-w-0 rounded-full border px-2.5 py-1 text-[11px] transition',
                       active
-                        ? 'border-white/20 bg-white/15 text-white'
-                        : 'border-white/10 bg-black/20 text-white/60 hover:bg-white/10',
+                      ? 'border-white/12 bg-white/[0.07] text-white'
+                      : 'border-white/7 bg-black/18 text-white/58 hover:bg-white/8 hover:text-white',
                     ].join(' ')}
                   >
                     {filter.label}
                   </button>
                 );
               })}
-              <button
-                type="button"
-                onClick={() => setShowMap((current) => !current)}
-                className={[
-                  'min-w-0 rounded-full border px-4 py-2 text-sm transition sm:px-3 sm:py-1.5 sm:text-xs',
-                  showMap
-                    ? 'border-orange-400/30 bg-orange-500/12 text-orange-100'
-                    : 'border-white/10 bg-black/20 text-white/60 hover:bg-white/10',
-                ].join(' ')}
-              >
-                {showMap ? 'Hide map' : 'Show map'}
-              </button>
             </div>
           </div>
 
-          <div className="hidden sm:flex sm:flex-wrap sm:gap-2.5">
+          <div className="hidden sm:flex sm:flex-wrap sm:gap-1.5">
             {WEEK_FILTERS.map((filter) => {
               const active = filter.value === activeFilter;
               return (
@@ -409,10 +421,10 @@ export default function WeekPage() {
                   type="button"
                   onClick={() => setActiveFilter(filter.value)}
                   className={[
-                    'min-w-0 rounded-full border px-3 py-2.5 text-sm transition sm:px-4 sm:py-2',
+                    'min-w-0 rounded-full border px-2.5 py-1 text-[12px] transition sm:px-3 sm:py-1.25 sm:text-[13px]',
                     active
-                      ? 'border-orange-400 bg-orange-500 text-black'
-                      : 'border-white/10 bg-black/30 text-white/75 hover:bg-white/10',
+                      ? 'border-orange-400/40 bg-orange-500/14 text-orange-50'
+                      : 'border-white/7 bg-black/18 text-white/60 hover:bg-white/8 hover:text-white',
                   ].join(' ')}
                 >
                   {filter.label}
@@ -421,19 +433,19 @@ export default function WeekPage() {
             })}
           </div>
 
-          <div className="mt-3 text-sm text-white/55">
+          <div className="mt-2.5 text-sm text-white/60">
             Viewing {selectedDay.fullDate}.
           </div>
 
           {hasActiveFilters ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2.5">
+            <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
               <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
                 Applied
               </span>
               {appliedFilterLabels.map((label) => (
                 <span
                   key={label}
-                  className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs text-white/70"
+                  className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs text-white/74"
                 >
                   {label}
                 </span>
@@ -445,7 +457,7 @@ export default function WeekPage() {
               >
                 Reset filters
               </button>
-              <div className="text-xs text-white/45">
+              <div className="text-xs text-white/50">
                 Back to the full week view across happy hour and events.
               </div>
             </div>
@@ -455,7 +467,7 @@ export default function WeekPage() {
         {showMap ? (
           <section
             ref={mapSectionRef}
-            className="mt-4 rounded-[1.75rem] border border-white/8 bg-white/[0.02] p-3 sm:mt-5 sm:rounded-3xl sm:border-white/10 sm:bg-white/[0.03] sm:p-5"
+            className="mt-4 rounded-[1.6rem] border border-white/8 bg-white/[0.02] p-3 sm:mt-5 sm:rounded-3xl sm:border-white/10 sm:bg-white/[0.03] sm:p-5"
           >
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div>
@@ -465,7 +477,7 @@ export default function WeekPage() {
                 <h2 className="mt-1 text-xl font-semibold text-white">
                   What&apos;s on {selectedDay.isToday ? 'today' : selectedDay.label.toLowerCase()}
                 </h2>
-                <div className="mt-1 text-sm text-white/55">
+                <div className="mt-1 text-sm text-white/62">
                   {selectedDay.fullDate}&apos;s filtered happy hours and events on the map.
                 </div>
               </div>
@@ -502,9 +514,9 @@ export default function WeekPage() {
             </div>
           ) : null}
           {!loading && !error && rows.length === 0 ? (
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-white/70">
+            <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.04] p-5 text-white/72">
               <div>Nothing matches this week filter yet.</div>
-              <div className="mt-2 text-white/55">
+              <div className="mt-2 text-white/62">
                 Try another day, widen the filters, or search for a venue, suburb, or event style.
               </div>
               {hasActiveFilters ? (
@@ -520,7 +532,7 @@ export default function WeekPage() {
           ) : null}
 
           {!loading && !error && rows.length > 0 ? (
-            <div className="mb-3 px-1 text-sm text-white/60 sm:mb-4 sm:rounded-2xl sm:border sm:border-white/10 sm:bg-white/[0.03] sm:px-4 sm:py-3">
+            <div className="mb-3 px-1 text-sm text-white/64 sm:mb-4 sm:rounded-2xl sm:border sm:border-white/10 sm:bg-white/[0.03] sm:px-4 sm:py-3">
               Showing {rows.length} venue{rows.length === 1 ? '' : 's'}
               {searchTerm.trim() ? ` for "${searchTerm.trim()}"` : ''}
               {activeFilter !== 'all' ? ` in ${getFilterHeading(activeFilter, selectedDay).toLowerCase()}` : ''}
@@ -533,16 +545,16 @@ export default function WeekPage() {
           <div className="space-y-5 sm:space-y-7">
             {sections.map((section) => (
               <section key={section.id} id={section.id} className="scroll-mt-28 space-y-3 sm:space-y-4">
-                <div className="rounded-[1.75rem] border border-white/8 bg-white/[0.02] p-3.5 sm:rounded-3xl sm:border-white/10 sm:bg-white/[0.03] sm:p-5">
+                <div className="rounded-[1.6rem] border border-white/8 bg-white/[0.02] p-3.5 sm:rounded-3xl sm:border-white/10 sm:bg-white/[0.03] sm:p-5">
                   <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-300/70">
-                        What&apos;s on this week
+                        {'\u{1F4C5} This week'}
                       </div>
                       <div className="mt-1 text-sm font-medium text-white/70">
                         {selectedDay.fullDate}
                       </div>
-                      <p className="text-sm text-white/55">{section.description}</p>
+                      <p className="text-sm text-white/62">{section.description}</p>
                     </div>
                     <div className="text-xs uppercase tracking-[0.18em] text-white/35">
                       {section.rows.length} venue{section.rows.length === 1 ? '' : 's'}
@@ -553,22 +565,25 @@ export default function WeekPage() {
                     {groupRowsByTime(section.rows, section.kind).map((group) => (
                       <div key={`${section.id}-${group.label}`} className="space-y-3">
                         <div className="flex items-center gap-3">
-                          <div className="rounded-full border border-orange-400/15 bg-orange-500/[0.08] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-100 sm:border-orange-400/20 sm:bg-orange-500/10 sm:px-3 sm:text-xs sm:tracking-[0.18em]">
+                          <div className="rounded-full border border-orange-400/15 bg-orange-500/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-100 sm:border-orange-400/20 sm:bg-orange-500/10 sm:px-3 sm:text-xs sm:tracking-[0.18em]">
                             {group.label}
                           </div>
                           <div className="h-px flex-1 bg-white/10" />
                         </div>
-                        <div className="grid gap-4">
+                        <div className="grid gap-3">
                           {group.rows.map((row) => (
                             <PublicVenueCard
                               key={`${section.id}-${row.venue.id}`}
                               venue={row.venue}
                               eyebrow={row.cardEyebrow}
-                              badges={row.badges}
                               compact
                               tone="today"
                               heroBadge={
-                                row.dayHappyHourRules.length > 0 ? (
+                                row.urgencyLabel ? (
+                                  <TopBadge className="border-amber-400/30 bg-amber-500/15 text-amber-100">
+                                    {row.urgencyLabel}
+                                  </TopBadge>
+                                ) : row.dayHappyHourRules.length > 0 ? (
                                   <TopBadge className="border-pink-400/30 bg-pink-500/15 text-pink-100">
                                     {selectedDay.isToday ? 'Today' : row.dayBadgeLabel}
                                   </TopBadge>
@@ -578,45 +593,17 @@ export default function WeekPage() {
                                   </TopBadge>
                                 )
                               }
-                              summary={
-                                <div className="space-y-2">
-                                  <div className="flex flex-wrap gap-2">
-                                    {row.dayHappyHourRules.length > 0 ? (
-                                      <StatusPill className="border-pink-400/30 bg-pink-500/15 text-pink-100">
-                                        {selectedDay.isToday ? 'Happy hour today' : `Happy hour ${row.dayBadgeLabel.toLowerCase()}`}
-                                      </StatusPill>
-                                    ) : null}
-                                    {row.dayEventRules.length > 0 ? (
-                                      <StatusPill className="border-orange-400/30 bg-orange-500/15 text-orange-100">
-                                        {selectedDay.isToday ? 'Events today' : `Events ${row.dayBadgeLabel.toLowerCase()}`}
-                                      </StatusPill>
-                                    ) : null}
-                                  </div>
-                                  {row.timeHighlights.length > 0 ? (
-                                    <div className="flex flex-wrap gap-2">
-                                      {row.timeHighlights.map((highlight) => (
-                                        <TimePill key={`${row.venue.id}-${highlight}`}>
-                                          {highlight}
-                                        </TimePill>
-                                      ))}
-                                    </div>
-                                  ) : null}
-                                </div>
-                              }
-                              details={
-                                <div className="space-y-3">
-                                  {row.dayHappyHourRules.map((rule) => (
-                                    <PublicHappyHourRuleCard
-                                      key={rule.id}
-                                      rule={rule}
-                                      compact
-                                      discoverySummary
-                                    />
-                                  ))}
-                                  {row.dayEventRules.map((rule) => (
-                                    <PublicEventRuleCard key={rule.id} rule={rule} compact discoverySummary />
-                                  ))}
-                                </div>
+                              summary={buildReasonToCare(row.daySpecialRules, row.dayHappyHourRules, row.dayEventRules)}
+                              details={buildSecondaryLine(
+                                row.daySpecialRules,
+                                row.dayHappyHourRules,
+                                row.timeHighlights,
+                                row.dayBadgeLabel,
+                                row.activeKidRule,
+                                row.activeDogRule
+                              )}
+                              secondaryFooterAction={
+                                <SaveVenueButton venueId={row.venue.id} variant="card" />
                               }
                             />
                           ))}
@@ -647,14 +634,15 @@ function buildDayOptions(): DayOption[] {
     timeZone: DISPLAY_TIMEZONE,
   });
 
-  return Array.from({ length: 7 }, (_, offset) => {
+  return Array.from({ length: 6 }, (_, index) => {
+    const offset = index + 1;
     const date = new Date();
     date.setDate(date.getDate() + offset);
     const shortText = shortFormatter.format(date);
     const fullText = fullFormatter.format(date);
     const label =
-      offset === 0
-        ? 'Today'
+      offset === 1
+        ? 'Tomorrow'
         : fullText.split(' ')[0]?.replace(/,$/, '') ?? fullText;
 
     return {
@@ -663,7 +651,7 @@ function buildDayOptions(): DayOption[] {
       shortDate: shortText,
       fullDate: fullText,
       dayOfWeek: getDayOfWeekForOffset(DISPLAY_TIMEZONE, offset),
-      isToday: offset === 0,
+      isToday: false,
     };
   });
 }
@@ -673,19 +661,26 @@ function buildWeekRow(venue: Venue, selectedDay: DayOption) {
     getPublishedRulesByType(venue, 'happy_hour'),
     selectedDay.dayOfWeek
   );
+  const daySpecialRules = getRulesForDay(getPublishedDealRules(venue), selectedDay.dayOfWeek);
   const dayEventRules = getRulesForDay(getPublishedEventRules(venue), selectedDay.dayOfWeek);
+  const activeKidRule =
+    getRulesForDay(getPublishedVenueRulesByKind(venue, 'kid'), selectedDay.dayOfWeek)[0] ?? null;
+  const activeDogRule =
+    getRulesForDay(getPublishedVenueRulesByKind(venue, 'dog'), selectedDay.dayOfWeek)[0] ?? null;
   const dayEventTypes = dayEventRules.map((rule) => rule.schedule_type);
-  const isRelevantOnDay = dayHappyHourRules.length > 0 || dayEventRules.length > 0;
+  const isRelevantOnDay =
+    dayHappyHourRules.length > 0 ||
+    daySpecialRules.length > 0 ||
+    dayEventRules.length > 0 ||
+    Boolean(activeKidRule || activeDogRule);
 
   const startTimes = [
+    ...daySpecialRules.map((rule) => clockToMinutes(rule.start_time)),
     ...dayHappyHourRules.map((rule) => clockToMinutes(rule.start_time)),
     ...dayEventRules.map((rule) => clockToMinutes(rule.start_time)),
   ];
   const primaryStartMinutes = startTimes.length > 0 ? Math.min(...startTimes) : 18 * 60;
-  const hasLunchSpecials = dayHappyHourRules.some((rule) => {
-    const minutes = clockToMinutes(rule.start_time);
-    return minutes >= 11 * 60 && minutes <= 15 * 60;
-  });
+  const hasLunchSpecials = daySpecialRules.some((rule) => rule.schedule_type === 'lunch_special');
 
   const dayLower = selectedDay.label.toLowerCase();
   const badges = [
@@ -705,33 +700,47 @@ function buildWeekRow(venue: Venue, selectedDay: DayOption) {
     'sport',
   ].find((type) => dayEventTypes.includes(type as (typeof dayEventTypes)[number]));
 
-  const dayLabel = selectedDay.isToday ? 'Today' : selectedDay.label;
-  const cardEyebrow =
-    dayHappyHourRules.length > 0
-      ? `Happy Hour ${dayLabel}`
+  const dayLabel = selectedDay.label;
+  const cardEyebrow = daySpecialRules.length > 0
+    ? daySpecialRules.some((rule) => rule.schedule_type === 'lunch_special')
+      ? '\u2600 LUNCH'
+      : '\u{1F525} SPECIAL'
+    : dayHappyHourRules.length > 0
+      ? '\u{1F37B} HAPPY HOUR'
       : primaryEventType === 'trivia'
-        ? `Trivia ${dayLabel}`
+        ? '\u2753 TRIVIA'
         : primaryEventType === 'live_music'
-          ? `Live Music ${dayLabel}`
+          ? '\u{1F3B5} LIVE MUSIC'
           : primaryEventType === 'comedy'
-            ? `Comedy ${dayLabel}`
+            ? '\u{1F3A4} COMEDY'
             : primaryEventType === 'karaoke'
-              ? `Karaoke ${dayLabel}`
-              : `Events ${dayLabel}`;
+              ? '\u{1F3A4} KARAOKE'
+              : primaryEventType === 'sport'
+                ? '\u26BD SPORT'
+                : '\u{1F4C5} THIS WEEK';
 
   const timeHighlights = [
+    ...daySpecialRules
+      .slice(0, 2)
+      .map((rule) =>
+        buildRangeLabel(rule, rule.schedule_type === 'lunch_special' ? 'Lunch' : 'Special')
+      ),
     ...dayHappyHourRules.slice(0, 2).map((rule) => buildRangeLabel(rule, 'Happy hour')),
     ...dayEventRules.slice(0, 2).map((rule) => buildRangeLabel(rule, eventRuleLabel(rule))),
   ];
 
   return {
     venue,
+    daySpecialRules,
     dayHappyHourRules,
     dayEventRules,
     dayEventTypes,
     isRelevantOnDay,
     primaryStartMinutes,
     hasLunchSpecials,
+    activeKidRule,
+    activeDogRule,
+    urgencyLabel: null,
     badges,
     cardEyebrow,
     timeHighlights,
@@ -742,6 +751,10 @@ function buildWeekRow(venue: Venue, selectedDay: DayOption) {
 function matchesWeekFilter(row: WeekRow, filter: WeekFilter) {
   if (filter === 'all') return true;
   if (filter === 'happy_hour') return row.dayHappyHourRules.length > 0;
+  if (filter === 'specials') return row.daySpecialRules.length > 0;
+  if (filter === 'lunch_specials') return row.hasLunchSpecials;
+  if (filter === 'kid_friendly_now') return Boolean(row.activeKidRule);
+  if (filter === 'dog_friendly_now') return Boolean(row.activeDogRule);
   if (filter === 'events') return row.dayEventRules.length > 0;
   if (filter === 'trivia') return row.dayEventTypes.includes('trivia');
   if (filter === 'live_music') return row.dayEventTypes.includes('live_music');
@@ -766,8 +779,11 @@ function matchesSearchText(row: WeekRow, searchTerm: string) {
     row.venue.name,
     row.venue.suburb,
     row.venue.address,
+    ...row.daySpecialRules.flatMap((rule) => collectRuleSearchParts(rule)),
     ...row.dayHappyHourRules.flatMap((rule) => collectRuleSearchParts(rule)),
     ...row.dayEventRules.flatMap((rule) => collectRuleSearchParts(rule)),
+    row.activeKidRule ? getCompactVenueRuleSignal(row.activeKidRule) : null,
+    row.activeDogRule ? getCompactVenueRuleSignal(row.activeDogRule) : null,
   ]
     .filter(hasText)
     .join(' ')
@@ -789,16 +805,22 @@ function collectRuleSearchParts(rule: VenueScheduleRule) {
 function getFilterHeading(filter: WeekFilter, selectedDay: DayOption) {
   const suffix = selectedDay.isToday ? 'today' : selectedDay.label.toLowerCase();
   if (filter === 'happy_hour') return `Happy hour ${suffix}`;
+  if (filter === 'specials') return `Specials ${suffix}`;
+  if (filter === 'lunch_specials') return `Lunch specials ${suffix}`;
+  if (filter === 'kid_friendly_now') return `Kid friendly ${suffix}`;
+  if (filter === 'dog_friendly_now') return `Dog friendly ${suffix}`;
   if (filter === 'events') return `Events ${suffix}`;
   if (filter === 'trivia') return `Trivia ${suffix}`;
   if (filter === 'live_music') return `Live music ${suffix}`;
   if (filter === 'comedy') return `Comedy ${suffix}`;
   if (filter === 'karaoke') return `Karaoke ${suffix}`;
-  return selectedDay.isToday ? 'What&apos;s on today' : `What&apos;s on ${suffix}`;
+  return selectedDay.isToday ? "What's on today" : `What's on ${suffix}`;
 }
 
 function getFilterSectionKind(filter: WeekFilter): SectionKind {
   if (filter === 'happy_hour') return 'happy_hour';
+  if (filter === 'specials') return 'happy_hour';
+  if (filter === 'lunch_specials') return 'happy_hour';
   if (filter === 'events') return 'events';
   if (filter === 'trivia') return 'events';
   if (filter === 'live_music') return 'events';
@@ -870,28 +892,6 @@ function formatTimeHeading(minutes: number) {
   return formatTimeForUi(`${hour}:${minute}`);
 }
 
-function StatusPill({
-  children,
-  className,
-}: {
-  children: string;
-  className: string;
-}) {
-  return (
-    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${className}`}>
-      {children}
-    </span>
-  );
-}
-
-function TimePill({ children }: { children: string }) {
-  return (
-    <span className="rounded-full border border-white/8 bg-black/18 px-2.5 py-1 text-[10px] text-white/60">
-      {children}
-    </span>
-  );
-}
-
 function TopBadge({
   children,
   className,
@@ -901,9 +901,102 @@ function TopBadge({
 }) {
   return (
     <span
-      className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${className}`}
+      className={`rounded-full border px-2.5 py-0.75 text-[9px] font-semibold uppercase tracking-[0.12em] ${className}`}
     >
       {children}
     </span>
   );
 }
+
+function buildReasonToCare(
+  specialRules: VenueScheduleRule[],
+  happyHourRules: VenueScheduleRule[],
+  eventRules: VenueScheduleRule[]
+) {
+  if (specialRules.length > 0) {
+    return getCompactSpecialLine(specialRules[0]);
+  }
+
+  if (happyHourRules.length > 0) {
+    return getHappyHourOfferLine(happyHourRules[0]) ?? 'Happy hour this week';
+  }
+
+  if (eventRules.length > 0) {
+    const firstEvent = eventRules[0];
+    return getEventHeroLine(firstEvent);
+  }
+
+  return 'Worth planning for';
+}
+
+function buildSecondaryLine(
+  specialRules: VenueScheduleRule[],
+  happyHourRules: VenueScheduleRule[],
+  timeHighlights: string[],
+  dayBadgeLabel: string,
+  activeKidRule?: VenueScheduleRule | null,
+  activeDogRule?: VenueScheduleRule | null
+) {
+  const firstTiming = timeHighlights[0]?.replace(
+    /^(Happy hour|Lunch|Special|Trivia|Live music|Comedy|Karaoke|DJ|Event|Sport)\s+/i,
+    ''
+  );
+  const categorySummary =
+    happyHourRules.length > 0 ? buildHappyHourCategorySummary(happyHourRules) : null;
+  const specialSummary = specialRules[0] ? getCompactSpecialLine(specialRules[0]) : null;
+  const supportiveSignals = [activeKidRule, activeDogRule]
+    .map((rule) => (rule ? getCompactVenueRuleSignal(rule) : null))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(' | ');
+
+  if (specialSummary && supportiveSignals) return `${specialSummary} ? ${supportiveSignals}`;
+  if (specialSummary && firstTiming) return `${specialSummary} ? ${firstTiming}`;
+  if (categorySummary && firstTiming) return `${categorySummary} ? ${firstTiming}`;
+  if (supportiveSignals && firstTiming) return `${supportiveSignals} ? ${firstTiming}`;
+  if (supportiveSignals) return supportiveSignals;
+  if (specialSummary) return specialSummary;
+  if (categorySummary) return categorySummary;
+  return firstTiming ?? dayBadgeLabel;
+}
+
+function buildHappyHourCategorySummary(rules: VenueScheduleRule[]) {
+  const categories = HAPPY_HOUR_CATEGORIES.filter((category) =>
+    rules.some((rule) => getDisplayHappyHourItems(rule.detail_json, category.key).length > 0)
+  ).map((category) => category.label.replace(/^[^\s]+\s/, ''));
+
+  return categories.slice(0, 3).join(' | ');
+}
+
+
+function getHappyHourOfferLine(rule: VenueScheduleRule | undefined) {
+  if (!rule) return null;
+
+  const categories = HAPPY_HOUR_CATEGORIES.flatMap((category) =>
+    getDisplayHappyHourItems(rule.detail_json, category.key)
+      .slice(0, 1)
+      .map((item) => {
+        const price = item.price != null ? `$${item.price}` : null;
+        const label = item.priceLabel?.trim() ? ` ${item.priceLabel.trim()}` : '';
+        if (price) return `${price}${label} ${item.title}`.trim();
+        return item.title;
+      })
+  ).filter(Boolean) as string[];
+
+  if (categories.length > 0) {
+    return categories.slice(0, 2).join(' + ');
+  }
+
+  return rule.deal_text?.trim() || rule.description?.trim() || null;
+}
+
+function getEventHeroLine(rule: VenueScheduleRule) {
+  const text =
+    rule.deal_text?.trim() ||
+    rule.title?.trim() ||
+    rule.description?.trim() ||
+    eventRuleLabel(rule);
+  if (text.toLowerCase().includes('from ') || text.toLowerCase().includes('now')) return text;
+  return `${text} from ${formatTimeForUi(rule.start_time.slice(0, 5))}`;
+}
+

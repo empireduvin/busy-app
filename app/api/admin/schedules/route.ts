@@ -1,56 +1,18 @@
 import { NextResponse } from 'next/server';
 import { requireAdminRequest } from '@/lib/admin-server';
 import { getErrorStatus } from '@/lib/authz';
-
-type ScheduleType =
-  | 'opening'
-  | 'kitchen'
-  | 'happy_hour'
-  | 'bottle_shop'
-  | 'trivia'
-  | 'live_music'
-  | 'sport'
-  | 'comedy'
-  | 'karaoke'
-  | 'dj'
-  | 'special_event';
-
-type DayOfWeek =
-  | 'monday'
-  | 'tuesday'
-  | 'wednesday'
-  | 'thursday'
-  | 'friday'
-  | 'saturday'
-  | 'sunday';
+import {
+  DAY_OPTIONS,
+  SCHEDULE_TYPE_OPTIONS,
+  isValidDayOfWeek,
+  isValidScheduleType,
+  type DayOfWeek,
+  type ScheduleType,
+} from '@/lib/schedule-rules';
 
 type OpeningHours = Partial<
   Record<DayOfWeek, Array<{ open: string; close: string }>>
 >;
-
-const DAY_VALUES: DayOfWeek[] = [
-  'monday',
-  'tuesday',
-  'wednesday',
-  'thursday',
-  'friday',
-  'saturday',
-  'sunday',
-];
-
-const SCHEDULE_TYPE_VALUES: ScheduleType[] = [
-  'opening',
-  'kitchen',
-  'happy_hour',
-  'bottle_shop',
-  'trivia',
-  'live_music',
-  'sport',
-  'comedy',
-  'karaoke',
-  'dj',
-  'special_event',
-];
 
 type IncomingScheduleRow = {
   venue_id?: string;
@@ -67,14 +29,6 @@ type IncomingScheduleRow = {
   is_active?: boolean | null;
   status?: string | null;
 };
-
-function isValidScheduleType(value: string): value is ScheduleType {
-  return SCHEDULE_TYPE_VALUES.includes(value as ScheduleType);
-}
-
-function isValidDayOfWeek(value: string): value is DayOfWeek {
-  return DAY_VALUES.includes(value as DayOfWeek);
-}
 
 function isValidTimeValue(value: string) {
   return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(value.trim());
@@ -157,15 +111,7 @@ function buildHoursJsonFromRows(
     sort_order?: number | null;
   }>
 ): OpeningHours | null {
-  const orderedDays: DayOfWeek[] = [
-    'monday',
-    'tuesday',
-    'wednesday',
-    'thursday',
-    'friday',
-    'saturday',
-    'sunday',
-  ];
+  const orderedDays: DayOfWeek[] = DAY_OPTIONS.map((option) => option.value);
 
   const output: OpeningHours = {};
 

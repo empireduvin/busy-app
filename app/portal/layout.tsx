@@ -4,7 +4,7 @@ import { getSupabaseBrowserClientResult } from '@/lib/supabase-browser';
 import { BROWSER_SUPABASE_ENV_ERROR } from '@/lib/public-env';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 type GuardState = 'checking' | 'authorized' | 'unauthorized';
 
@@ -16,10 +16,16 @@ export default function PortalLayout({
   const supabase = useMemo(() => getSupabaseBrowserClientResult().client, []);
   const router = useRouter();
   const pathname = usePathname();
+  const pathnameRef = useRef(pathname);
+  const authorizedRef = useRef(false);
   const [guardState, setGuardState] = useState<GuardState>('checking');
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
 
   useEffect(() => {
     let mounted = true;
@@ -31,13 +37,14 @@ export default function PortalLayout({
       };
     }
 
-    async function checkAccess(showLoading = true) {
+    async function checkAccess(showLoading = !authorizedRef.current) {
       if (showLoading) {
         setGuardState('checking');
+        setErrorMessage(null);
       }
-      setErrorMessage(null);
       if (!supabase) {
         setErrorMessage(BROWSER_SUPABASE_ENV_ERROR);
+        authorizedRef.current = false;
         setGuardState('unauthorized');
         return;
       }
@@ -51,12 +58,15 @@ export default function PortalLayout({
 
       if (sessionError) {
         setErrorMessage(sessionError.message);
+        authorizedRef.current = false;
         setGuardState('unauthorized');
         return;
       }
 
       if (!session?.user) {
-        router.replace(`/login?next=${encodeURIComponent(pathname || '/portal')}`);
+        router.replace(
+          `/login?next=${encodeURIComponent(pathnameRef.current || '/portal')}`
+        );
         return;
       }
 
@@ -80,21 +90,25 @@ export default function PortalLayout({
 
       if (adminError) {
         setErrorMessage(adminError.message);
+        authorizedRef.current = false;
         setGuardState('unauthorized');
         return;
       }
 
       if (venueError) {
         setErrorMessage(venueError.message);
+        authorizedRef.current = false;
         setGuardState('unauthorized');
         return;
       }
 
       if (adminRow?.user_id || (venueRows?.length ?? 0) > 0) {
+        authorizedRef.current = true;
         setGuardState('authorized');
         return;
       }
 
+      authorizedRef.current = false;
       setGuardState('unauthorized');
     }
 
@@ -112,7 +126,10 @@ export default function PortalLayout({
 
       setUserEmail(session.user.email ?? null);
 
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+      if (
+        event === 'SIGNED_IN' ||
+        event === 'USER_UPDATED'
+      ) {
         void checkAccess(false);
       }
     });
@@ -121,7 +138,7 @@ export default function PortalLayout({
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [pathname, router, supabase]);
+  }, [router, supabase]);
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -189,16 +206,16 @@ export default function PortalLayout({
 
   return (
     <>
-      <div className="sticky top-0 z-50 border-b border-white/10 bg-black/90 px-4 py-3 text-white backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-          <div className="text-sm">
+      <div className="sticky top-0 z-50 border-b border-white/10 bg-black/90 px-3 py-2 text-white backdrop-blur sm:px-4 sm:py-2.5">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0 text-sm leading-tight">
             <span className="font-semibold">Venue Portal</span>
-            {userEmail ? <span className="text-white/50"> | {userEmail}</span> : null}
+            {userEmail ? <span className="truncate text-white/50"> | {userEmail}</span> : null}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Link
               href="/portal"
-              className="inline-flex min-h-[44px] items-center rounded-xl border border-white/10 px-3 py-2 text-sm font-medium hover:bg-white/5"
+              className="inline-flex min-h-[38px] items-center whitespace-nowrap rounded-xl border border-white/10 px-3 py-1.5 text-sm font-medium hover:bg-white/5"
             >
               Dashboard
             </Link>
@@ -206,7 +223,7 @@ export default function PortalLayout({
               type="button"
               onClick={handleSignOut}
               disabled={signingOut}
-              className="inline-flex min-h-[44px] items-center rounded-xl border border-white/10 px-3 py-2 text-sm font-medium hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex min-h-[38px] items-center whitespace-nowrap rounded-xl border border-white/10 px-3 py-1.5 text-sm font-medium hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {signingOut ? 'Signing out...' : 'Sign out'}
             </button>

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
@@ -7,15 +7,33 @@ import {
   type HappyHourDetailItem,
   type HappyHourDetailJson,
   type HappyHourPrice,
+  type ScheduleRuleDetailJson,
   getHappyHourItemPrices,
   normalizeHappyHourDetailCategory,
   normalizeHappyHourDetailJson,
+  normalizeScheduleRuleDetailJson,
   normalizeVenueSuburb,
 } from '@/lib/venue-data';
 import {
   getEffectiveKitchenHours,
   isRestaurantOrCafeVenueType,
 } from '@/lib/venue-type-rules';
+import {
+  DAY_OPTIONS,
+  DEAL_SCHEDULE_TYPES,
+  EVENT_SCHEDULE_TYPES,
+  HOURS_SCHEDULE_TYPES,
+  SCHEDULE_TYPE_OPTIONS,
+  VENUE_RULE_KIND_OPTIONS,
+  getScheduleTypeLabel,
+  getVenueRuleKindLabel,
+  isDealScheduleType,
+  isEventScheduleType,
+  isVenueRuleScheduleType,
+  type DayOfWeek,
+  type ScheduleType,
+  type VenueRuleKind,
+} from '@/lib/schedule-rules';
 
 type AdminTab = 'schedules' | 'venues';
 
@@ -70,7 +88,7 @@ type VenueScheduleRule = {
   description?: string | null;
   deal_text?: string | null;
   notes?: string | null;
-  detail_json?: HappyHourDetailJson | null;
+  detail_json?: ScheduleRuleDetailJson | null;
   is_active?: boolean | null;
   status?: string | null;
 };
@@ -92,8 +110,11 @@ type Venue = {
   shows_sport?: boolean | null;
   plays_with_sound?: boolean | null;
   sport_types?: string | null;
+  sport_notes?: string | null;
   dog_friendly?: boolean | null;
+  dog_friendly_notes?: string | null;
   kid_friendly?: boolean | null;
+  kid_friendly_notes?: string | null;
   opening_hours?: unknown | null;
   kitchen_hours?: OpeningHours | null;
   happy_hour_hours?: OpeningHours | null;
@@ -111,28 +132,6 @@ const DEFAULT_ADMIN_VENUE_TYPES: VenueType[] = [
   { id: 'cafe', display_name: 'cafe', raw_value: 'cafe' },
   { id: 'bottle_shop', display_name: 'bottle shop', raw_value: 'bottle_shop' },
 ];
-
-type ScheduleType =
-  | 'opening'
-  | 'kitchen'
-  | 'happy_hour'
-  | 'bottle_shop'
-  | 'trivia'
-  | 'live_music'
-  | 'sport'
-  | 'comedy'
-  | 'karaoke'
-  | 'dj'
-  | 'special_event';
-
-type DayOfWeek =
-  | 'monday'
-  | 'tuesday'
-  | 'wednesday'
-  | 'thursday'
-  | 'friday'
-  | 'saturday'
-  | 'sunday';
 
 type SaveMode = 'append' | 'replace';
 
@@ -209,8 +208,11 @@ type VenueFormState = {
   shows_sport: boolean;
   plays_with_sound: boolean;
   sport_types: string;
+  sport_notes: string;
   dog_friendly: boolean;
+  dog_friendly_notes: string;
   kid_friendly: boolean;
+  kid_friendly_notes: string;
   opening_hours: unknown | null;
 };
 
@@ -271,7 +273,7 @@ type ExistingSchedulePreviewRow = {
   description: string | null;
   deal_text: string | null;
   notes: string | null;
-  detail_json: HappyHourDetailJson | null;
+  detail_json: ScheduleRuleDetailJson | null;
 };
 
 type VenueDaySummary = {
@@ -287,42 +289,10 @@ type VenueDaySummary = {
   }>;
 };
 
-const DAY_OPTIONS: { value: DayOfWeek; label: string }[] = [
-  { value: 'monday', label: 'Mon' },
-  { value: 'tuesday', label: 'Tue' },
-  { value: 'wednesday', label: 'Wed' },
-  { value: 'thursday', label: 'Thu' },
-  { value: 'friday', label: 'Fri' },
-  { value: 'saturday', label: 'Sat' },
-  { value: 'sunday', label: 'Sun' },
-];
-
-const SCHEDULE_TYPE_OPTIONS: { value: ScheduleType; label: string }[] = [
-  { value: 'opening', label: 'Opening Hours' },
-  { value: 'kitchen', label: 'Kitchen Hours' },
-  { value: 'happy_hour', label: 'Happy Hour' },
-  { value: 'bottle_shop', label: 'Bottle Shop Hours' },
-  { value: 'trivia', label: 'Trivia' },
-  { value: 'live_music', label: 'Live Music' },
-  { value: 'sport', label: 'Sport' },
-  { value: 'comedy', label: 'Comedy' },
-  { value: 'karaoke', label: 'Karaoke' },
-  { value: 'dj', label: 'DJ' },
-  { value: 'special_event', label: 'Special Event' },
-];
-
 const CORE_SINGLE_VENUE_TYPES: ScheduleType[] = ['opening', 'kitchen', 'happy_hour', 'bottle_shop'];
-const EVENT_SCHEDULE_TYPES: ScheduleType[] = [
-  'trivia',
-  'live_music',
-  'sport',
-  'comedy',
-  'karaoke',
-  'dj',
-  'special_event',
-];
 
 const ADMIN_ACTIVITY_LOG_KEY = 'busy-app-admin-activity-log';
+const ADMIN_UI_STATE_KEY = 'busy-app-admin-ui-state';
 const ADMIN_ACTIVITY_LOG_TABLE = 'admin_activity_logs';
 
 function makeId() {
@@ -479,14 +449,6 @@ function guessVenueTypeIdFromGoogle(
   return '';
 }
 
-function getScheduleTypeLabel(type: ScheduleType) {
-  return SCHEDULE_TYPE_OPTIONS.find((option) => option.value === type)?.label ?? type;
-}
-
-function isEventScheduleType(type: ScheduleType) {
-  return EVENT_SCHEDULE_TYPES.includes(type);
-}
-
 function normalizeComparisonText(value: string | null | undefined) {
   return (value ?? '').trim().toLowerCase().replace(/[_-]+/g, ' ');
 }
@@ -636,7 +598,7 @@ function getExistingSchedulePreviewRows(
       description: row.description ?? null,
       deal_text: row.deal_text ?? null,
       notes: row.notes ?? null,
-      detail_json: normalizeHappyHourDetailJson(row.detail_json),
+      detail_json: normalizeScheduleRuleDetailJson(row.detail_json),
     }))
     .filter((row) => row.start_time && row.end_time);
 
@@ -828,8 +790,11 @@ function diffVenuePayload(
     shows_sport: 'Shows live sport',
     plays_with_sound: 'Sport with sound',
     sport_types: 'Sport types',
+    sport_notes: 'Sport notes',
     dog_friendly: 'Dog friendly',
+    dog_friendly_notes: 'Dog-friendly notes',
     kid_friendly: 'Kid friendly',
+    kid_friendly_notes: 'Kid-friendly notes',
     opening_hours: 'Opening hours',
     kitchen_hours: 'Kitchen hours',
   };
@@ -850,8 +815,11 @@ function diffVenuePayload(
     shows_sport: originalVenue?.shows_sport ?? null,
     plays_with_sound: originalVenue?.plays_with_sound ?? null,
     sport_types: originalVenue?.sport_types ?? null,
+    sport_notes: originalVenue?.sport_notes ?? null,
     dog_friendly: originalVenue?.dog_friendly ?? null,
+    dog_friendly_notes: originalVenue?.dog_friendly_notes ?? null,
     kid_friendly: originalVenue?.kid_friendly ?? null,
+    kid_friendly_notes: originalVenue?.kid_friendly_notes ?? null,
     opening_hours: convertGoogleOpeningHours(originalVenue?.opening_hours) ?? null,
     kitchen_hours: originalVenue?.kitchen_hours ?? null,
   };
@@ -944,8 +912,11 @@ function blankVenueForm(): VenueFormState {
     shows_sport: false,
     plays_with_sound: false,
     sport_types: '',
+    sport_notes: '',
     dog_friendly: false,
+    dog_friendly_notes: '',
     kid_friendly: false,
+    kid_friendly_notes: '',
     opening_hours: null,
   };
 }
@@ -997,6 +968,17 @@ function getErrorMessage(error: unknown, fallback: string) {
     if (combined) return combined;
   }
   return fallback;
+}
+
+function parseStructuredPriceInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.replace(/^\$/, '');
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error('Special price must be a valid number.');
+  }
+  return Math.round(parsed * 100) / 100;
 }
 
 function getAdminFriendlyErrorMessage(error: unknown, fallback: string) {
@@ -1305,7 +1287,9 @@ export default function AdminMasterPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dealText, setDealText] = useState('');
+  const [specialPrice, setSpecialPrice] = useState('');
   const [notes, setNotes] = useState('');
+  const [venueRuleKind, setVenueRuleKind] = useState<VenueRuleKind>('kid');
   const [happyHourForm, setHappyHourForm] = useState<HappyHourFormState>(blankHappyHourForm());
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [clearingSchedule, setClearingSchedule] = useState(false);
@@ -1317,7 +1301,7 @@ export default function AdminMasterPage() {
   const [googleResults, setGoogleResults] = useState<GoogleSearchResult[]>([]);
   const [selectedGooglePlaceId, setSelectedGooglePlaceId] = useState<string | null>(null);
   const [activityLog, setActivityLog] = useState<AdminActivityEntry[]>([]);
-  const [showActivityLog, setShowActivityLog] = useState(true);
+  const [showActivityLog, setShowActivityLog] = useState(false);
   const [remoteActivityLogEnabled, setRemoteActivityLogEnabled] = useState(false);
   const [venueForm, setVenueForm] = useState<VenueFormState>(blankVenueForm());
   const [savingVenue, setSavingVenue] = useState(false);
@@ -1337,6 +1321,8 @@ export default function AdminMasterPage() {
   const [savingGlobalVenueAccess, setSavingGlobalVenueAccess] = useState(false);
   const [portalUserSearch, setPortalUserSearch] = useState('');
   const [portalUserCurrentVenueOnly, setPortalUserCurrentVenueOnly] = useState(false);
+  const [showVenuePickerMobile, setShowVenuePickerMobile] = useState(true);
+  const [scheduleWorkspaceArmed, setScheduleWorkspaceArmed] = useState(false);
 
   function requireSupabaseClient() {
     if (!supabase) {
@@ -1400,128 +1386,61 @@ export default function AdminMasterPage() {
       );
       return;
     }
-    loadVenues();
-    loadVenueTypes();
+    void loadAdminBootstrap();
     void loadPortalAccessOverview();
     void loadRemoteActivityLog();
   }, [supabase]);
 
-  async function loadVenues() {
+  async function loadAdminBootstrap() {
     setLoadingVenues(true);
+    setLoadingVenueTypes(true);
     setVenuesError(null);
     if (!supabase) {
       setVenues([]);
-      setVenuesError(
-        'Missing Supabase env vars. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local, then restart npm run dev.'
-      );
-      appendActivityLog({
-        area: 'data',
-        action: 'Load venues',
-        status: 'failure',
-        target: 'venues table',
-        details: 'Missing Supabase env vars.',
-      });
+      setVenueTypes([]);
       setLoadingVenues(false);
+      setLoadingVenueTypes(false);
       return;
     }
-    const { data, error } = await supabase
-      .from('venues')
-      .select(
-        'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, dog_friendly, kid_friendly, opening_hours, kitchen_hours, happy_hour_hours, venue_schedule_rules(id, venue_id, schedule_type, day_of_week, start_time, end_time, sort_order, title, description, deal_text, notes, detail_json, is_active, status)'
-      )
-      .order('name', { ascending: true });
-    if (error) {
-      setVenuesError(`Failed to load venues: ${error.message}`);
-      setVenues([]);
-      appendActivityLog({
-        area: 'data',
-        action: 'Load venues',
-        status: 'failure',
-        target: 'venues table',
-        details: error.message,
-      });
-    } else {
-      setVenues((data ?? []) as Venue[]);
+
+    try {
+      const result = await adminAuthedFetch<{
+        venues?: Venue[];
+        venueTypes?: VenueType[];
+        venueTypeError?: string | null;
+      }>('/api/admin/venues');
+
+      setVenues(result.venues ?? []);
+      setVenueTypes(mergeVenueTypeOptions(result.venueTypes ?? []));
+
+      if (result.venueTypeError) {
+        setVenuesError(`Failed to load venue types: ${result.venueTypeError}`);
+      }
+
       appendActivityLog({
         area: 'data',
         action: 'Load venues',
         status: 'success',
-        target: 'venues table',
-        details: `Loaded ${(data ?? []).length} venue record${(data ?? []).length === 1 ? '' : 's'}.`,
+        target: 'admin bootstrap',
+        details: `Loaded ${(result.venues ?? []).length} venue record${(result.venues ?? []).length === 1 ? '' : 's'} and ${(
+          result.venueTypes ?? []
+        ).length} venue type${(result.venueTypes ?? []).length === 1 ? '' : 's'}.`,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to load admin data.';
+      setVenues([]);
+      setVenueTypes([]);
+      setVenuesError(message);
+      appendActivityLog({
+        area: 'data',
+        action: 'Load venues',
+        status: 'failure',
+        target: 'admin bootstrap',
+        details: message,
       });
     }
     setLoadingVenues(false);
-  }
-
-  async function loadVenueTypes() {
-    setLoadingVenueTypes(true);
-    if (!supabase) {
-      setVenueTypes([]);
-      setVenuesError(
-        'Missing Supabase env vars. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local, then restart npm run dev.'
-      );
-      appendActivityLog({
-        area: 'data',
-        action: 'Load venue types',
-        status: 'failure',
-        target: 'venue_types table',
-        details: 'Missing Supabase env vars.',
-      });
-      setLoadingVenueTypes(false);
-      return;
-    }
-    const attempts = [
-      { select: 'id, name', field: 'name' },
-      { select: 'id, label', field: 'label' },
-      { select: 'id, title', field: 'title' },
-      { select: 'id, venue_type', field: 'venue_type' },
-      { select: 'id, slug', field: 'slug' },
-      { select: 'id, type_name', field: 'type_name' },
-      { select: 'id, display_name', field: 'display_name' },
-    ] as const;
-    let loaded = false;
-    let lastError = '';
-    for (const attempt of attempts) {
-      const { data, error } = await supabase
-        .from('venue_types')
-        .select(attempt.select)
-        .order(attempt.field, { ascending: true });
-      if (!error && data) {
-        const mapped = (data as Array<Record<string, unknown>>)
-          .map((row) => ({
-            id: String(row.id),
-            display_name: String(row[attempt.field]),
-            raw_value: String(row[attempt.field]),
-          }))
-          .filter((row) => row.id && row.display_name);
-        setVenueTypes(mergeVenueTypeOptions(mapped));
-        appendActivityLog({
-          area: 'data',
-          action: 'Load venue types',
-          status: 'success',
-          target: 'venue_types table',
-          details: `Loaded ${mergeVenueTypeOptions(mapped).length} venue type${mergeVenueTypeOptions(mapped).length === 1 ? '' : 's'}.`,
-        });
-        loaded = true;
-        break;
-      }
-      if (error) {
-        lastError = error.message;
-      }
-    }
-    if (!loaded) {
-      setVenueTypes(mergeVenueTypeOptions([]));
-      setVenuesError(
-        `Failed to load venue types: ${lastError || 'Could not detect label column in venue_types table.'}`
-      );
-      appendActivityLog({
-        area: 'data',
-        action: 'Load venue types',
-        status: 'failure',
-        target: 'venue_types table',
-        details: lastError || 'Could not detect label column.',
-      });
-    }
     setLoadingVenueTypes(false);
   }
 
@@ -1546,11 +1465,58 @@ export default function AdminMasterPage() {
 
   useEffect(() => {
     try {
+      const stored = window.sessionStorage.getItem(ADMIN_UI_STATE_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as Partial<{
+        tab: AdminTab;
+        search: string;
+        selectedVenueIds: string[];
+        scheduleType: ScheduleType;
+        saveMode: SaveMode;
+        showActivityLog: boolean;
+      }>;
+
+      if (parsed.tab === 'schedules' || parsed.tab === 'venues') setTab(parsed.tab);
+      if (typeof parsed.search === 'string') setSearch(parsed.search);
+      if (Array.isArray(parsed.selectedVenueIds)) {
+        setSelectedVenueIds(parsed.selectedVenueIds.filter((value): value is string => typeof value === 'string'));
+      }
+      if (typeof parsed.scheduleType === 'string') {
+        const validScheduleType = SCHEDULE_TYPE_OPTIONS.some((option) => option.value === parsed.scheduleType);
+        if (validScheduleType) setScheduleType(parsed.scheduleType);
+      }
+      if (parsed.saveMode === 'append' || parsed.saveMode === 'replace') setSaveMode(parsed.saveMode);
+      if (typeof parsed.showActivityLog === 'boolean') setShowActivityLog(parsed.showActivityLog);
+    } catch {
+      // Ignore storage failures
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
       window.localStorage.setItem(ADMIN_ACTIVITY_LOG_KEY, JSON.stringify(activityLog));
     } catch {
       // Ignore storage failures
     }
   }, [activityLog]);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(
+        ADMIN_UI_STATE_KEY,
+        JSON.stringify({
+          tab,
+          search,
+          selectedVenueIds,
+          scheduleType,
+          saveMode,
+          showActivityLog,
+        })
+      );
+    } catch {
+      // Ignore storage failures
+    }
+  }, [saveMode, scheduleType, search, selectedVenueIds, showActivityLog, tab]);
 
   function appendActivityLog(
     entry: Omit<AdminActivityEntry, 'id' | 'timestamp'>
@@ -1687,7 +1653,25 @@ export default function AdminMasterPage() {
     return selected.slice(0, 5);
   }, [selectedVenueIds, venues]);
 
+  useEffect(() => {
+    if (selectedVenueIds.length === 0) {
+      setScheduleWorkspaceArmed(false);
+    }
+  }, [selectedVenueIds]);
+
   function toggleVenue(id: string) {
+    setScheduleWorkspaceArmed(false);
+    setScheduleMessage(null);
+    setScheduleErrorMessage(null);
+    setSelectedVenueIds((current) =>
+      current.includes(id) ? current : [...current, id]
+    );
+  }
+
+  function toggleVenueCheckbox(id: string) {
+    setScheduleWorkspaceArmed(false);
+    setScheduleMessage(null);
+    setScheduleErrorMessage(null);
     setSelectedVenueIds((current) =>
       current.includes(id)
         ? current.filter((item) => item !== id)
@@ -1697,6 +1681,9 @@ export default function AdminMasterPage() {
 
   function selectAllFiltered() {
     const filteredIds = filteredVenues.map((venue) => venue.id);
+    setScheduleWorkspaceArmed(false);
+    setScheduleMessage(null);
+    setScheduleErrorMessage(null);
     setSelectedVenueIds((current) => {
       const set = new Set([...current, ...filteredIds]);
       return Array.from(set);
@@ -1705,6 +1692,9 @@ export default function AdminMasterPage() {
 
   function clearFiltered() {
     const filteredIds = new Set(filteredVenues.map((venue) => venue.id));
+    setScheduleWorkspaceArmed(false);
+    setScheduleMessage(null);
+    setScheduleErrorMessage(null);
     setSelectedVenueIds((current) =>
       current.filter((id) => !filteredIds.has(id))
     );
@@ -1774,7 +1764,9 @@ export default function AdminMasterPage() {
     setTitle('');
     setDescription('');
     setDealText('');
+    setSpecialPrice('');
     setNotes('');
+    setVenueRuleKind('kid');
     setHappyHourForm(blankHappyHourForm());
   }
 
@@ -1793,7 +1785,9 @@ export default function AdminMasterPage() {
       new Set(sortedRows.map((row) => row.day_of_week))
     ) as DayOfWeek[];
     const firstRow = sortedRows[0];
-    const mergedDetailJson = sortedRows.find((row) => row.detail_json)?.detail_json ?? null;
+    const mergedDetailJson = normalizeScheduleRuleDetailJson(
+      sortedRows.find((row) => row.detail_json)?.detail_json ?? null
+    );
 
     setScheduleType(targetScheduleType);
     setSelectedDays(uniqueDays);
@@ -1806,6 +1800,9 @@ export default function AdminMasterPage() {
     setTitle(firstRow?.title ?? '');
     setDescription(firstRow?.description ?? '');
     setDealText(firstRow?.deal_text ?? '');
+    setSpecialPrice(
+      mergedDetailJson?.special_price != null ? String(mergedDetailJson.special_price) : ''
+    );
     setNotes(firstRow?.notes ?? mergedDetailJson?.notes ?? '');
 
     if (targetScheduleType === 'happy_hour') {
@@ -1817,6 +1814,10 @@ export default function AdminMasterPage() {
         food: parseDetailCategoryToItems(mergedDetailJson?.food),
         notes: mergedDetailJson?.notes ?? firstRow?.notes ?? '',
       });
+    }
+
+    if (targetScheduleType === 'venue_rule') {
+      setVenueRuleKind(mergedDetailJson?.rule_kind === 'dog' ? 'dog' : 'kid');
     }
 
     setSaveMode('replace');
@@ -1834,6 +1835,7 @@ export default function AdminMasterPage() {
     day: DayOfWeek,
     targetScheduleType: ScheduleType
   ) {
+    setScheduleWorkspaceArmed(true);
     setSelectedVenueIds([venue.id]);
     const rows = getExistingSchedulePreviewRows(venue, targetScheduleType).filter(
       (row) => row.day_of_week === day
@@ -1846,7 +1848,9 @@ export default function AdminMasterPage() {
       setTitle('');
       setDescription('');
       setDealText('');
+      setSpecialPrice('');
       setNotes('');
+      setVenueRuleKind('kid');
       if (targetScheduleType === 'happy_hour') {
         setHappyHourForm(blankHappyHourForm());
       }
@@ -1866,11 +1870,17 @@ export default function AdminMasterPage() {
   }
 
   function renderScheduleTypeOptions() {
-    const hourOptions = SCHEDULE_TYPE_OPTIONS.filter(
-      (option) => !isEventScheduleType(option.value)
+    const hourOptions = SCHEDULE_TYPE_OPTIONS.filter((option) =>
+      HOURS_SCHEDULE_TYPES.includes(option.value)
+    );
+    const dealOptions = SCHEDULE_TYPE_OPTIONS.filter((option) =>
+      DEAL_SCHEDULE_TYPES.includes(option.value)
     );
     const eventOptions = SCHEDULE_TYPE_OPTIONS.filter((option) =>
       isEventScheduleType(option.value)
+    );
+    const venueRuleOptions = SCHEDULE_TYPE_OPTIONS.filter((option) =>
+      option.value === 'venue_rule'
     );
 
     return (
@@ -1882,8 +1892,22 @@ export default function AdminMasterPage() {
             </option>
           ))}
         </optgroup>
+        <optgroup label="Deals">
+          {dealOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </optgroup>
         <optgroup label="Events">
           {eventOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="Venue Rules">
+          {venueRuleOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
@@ -2040,6 +2064,7 @@ export default function AdminMasterPage() {
   }, [portalAccessGroups, portalUserSearch, portalUserCurrentVenueOnly, venueForm.id]);
 
   function populateVenueFormFromExistingVenue(venue: Venue) {
+    setScheduleWorkspaceArmed(false);
     setVenueForm({
       id: venue.id ?? null,
       name: venue.name ?? '',
@@ -2058,8 +2083,11 @@ export default function AdminMasterPage() {
       shows_sport: normalizeBooleanFlag(venue.shows_sport),
       plays_with_sound: normalizeBooleanFlag(venue.plays_with_sound),
       sport_types: venue.sport_types ?? '',
+      sport_notes: venue.sport_notes ?? '',
       dog_friendly: normalizeBooleanFlag(venue.dog_friendly),
+      dog_friendly_notes: venue.dog_friendly_notes ?? '',
       kid_friendly: normalizeBooleanFlag(venue.kid_friendly),
+      kid_friendly_notes: venue.kid_friendly_notes ?? '',
       opening_hours: convertGoogleOpeningHours(venue.opening_hours) ?? null,
     });
     setTab('venues');
@@ -2073,6 +2101,7 @@ export default function AdminMasterPage() {
   function focusVenueInScheduleEditor(venue: Venue) {
     setTab('schedules');
     setSelectedVenueIds([venue.id]);
+    setScheduleWorkspaceArmed(true);
     setScheduleErrorMessage(null);
     setScheduleMessage(
       `Loaded ${venue.name ?? 'venue'} into the weekly editor. Review existing details below and amend directly.`
@@ -2170,8 +2199,11 @@ export default function AdminMasterPage() {
         shows_sport: normalizeBooleanFlag(existingMatch?.shows_sport),
         plays_with_sound: normalizeBooleanFlag(existingMatch?.plays_with_sound),
         sport_types: existingMatch?.sport_types ?? '',
+        sport_notes: existingMatch?.sport_notes ?? '',
         dog_friendly: normalizeBooleanFlag(existingMatch?.dog_friendly),
+        dog_friendly_notes: existingMatch?.dog_friendly_notes ?? '',
         kid_friendly: normalizeBooleanFlag(existingMatch?.kid_friendly),
+        kid_friendly_notes: existingMatch?.kid_friendly_notes ?? '',
         opening_hours: convertGoogleRegularOpeningHoursToOpeningHours(
           place.regularOpeningHours
         ) ?? existingMatch?.opening_hours ?? null,
@@ -2265,8 +2297,11 @@ export default function AdminMasterPage() {
         shows_sport: venueForm.shows_sport,
         plays_with_sound: venueForm.plays_with_sound,
         sport_types: venueForm.sport_types.trim() || null,
+        sport_notes: venueForm.sport_notes.trim() || null,
         dog_friendly: venueForm.dog_friendly,
+        dog_friendly_notes: venueForm.dog_friendly_notes.trim() || null,
         kid_friendly: venueForm.kid_friendly,
+        kid_friendly_notes: venueForm.kid_friendly_notes.trim() || null,
         opening_hours: openingHours,
         kitchen_hours: getEffectiveKitchenHours(
           venueTypeName,
@@ -2322,14 +2357,21 @@ export default function AdminMasterPage() {
               ? normalizeBooleanFlag(result.venue.plays_with_sound)
               : current.plays_with_sound,
           sport_types: String(result.venue?.sport_types ?? current.sport_types ?? ''),
+          sport_notes: String(result.venue?.sport_notes ?? current.sport_notes ?? ''),
           dog_friendly:
             result.venue?.dog_friendly != null
               ? normalizeBooleanFlag(result.venue.dog_friendly)
               : current.dog_friendly,
+          dog_friendly_notes: String(
+            result.venue?.dog_friendly_notes ?? current.dog_friendly_notes ?? ''
+          ),
           kid_friendly:
             result.venue?.kid_friendly != null
               ? normalizeBooleanFlag(result.venue.kid_friendly)
               : current.kid_friendly,
+          kid_friendly_notes: String(
+            result.venue?.kid_friendly_notes ?? current.kid_friendly_notes ?? ''
+          ),
           opening_hours:
             result.venue?.opening_hours != null
               ? result.venue.opening_hours
@@ -2364,8 +2406,7 @@ export default function AdminMasterPage() {
                 ),
               ].join(' | '),
       });
-      await loadVenues();
-      await loadVenueTypes();
+      await loadAdminBootstrap();
       await loadPortalAccessOverview();
       if (result.id) {
         await loadVenueAccess(String(result.id));
@@ -2458,8 +2499,32 @@ export default function AdminMasterPage() {
       });
       return;
     }
+    let structuredSpecialPrice: number | null = null;
+    if (scheduleType === 'daily_special' || scheduleType === 'lunch_special') {
+      try {
+        structuredSpecialPrice = parseStructuredPriceInput(specialPrice);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Special price must be a valid number.';
+        setScheduleErrorMessage(message);
+        appendActivityLog({
+          area: 'schedules',
+          action: 'Save schedule',
+          status: 'failure',
+          target: getVenueTargetLabel(selectedVenueIds),
+          details: `Validation: ${message}`,
+        });
+        return;
+      }
+    }
     const happyHourDetailJson =
       scheduleType === 'happy_hour' ? buildHappyHourDetailJson(happyHourForm) : null;
+    const venueRuleDetailJson =
+      scheduleType === 'venue_rule' ? normalizeScheduleRuleDetailJson({ rule_kind: venueRuleKind }) : null;
+    const specialDetailJson =
+      scheduleType === 'daily_special' || scheduleType === 'lunch_special'
+        ? normalizeScheduleRuleDetailJson({ special_price: structuredSpecialPrice })
+        : null;
     const generatedHappyHourSummary =
       scheduleType === 'happy_hour' ? buildHappyHourDealSummary(happyHourForm) : null;
     setSavingSchedule(true);
@@ -2483,7 +2548,7 @@ export default function AdminMasterPage() {
               scheduleType === 'happy_hour'
                 ? (notes.trim() || happyHourForm.notes.trim() || null)
                 : notes.trim() || null,
-            detail_json: happyHourDetailJson,
+            detail_json: happyHourDetailJson ?? venueRuleDetailJson ?? specialDetailJson,
             is_active: true,
             status: 'published',
           }))
@@ -2500,7 +2565,7 @@ export default function AdminMasterPage() {
           selectedDays,
         }),
       });
-      await loadVenues();
+      await loadAdminBootstrap();
       setScheduleMessage(
         `Saved ${rows.length} schedule row${rows.length === 1 ? '' : 's'}.`
       );
@@ -2775,7 +2840,7 @@ export default function AdminMasterPage() {
           selectedDays,
         }),
       });
-      await loadVenues();
+      await loadAdminBootstrap();
 
       setScheduleMessage(
         `Deleted ${getScheduleTypeLabel(scheduleType).toLowerCase()} for ${formatActivityDays(selectedDays)}.`
@@ -2844,7 +2909,7 @@ export default function AdminMasterPage() {
           scheduleType,
         }),
       });
-      await loadVenues();
+      await loadAdminBootstrap();
 
       setScheduleMessage(
         `Deleted all ${getScheduleTypeLabel(scheduleType).toLowerCase()} rows for the selected venue${selectedVenueIds.length === 1 ? '' : 's'}.`
@@ -2953,6 +3018,7 @@ export default function AdminMasterPage() {
 
   const selectedCount = selectedVenueIds.length;
   const isSingleVenueMode = selectedCount === 1;
+  const isScheduleWorkspaceActive = selectedCount > 0 && scheduleWorkspaceArmed;
   const selectedVenueSummary =
     selectedCount === 0
       ? 'No venues selected yet'
@@ -2988,22 +3054,50 @@ export default function AdminMasterPage() {
 
   return (
     <div className="admin-shell min-h-screen bg-neutral-100 text-neutral-950">
-      <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
+      <div className="mx-auto max-w-7xl px-3 py-3 sm:px-4 sm:py-4 md:px-6">
+        <div className="mb-3 sm:mb-4">
+          <h1 className="text-xl font-bold tracking-tight text-neutral-900 sm:text-2xl">
             Master Admin
           </h1>
-          <p className="mt-2 text-sm text-neutral-700">
-            Manage schedules, create venues, and pull Google venue data from one place.
+          <p className="mt-1 text-sm text-neutral-700">
+            Search a venue, edit what matters, then save.
           </p>
         </div>
 
-        <section className="mb-6 rounded-2xl border border-neutral-300 bg-white p-4 shadow-md">
+        <div className="mb-3 flex flex-wrap gap-2 sm:mb-4">
+          <button
+            type="button"
+            onClick={() => setTab('schedules')}
+            className={`rounded-xl px-3.5 py-2 text-sm font-semibold ${
+              tab === 'schedules'
+                ? 'bg-neutral-900 text-white'
+                : 'border border-neutral-300 bg-white hover:bg-neutral-100'
+            }`}
+          >
+            Schedules
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setScheduleWorkspaceArmed(false);
+              setTab('venues');
+            }}
+            className={`rounded-xl px-3.5 py-2 text-sm font-semibold ${
+              tab === 'venues'
+                ? 'bg-neutral-900 text-white'
+                : 'border border-neutral-300 bg-white hover:bg-neutral-100'
+            }`}
+          >
+            Venues / Google
+          </button>
+        </div>
+
+        <section className="admin-surface mb-3 rounded-2xl border p-3 sm:mb-4 sm:p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold text-neutral-900">Activity Log</h2>
+              <h2 className="text-base font-semibold text-neutral-900 sm:text-lg">Activity log</h2>
               <p className="mt-1 text-sm text-neutral-700">
-                Tracks admin updates, loads, Google actions, and whether they succeeded or failed.
+                Secondary session history for admin actions.
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                 <span
@@ -3021,28 +3115,31 @@ export default function AdminMasterPage() {
               <button
                 type="button"
                 onClick={() => setShowActivityLog((current) => !current)}
-                className="min-h-[44px] rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-100"
+                className="admin-ghost-button min-h-[40px] rounded-xl border px-3 py-2 text-sm font-medium"
               >
-                {showActivityLog ? 'Hide log' : 'Show log'}
+                {showActivityLog ? 'Hide activity log' : 'Show activity log'}
               </button>
-              <button
-                type="button"
-                onClick={clearActivityLog}
-                className="min-h-[44px] rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-100"
-              >
-                Clear log
-              </button>
+              {showActivityLog ? (
+                <button
+                  type="button"
+                  onClick={clearActivityLog}
+                  className="admin-ghost-button min-h-[40px] rounded-xl border px-3 py-2 text-sm font-medium"
+                >
+                  Clear log
+                </button>
+              ) : null}
             </div>
           </div>
-          {showActivityLog ? (
-            <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto">
+          <div className={`grid transition-[grid-template-rows,opacity] duration-200 ${showActivityLog ? 'mt-3 grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+            <div className="min-h-0 overflow-hidden">
+              <div className="max-h-[420px] space-y-3 overflow-y-auto">
               {activityLog.length === 0 ? (
                 <div className="text-sm text-neutral-500">No admin activity logged yet.</div>
               ) : (
                 activityLog.map((entry) => (
                   <div
                     key={entry.id}
-                    className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-3 text-neutral-900"
+                    className="admin-surface-subtle rounded-xl border px-3 py-3 text-neutral-900"
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <span
@@ -3070,158 +3167,267 @@ export default function AdminMasterPage() {
                   </div>
                 ))
               )}
+              </div>
             </div>
-          ) : null}
+          </div>
         </section>
 
-        <div className="mb-6 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setTab('schedules')}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold ${
-              tab === 'schedules'
-                ? 'bg-neutral-900 text-white'
-                : 'border border-neutral-300 bg-white hover:bg-neutral-100'
-            }`}
-          >
-            Schedules
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('venues')}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold ${
-              tab === 'venues'
-                ? 'bg-neutral-900 text-white'
-                : 'border border-neutral-300 bg-white hover:bg-neutral-100'
-            }`}
-          >
-            Venues / Google
-          </button>
-        </div>
-
         {venuesError ? (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 sm:mb-5">
             {venuesError}
           </div>
         ) : null}
 
         {activeAdminTask ? (
-          <div className="mb-6 rounded-2xl border border-orange-300/25 bg-orange-500/10 px-4 py-3 text-sm text-orange-50">
+          <div className="mb-4 rounded-2xl border border-orange-300/25 bg-orange-500/10 px-4 py-3 text-sm text-orange-50 sm:mb-5">
             <div className="font-semibold">Working on it</div>
             <div className="mt-1 text-orange-100/85">{activeAdminTask}. Please wait for the confirmation message before moving on.</div>
           </div>
         ) : null}
 
         {tab === 'schedules' ? (
-          <div className="grid gap-6 lg:grid-cols-[1.1fr_1.4fr]">
-            <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-              <h2 className="mb-4 text-lg font-semibold text-neutral-900">
-                1. Select Venues
-              </h2>
-              <div className="mb-3">
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search venues"
-                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500"
-                />
-              </div>
-              <div className="mb-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={selectAllFiltered}
-                  className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100"
-                >
-                  Select all
-                </button>
-                <button
-                  type="button"
-                  onClick={clearFiltered}
-                  className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100"
-                >
-                  Clear
-                </button>
-                <div className="ml-auto rounded-xl bg-neutral-100 px-3 py-2 text-sm font-medium">
-                  Selected: {selectedCount}
+          <div className="grid gap-4 sm:gap-5 2xl:grid-cols-[340px_minmax(0,1fr)]">
+            <section className="admin-surface self-start rounded-2xl border p-3 sm:p-4 2xl:sticky 2xl:top-20">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-neutral-900">
+                    Select venues
+                  </h2>
+                  <p className="mt-1 text-sm text-neutral-700">
+                    Search first, select venues, then choose Edit venue or Edit schedule explicitly.
+                  </p>
+                </div>
+                <div className="admin-surface-subtle rounded-xl border px-3 py-2 text-xs font-medium text-neutral-700">
+                  {selectedCount} selected
                 </div>
               </div>
-              <div className="max-h-[70vh] overflow-y-auto rounded-xl border border-neutral-200">
-                {loadingVenues ? (
-                  <div className="p-4 text-sm text-neutral-600">Loading…</div>
-                ) : filteredVenues.length === 0 ? (
-                  <div className="p-4 text-sm text-neutral-600">No venues.</div>
-                ) : (
-                  <div className="divide-y divide-neutral-200">
-                    {filteredVenues.map((venue) => {
-                      const checked = selectedVenueIds.includes(venue.id);
-                      const venueTypeName = venue.venue_type_id
-                        ? venueTypeNameById.get(venue.venue_type_id) ?? ''
-                        : '—';
-                      return (
-                        <div
-                          key={venue.id}
-                          onClick={() => focusVenueInScheduleEditor(venue)}
-                          className="flex cursor-pointer items-start gap-3 p-3 hover:bg-neutral-50"
-                        >
-                          <label className="flex cursor-pointer items-start gap-3">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleVenue(venue.id)}
-                              onClick={(event) => event.stopPropagation()}
-                              className="mt-1 h-4 w-4"
-                            />
-                            <div>
-                              <div className="font-medium text-neutral-900">
-                                {venue.name}
+              {selectedCount > 0 && !showVenuePickerMobile ? (
+                <div className="admin-surface-subtle rounded-2xl border p-3 sm:hidden">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">
+                    Selected venues
+                  </div>
+                  <div className="mt-1 text-sm font-semibold text-neutral-900">
+                    {selectedVenueSummary}
+                  </div>
+                  <div className="mt-1 text-xs text-neutral-600">
+                    Selection stays separate from editing. Reopen the venue list anytime to change or add venues.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowVenuePickerMobile(true)}
+                    className="admin-ghost-button mt-3 inline-flex rounded-xl border px-3 py-2 text-sm font-medium"
+                  >
+                    Change venue
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-3">
+                    <input
+                      type="text"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search venue, suburb, or type"
+                      className="w-full rounded-xl border border-neutral-300 px-3 py-2.5 text-sm outline-none focus:border-neutral-500"
+                    />
+                  </div>
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={selectAllFiltered}
+                      className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearFiltered}
+                      className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                    >
+                      Clear
+                    </button>
+                    {selectedCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowVenuePickerMobile(false)}
+                        className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium sm:hidden"
+                      >
+                        Back to edit
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="admin-surface max-h-[52vh] overflow-hidden rounded-xl border sm:max-h-[60vh]">
+                    {loadingVenues ? (
+                      <div className="p-4 text-sm text-neutral-600">Loading…</div>
+                    ) : filteredVenues.length === 0 ? (
+                      <div className="p-4 text-sm text-neutral-600">No venues.</div>
+                    ) : (
+                      <div className="admin-zebra max-h-[52vh] divide-y divide-black/5 overflow-y-auto sm:max-h-[60vh]">
+                        {filteredVenues.map((venue) => {
+                          const checked = selectedVenueIds.includes(venue.id);
+                          const venueTypeName = venue.venue_type_id
+                            ? venueTypeNameById.get(venue.venue_type_id) ?? ''
+                            : '—';
+                          return (
+                            <div
+                              key={venue.id}
+                              onClick={() => toggleVenue(venue.id)}
+                              className={`flex items-start justify-between gap-3 border-l-2 p-2.5 transition sm:p-3 ${
+                                checked
+                                  ? 'border-orange-400 bg-white/[0.08] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]'
+                                  : 'border-transparent hover:bg-white/5'
+                              }`}
+                            >
+                              <div className="flex cursor-pointer items-start gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleVenueCheckbox(venue.id)}
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="mt-1 h-4 w-4"
+                                />
+                                <div>
+                                  <div className="font-medium text-neutral-900">
+                                    {venue.name}
+                                  </div>
+                                  <div className="text-sm text-neutral-700">
+                                    {venue.suburb} | {venueTypeName}
+                                  </div>
+                                  {checked ? (
+                                    <div className="mt-2 inline-flex rounded-full border border-orange-300/40 bg-orange-500/14 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-orange-100">
+                                      Selected
+                                    </div>
+                                  ) : null}
+                                </div>
                               </div>
-                              <div className="text-sm text-neutral-600">
-                                {venue.suburb} • {venueTypeName}
+                              <div className="flex shrink-0 flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    focusVenueInScheduleEditor(venue);
+                                    setShowVenuePickerMobile(false);
+                                  }}
+                                  className="admin-ghost-button rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+                                >
+                                  Edit schedule
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    populateVenueFormFromExistingVenue(venue);
+                                    setShowVenuePickerMobile(false);
+                                  }}
+                                  className="admin-ghost-button rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+                                >
+                                  Edit venue
+                                </button>
                               </div>
                             </div>
-                          </label>
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                focusVenueInScheduleEditor(venue);
-                              }}
-                              className="rounded-xl border border-blue-300 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50"
-                            >
-                              Amend schedules
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                populateVenueFormFromExistingVenue(venue);
-                              }}
-                              className="rounded-xl border border-neutral-300 px-3 py-2 text-xs font-medium hover:bg-neutral-100"
-                            >
-                              Edit venue
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </section>
 
-            <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-              <h2 className="mb-4 text-lg font-semibold text-neutral-900">
-                2. Create Schedule Rules
-              </h2>
-              {isSingleVenueMode ? (
-                <div className="mb-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
-                  <div className="text-sm font-semibold text-neutral-900">
-                    Single Venue Weekly Editor
+            <section className="admin-surface rounded-2xl border p-3 sm:p-4">
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-neutral-900">
+                    Edit schedule
+                  </h2>
+                  <p className="mt-1 text-sm text-neutral-700">
+                    Selected venue context stays here so you can edit and save without losing your place.
+                  </p>
+                </div>
+                <div className="admin-surface-subtle rounded-xl border px-3 py-2 text-xs text-neutral-700">
+                  {selectedVenueSummary}
+                </div>
+              </div>
+              {selectedCount > 0 ? (
+                <div className="admin-surface-subtle mb-4 rounded-2xl border p-3 sm:hidden">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">
+                        {isScheduleWorkspaceActive ? 'Editing now' : 'Selected venues'}
+                      </div>
+                      <div className="mt-1 truncate text-base font-semibold text-neutral-900">
+                        {selectedCount === 1
+                          ? selectedVenuesForSummary[0]?.name ?? selectedVenueSummary
+                          : selectedVenueSummary}
+                      </div>
+                      <div className="mt-1 text-xs text-neutral-600">
+                        {selectedCount === 1
+                          ? selectedVenuesForSummary[0]?.suburb ?? 'Venue selected'
+                          : 'Choose an action to keep selection separate from editing'}
+                        {selectedCount === 1 && selectedVenuesForSummary[0]?.venue_type_id
+                          ? ` | ${venueTypeNameById.get(selectedVenuesForSummary[0]?.venue_type_id) ?? selectedVenuesForSummary[0]?.venue_type_id}`
+                          : ''}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowVenuePickerMobile(true)}
+                      className="admin-ghost-button shrink-0 rounded-xl border px-3 py-2 text-xs font-medium"
+                    >
+                      Change venue
+                    </button>
                   </div>
-                  <div className="mt-1 text-sm text-neutral-600">
-                    Review the week, then load opening, kitchen, or happy hour into the editor below.
+                </div>
+              ) : null}
+              {selectedCount > 0 && !isScheduleWorkspaceActive ? (
+                <div className="admin-surface-subtle mb-4 rounded-2xl border p-3.5 sm:p-4">
+                  <div className="text-sm font-semibold text-neutral-900">
+                    Selection ready
+                  </div>
+                  <div className="mt-1 text-sm text-neutral-700">
+                    Your selection is highlighted, but editing will only start when you choose an action.
+                  </div>
+                  <div className="mt-3 rounded-xl border border-black/5 bg-white/40 px-3 py-3 text-sm text-neutral-700">
+                    {selectedCount === 1
+                      ? `${selectedVenuesForSummary[0]?.name ?? '1 venue selected'} is selected. Choose Edit schedule to open the weekly editor or Edit venue to open the venue profile form.`
+                      : `${selectedVenueSummary}. Use Edit schedule to work across the selected venues without forcing a single-venue view.`}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScheduleWorkspaceArmed(true);
+                        setScheduleErrorMessage(null);
+                        setScheduleMessage(
+                          selectedCount === 1
+                            ? `Loaded ${selectedVenuesForSummary[0]?.name ?? 'the selected venue'} into the weekly editor.`
+                            : `Loaded ${selectedVenueSummary.toLowerCase()} into the schedule editor.`
+                        );
+                      }}
+                      className="admin-primary-button rounded-xl border px-3 py-2 text-sm font-semibold"
+                    >
+                      Edit schedule
+                    </button>
+                    {singleSelectedVenue ? (
+                      <button
+                        type="button"
+                        onClick={() => populateVenueFormFromExistingVenue(singleSelectedVenue)}
+                        className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                      >
+                        Edit venue
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+              <div className={selectedCount > 0 && !isScheduleWorkspaceActive ? 'hidden' : ''}>
+              {isSingleVenueMode && isScheduleWorkspaceActive ? (
+                <div className="admin-surface-subtle mb-4 rounded-2xl border p-3 sm:p-4">
+                  <div className="text-sm font-semibold text-neutral-900">
+                    Weekly view
+                  </div>
+                  <div className="mt-1 text-sm text-neutral-700">
+                    Load a day into the editor below, then save.
                   </div>
 
                   <div className="mt-4 space-y-4">
@@ -3234,7 +3440,7 @@ export default function AdminMasterPage() {
                       return (
                         <div
                           key={venue.id}
-                          className="rounded-2xl border border-neutral-200 bg-white p-4"
+                          className="admin-surface rounded-2xl border p-3.5 sm:p-4"
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
@@ -3249,15 +3455,140 @@ export default function AdminMasterPage() {
                             <button
                               type="button"
                               onClick={() => setSelectedVenueIds([venue.id])}
-                              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100"
+                              className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
                             >
                               Focus this venue
                             </button>
                           </div>
 
-                          <div className="mt-4 overflow-x-auto">
-                            <div className="min-w-[1180px]">
-                              <div className="grid grid-cols-[72px_1.1fr_1.1fr_1.1fr_1.1fr_1.7fr_360px] gap-3 border-b border-neutral-200 pb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                          <div className="mt-4 overflow-x-auto rounded-xl border border-white/6">
+                            <div className="sm:hidden space-y-2">
+                              {daySummaries.map((summary) => (
+                                <div
+                                  key={`${venue.id}-${summary.day}-mobile`}
+                                  className="rounded-xl border border-white/8 bg-black/18 p-3"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="text-sm font-semibold text-neutral-900">
+                                      {getDayLabel(summary.day)}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditVenueDayForType(venue, summary.day, scheduleType)}
+                                      className="admin-ghost-button rounded-lg border px-2.5 py-1.5 text-[11px] font-medium"
+                                    >
+                                      Edit day
+                                    </button>
+                                  </div>
+
+                                  <div className="mt-3 grid gap-2 text-sm text-neutral-700">
+                                    <div className="rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2">
+                                      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">Open</div>
+                                      <div className="mt-1">{summary.opening ?? 'None'}</div>
+                                    </div>
+                                    <div className="rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2">
+                                      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">Kitchen</div>
+                                      <div className="mt-1">{summary.kitchen ?? 'None'}</div>
+                                    </div>
+                                    <div className="rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2">
+                                      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">Happy hour</div>
+                                      <div className="mt-1 font-medium text-neutral-800">{summary.happyHour ?? 'None'}</div>
+                                      {summary.happyHourDetails.length > 0 ? (
+                                        <div className="mt-2 flex flex-wrap gap-1.5">
+                                          {summary.happyHourDetails.map((detail, index) => (
+                                            <span
+                                              key={`${summary.day}-happy-mobile-${index}`}
+                                              className="rounded-full border border-pink-100 bg-pink-50 px-2 py-1 text-[11px] text-pink-900"
+                                            >
+                                              {detail}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                    <div className="rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2">
+                                      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">Bottle shop</div>
+                                      <div className="mt-1">{summary.bottleShop ?? 'None'}</div>
+                                    </div>
+                                    <div className="rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2">
+                                      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">Events</div>
+                                      <div className="mt-1 space-y-1.5">
+                                        {summary.events.length > 0 ? (
+                                          summary.events.map((eventItem, index) => (
+                                            <div
+                                              key={`${summary.day}-event-mobile-${index}`}
+                                              className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-2 text-xs text-blue-900"
+                                            >
+                                              <div>{eventItem.summary}</div>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  handleEditVenueDayForType(
+                                                    venue,
+                                                    summary.day,
+                                                    eventItem.scheduleType
+                                                  )
+                                                }
+                                                className="mt-2 rounded-lg border border-neutral-300 bg-white/80 px-2 py-1 text-[11px] font-medium text-neutral-700 hover:bg-white"
+                                              >
+                                                Edit {getScheduleTypeLabel(eventItem.scheduleType).toLowerCase()}
+                                              </button>
+                                            </div>
+                                          ))
+                                        ) : (
+                                          <div>None</div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-3 grid grid-cols-2 gap-2">
+                                    {CORE_SINGLE_VENUE_TYPES.map((type) => (
+                                      <button
+                                        key={`${summary.day}-${type}-mobile`}
+                                        type="button"
+                                        onClick={() =>
+                                          handleEditVenueDayForType(venue, summary.day, type)
+                                        }
+                                        className="admin-ghost-button rounded-xl border px-3 py-2 text-xs font-medium"
+                                      >
+                                        {type === 'opening'
+                                          ? 'Opening'
+                                          : type === 'kitchen'
+                                            ? 'Kitchen'
+                                            : type === 'bottle_shop'
+                                              ? 'Bottle shop'
+                                              : 'Happy hour'}
+                                      </button>
+                                    ))}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setScheduleWorkspaceArmed(true);
+                                        setSelectedVenueIds([venue.id]);
+                                        setScheduleType('trivia');
+                                        setSelectedDays([summary.day]);
+                                        setTimeBlocks([{ start_time: '', end_time: '' }]);
+                                        setTitle('');
+                                        setDescription('');
+                                        setDealText('');
+                                        setNotes('');
+                                        setSaveMode('append');
+                                        setScheduleErrorMessage(null);
+                                        setScheduleMessage(
+                                          `Add an event for ${venue.name ?? 'this venue'} on ${getDayLabel(summary.day)}. Choose the event type below, then save.`
+                                        );
+                                      }}
+                                      className="admin-ghost-button col-span-2 rounded-xl border px-3 py-2 text-xs font-medium"
+                                    >
+                                      Add event
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="hidden min-w-[1180px] sm:block">
+                              <div className="grid grid-cols-[72px_1.1fr_1.1fr_1.1fr_1.1fr_1.7fr_360px] gap-3 border-b border-black/5 pb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
                                 <div>Day</div>
                                 <div>Open</div>
                                 <div>Kitchen</div>
@@ -3267,7 +3598,7 @@ export default function AdminMasterPage() {
                                 <div>Actions</div>
                               </div>
 
-                              <div className="divide-y divide-neutral-200">
+                              <div className="admin-zebra divide-y divide-black/5">
                                 {daySummaries.map((summary) => (
                                   <div
                                     key={`${venue.id}-${summary.day}`}
@@ -3320,7 +3651,7 @@ export default function AdminMasterPage() {
                                                     eventItem.scheduleType
                                                   )
                                                 }
-                                                className="mt-2 rounded-lg border border-blue-300 bg-white px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
+                                                className="mt-2 rounded-lg border border-neutral-300 bg-white/80 px-2 py-1 text-[11px] font-medium text-neutral-700 hover:bg-white"
                                               >
                                                 Edit {getScheduleTypeLabel(eventItem.scheduleType).toLowerCase()}
                                               </button>
@@ -3339,7 +3670,7 @@ export default function AdminMasterPage() {
                                           onClick={() =>
                                             handleEditVenueDayForType(venue, summary.day, type)
                                           }
-                                          className="rounded-xl border border-blue-300 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                                          className="admin-ghost-button rounded-xl border px-3 py-2 text-xs font-medium"
                                           >
                                             {type === 'opening'
                                               ? 'Edit opening'
@@ -3352,7 +3683,8 @@ export default function AdminMasterPage() {
                                       ))}
                                       <button
                                         type="button"
-                                        onClick={() => {
+                                      onClick={() => {
+                                          setScheduleWorkspaceArmed(true);
                                           setSelectedVenueIds([venue.id]);
                                           setScheduleType('trivia');
                                           setSelectedDays([summary.day]);
@@ -3367,7 +3699,7 @@ export default function AdminMasterPage() {
                                             `Add an event for ${venue.name ?? 'this venue'} on ${getDayLabel(summary.day)}. Choose the event type below, then save.`
                                           );
                                         }}
-                                        className="rounded-xl border border-violet-300 px-3 py-2 text-xs font-medium text-violet-700 hover:bg-violet-50"
+                                        className="admin-ghost-button rounded-xl border px-3 py-2 text-xs font-medium"
                                       >
                                         Add event
                                       </button>
@@ -3384,7 +3716,7 @@ export default function AdminMasterPage() {
                 </div>
               ) : null}
 
-              <div className="mb-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+              <div className="admin-surface-subtle mb-4 rounded-2xl border p-3.5 sm:p-4">
                 <div className="text-sm font-semibold text-neutral-900">Ready to save</div>
                 <div className="mt-1 text-xs text-neutral-600">
                   Review the impact below before saving or deleting anything.
@@ -3421,6 +3753,66 @@ export default function AdminMasterPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm font-medium">Schedule Type</label>
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScheduleType('daily_special');
+                        setScheduleWorkspaceArmed(true);
+                      }}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] ${
+                        scheduleType === 'daily_special'
+                          ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
+                          : 'admin-ghost-button'
+                      }`}
+                    >
+                      Daily specials
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScheduleType('lunch_special');
+                        setScheduleWorkspaceArmed(true);
+                      }}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] ${
+                        scheduleType === 'lunch_special'
+                          ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
+                          : 'admin-ghost-button'
+                      }`}
+                    >
+                      Lunch specials
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScheduleType('venue_rule');
+                        setVenueRuleKind('kid');
+                        setScheduleWorkspaceArmed(true);
+                      }}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] ${
+                        scheduleType === 'venue_rule' && venueRuleKind === 'kid'
+                          ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
+                          : 'admin-ghost-button'
+                      }`}
+                    >
+                      Kids allowed
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScheduleType('venue_rule');
+                        setVenueRuleKind('dog');
+                        setScheduleWorkspaceArmed(true);
+                      }}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] ${
+                        scheduleType === 'venue_rule' && venueRuleKind === 'dog'
+                          ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
+                          : 'admin-ghost-button'
+                      }`}
+                    >
+                      Dog friendly
+                    </button>
+                  </div>
                   <select
                     value={scheduleType}
                     onChange={(e) => setScheduleType(e.target.value as ScheduleType)}
@@ -3455,33 +3847,33 @@ export default function AdminMasterPage() {
                   </div>
                 </div>
               </div>
-              <div className="mt-4">
+              <div className="mt-3.5 sm:mt-4">
                 <div className="mb-2 flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => setDaysPreset('weekdays')}
-                    className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100"
+                    className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
                   >
                     Mon-Fri
                   </button>
                   <button
                     type="button"
                     onClick={() => setDaysPreset('weekend')}
-                    className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100"
+                    className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
                   >
                     Weekend
                   </button>
                   <button
                     type="button"
                     onClick={() => setDaysPreset('all')}
-                    className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100"
+                    className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
                   >
                     All days
                   </button>
                   <button
                     type="button"
                     onClick={() => setDaysPreset('clear')}
-                    className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100"
+                    className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
                   >
                     Clear days
                   </button>
@@ -3495,32 +3887,33 @@ export default function AdminMasterPage() {
                         key={day.value}
                         type="button"
                         onClick={() => toggleDay(day.value)}
-                        className={`rounded-xl px-3 py-2 text-sm font-medium ${
+                        className={`min-h-[42px] rounded-xl border px-3 py-2 text-sm font-semibold ${
                           active
-                            ? 'bg-neutral-900 text-white'
-                            : 'border border-neutral-300 hover:bg-neutral-100'
+                            ? 'border-orange-400 bg-orange-500 text-black shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
+                            : 'admin-ghost-button border'
                         }`}
+                        aria-pressed={active}
                       >
-                        {day.label}
+                        {active ? `Selected ${day.label}` : day.label}
                       </button>
                     );
                   })}
                 </div>
               </div>
-              <div className="mt-4">
+              <div className="mt-3.5 sm:mt-4">
                 <div className="mb-2 flex items-center justify-between">
                   <label className="block text-sm font-medium">Time Blocks</label>
                   <button
                     type="button"
                     onClick={addTimeBlock}
-                    className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100"
+                    className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
                   >
                     Add
                   </button>
                 </div>
                 <div className="space-y-3">
                   {timeBlocks.map((block, index) => (
-                    <div key={index} className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+                    <div key={index} className="grid gap-2.5 md:grid-cols-[1fr_1fr_auto]">
                       <div>
                         <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">
                           Start
@@ -3559,44 +3952,115 @@ export default function AdminMasterPage() {
                   ))}
                 </div>
               </div>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
+              {isVenueRuleScheduleType(scheduleType) && (
+                <div className="mt-3.5 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Rule type</label>
+                    <select
+                      value={venueRuleKind}
+                      onChange={(e) => setVenueRuleKind(e.target.value as VenueRuleKind)}
+                      className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                    >
+                      {VENUE_RULE_KIND_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
+                    Public signal: {getVenueRuleKindLabel(venueRuleKind)}
+                  </div>
+                </div>
+              )}
+              <div className="mt-3.5 grid gap-3 md:mt-4 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm font-medium">Title</label>
                   <input
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Optional public heading"
+                    placeholder={
+                      scheduleType === 'daily_special'
+                        ? 'e.g. Steak Night'
+                        : scheduleType === 'lunch_special'
+                          ? 'e.g. Lunch Special'
+                          : scheduleType === 'venue_rule'
+                            ? 'Optional short label'
+                            : 'Optional public heading'
+                    }
                     className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Deal text</label>
+                  <label className="mb-1 block text-sm font-medium">
+                    {isVenueRuleScheduleType(scheduleType) ? 'Public summary' : 'Deal text'}
+                  </label>
                   <input
                     type="text"
                     value={dealText}
                     onChange={(e) => setDealText(e.target.value)}
-                    placeholder="Short line for the public card"
+                    placeholder={
+                      scheduleType === 'happy_hour'
+                        ? 'e.g. $7 schooners / $15 burgers'
+                        : scheduleType === 'daily_special'
+                          ? 'e.g. Parmi + chips $20'
+                          : scheduleType === 'lunch_special'
+                            ? 'e.g. Lunch special $15'
+                            : scheduleType === 'venue_rule'
+                              ? venueRuleKind === 'kid'
+                                ? 'e.g. Kids until 8pm'
+                                : 'e.g. Dogs front bar only'
+                              : 'Short line for the public card'
+                    }
                     className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>
               </div>
+              {(scheduleType === 'daily_special' || scheduleType === 'lunch_special') && (
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Structured price</label>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={specialPrice}
+                      onChange={(e) => setSpecialPrice(e.target.value)}
+                      placeholder={scheduleType === 'lunch_special' ? 'e.g. 15' : 'e.g. 20'}
+                      className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                    />
+                    <div className="mt-1 text-xs text-neutral-500">
+                      Used for filterable special pricing. Keep the public summary text as-is.
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="mt-3">
                 <label className="mb-1 block text-sm font-medium">Description</label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Public-facing detail or context for this activity"
+                  placeholder={
+                    isVenueRuleScheduleType(scheduleType)
+                      ? 'Optional public detail if the rule needs more context'
+                      : 'Public-facing detail or context for this activity'
+                  }
                   rows={3}
                   className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                 />
               </div>
               <div className="mt-3">
-                <label className="mb-1 block text-sm font-medium">Internal notes</label>
+                <label className="mb-1 block text-sm font-medium">Notes</label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Operator notes, sourcing notes, or reminders"
+                  placeholder={
+                    isVenueRuleScheduleType(scheduleType)
+                      ? 'Optional nuance such as Beer garden only or Front bar only'
+                      : 'Operator notes, sourcing notes, or reminders'
+                  }
                   rows={3}
                   className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                 />
@@ -3630,6 +4094,7 @@ export default function AdminMasterPage() {
                   </div>
                 </div>
               )}
+              </div>
               {scheduleMessage && (
                 <div className="mt-4 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
                   {scheduleMessage}
@@ -3640,23 +4105,28 @@ export default function AdminMasterPage() {
                   {scheduleErrorMessage}
                 </div>
               )}
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={handleSaveSchedule}
-                  disabled={savingSchedule || clearingSchedule}
-                  className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 disabled:opacity-60"
-                >
-                  {savingSchedule ? 'Saving…' : 'Save schedule'}
-                </button>
-                <button
-                  type="button"
-                  onClick={resetScheduleForm}
-                  disabled={savingSchedule || clearingSchedule}
-                  className="rounded-xl border border-neutral-300 px-4 py-2 text-sm font-semibold hover:bg-neutral-100"
-                >
-                  Clear
-                </button>
+              <div className="admin-focus-band mt-4 rounded-2xl border border-white/10 bg-[#0f1419]/92 p-3 shadow-[0_18px_48px_rgba(0,0,0,0.28)] sm:mt-5 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
+                <div className="mb-2 text-xs uppercase tracking-[0.16em] text-neutral-500 sm:hidden">
+                  Save actions
+                </div>
+                <div className="flex flex-wrap gap-2.5">
+                  <button
+                    type="button"
+                    onClick={handleSaveSchedule}
+                    disabled={savingSchedule || clearingSchedule}
+                    className="admin-primary-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                  >
+                    {savingSchedule ? 'Saving…' : 'Save schedule'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetScheduleForm}
+                    disabled={savingSchedule || clearingSchedule}
+                    className="admin-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold"
+                  >
+                    Clear
+                  </button>
+                </div>
               </div>
               <div className="mt-4">
                 <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-500">
@@ -3686,9 +4156,9 @@ export default function AdminMasterPage() {
             </section>
           </div>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr]">
-            <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-              <h2 className="mb-4 text-lg font-semibold">1. Google Search</h2>
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+            <section className="admin-surface self-start rounded-2xl border p-3.5 sm:p-4 lg:sticky lg:top-20">
+              <h2 className="mb-3 text-lg font-semibold">Google search</h2>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -3701,7 +4171,7 @@ export default function AdminMasterPage() {
                   type="button"
                   onClick={handleGoogleSearch}
                   disabled={googleLoading}
-                  className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                  className="admin-primary-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-60"
                 >
                   {googleLoading ? 'Searching…' : 'Search'}
                 </button>
@@ -3713,14 +4183,14 @@ export default function AdminMasterPage() {
               )}
               <div className="mt-4 max-h-[65vh] overflow-y-auto">
                 {googleResults.map((result) => (
-                  <div key={result.place_id} className="mb-3 rounded-xl border border-neutral-200 p-3">
+                  <div key={result.place_id} className="admin-surface-subtle mb-3 rounded-xl border p-3">
                     <div className="font-medium">{result.name}</div>
                     <div className="text-sm text-neutral-600">{result.formatted_address}</div>
                     <div className="mt-2">
                       <button
                         type="button"
                         onClick={() => handleUseGoogleResult(result.place_id)}
-                        className="rounded-xl border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100"
+                        className="admin-ghost-button rounded-xl border px-3 py-2 text-sm"
                       >
                         Use
                       </button>
@@ -3730,8 +4200,8 @@ export default function AdminMasterPage() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-              <h2 className="mb-4 text-lg font-semibold">2. Venue Setup</h2>
+            <section className="admin-surface rounded-2xl border p-3.5 sm:p-4">
+              <h2 className="mb-3 text-lg font-semibold">Venue setup</h2>
               {venueMessage && (
                 <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
                   {venueMessage}
@@ -3742,7 +4212,7 @@ export default function AdminMasterPage() {
                   {venueErrorMessage}
                 </div>
               )}
-              <div className="mb-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+              <div className="admin-surface-subtle mb-4 rounded-2xl border p-4">
                 <div className="text-sm font-semibold text-neutral-900">Venue save summary</div>
                 <div className="mt-1 text-xs text-neutral-600">
                   Google results can prefill the form, but nothing changes live until you save.
@@ -3846,14 +4316,24 @@ export default function AdminMasterPage() {
                   Only fill this in if the venue actually promotes live sport.
                 </div>
               </div>
+              <div className="mb-3">
+                <label className="mb-1 block text-sm font-medium">Sport notes</label>
+                <textarea
+                  value={venueForm.sport_notes}
+                  onChange={(e) => updateVenueForm('sport_notes', e.target.value)}
+                  rows={2}
+                  placeholder="Optional notes like AFL only on main screen or Sound for marquee games"
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                />
+              </div>
               <div className="mb-4 grid gap-3 sm:grid-cols-2">
                 <button
                   type="button"
                   onClick={() => updateVenueForm('shows_sport', !venueForm.shows_sport)}
                   className={`rounded-xl border px-3 py-3 text-left text-sm ${
                     venueForm.shows_sport
-                      ? 'border-orange-300 bg-orange-50 text-orange-900'
-                      : 'border-neutral-300 hover:bg-neutral-100'
+                      ? 'border-orange-300/30 bg-orange-500/12 text-white'
+                      : 'admin-ghost-button'
                   }`}
                 >
                   <div className="font-semibold">Shows live sport</div>
@@ -3867,9 +4347,9 @@ export default function AdminMasterPage() {
                   disabled={!venueForm.shows_sport && !venueForm.plays_with_sound}
                   className={`rounded-xl border px-3 py-3 text-left text-sm ${
                     venueForm.plays_with_sound
-                      ? 'border-orange-300 bg-orange-50 text-orange-900'
+                      ? 'border-orange-300/30 bg-orange-500/12 text-white'
                       : venueForm.shows_sport
-                      ? 'border-neutral-300 hover:bg-neutral-100'
+                      ? 'admin-ghost-button'
                       : 'border-neutral-200 bg-neutral-50 text-neutral-400'
                   }`}
                 >
@@ -3887,8 +4367,8 @@ export default function AdminMasterPage() {
                   onClick={() => updateVenueForm('dog_friendly', !venueForm.dog_friendly)}
                   className={`rounded-xl border px-3 py-3 text-left text-sm ${
                     venueForm.dog_friendly
-                      ? 'border-orange-300 bg-orange-50 text-orange-900'
-                      : 'border-neutral-300 hover:bg-neutral-100'
+                      ? 'border-orange-300/30 bg-orange-500/12 text-white'
+                      : 'admin-ghost-button'
                   }`}
                 >
                   <div className="font-semibold">Dog friendly</div>
@@ -3901,8 +4381,8 @@ export default function AdminMasterPage() {
                   onClick={() => updateVenueForm('kid_friendly', !venueForm.kid_friendly)}
                   className={`rounded-xl border px-3 py-3 text-left text-sm ${
                     venueForm.kid_friendly
-                      ? 'border-orange-300 bg-orange-50 text-orange-900'
-                      : 'border-neutral-300 hover:bg-neutral-100'
+                      ? 'border-orange-300/30 bg-orange-500/12 text-white'
+                      : 'admin-ghost-button'
                   }`}
                 >
                   <div className="font-semibold">Kid friendly</div>
@@ -3911,25 +4391,47 @@ export default function AdminMasterPage() {
                   </div>
                 </button>
               </div>
+              <div className="mb-4 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Dog-friendly notes</label>
+                  <textarea
+                    value={venueForm.dog_friendly_notes}
+                    onChange={(e) => updateVenueForm('dog_friendly_notes', e.target.value)}
+                    rows={2}
+                    placeholder="Optional notes like Beer garden only"
+                    className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Kid-friendly notes</label>
+                  <textarea
+                    value={venueForm.kid_friendly_notes}
+                    onChange={(e) => updateVenueForm('kid_friendly_notes', e.target.value)}
+                    rows={2}
+                    placeholder="Optional notes like Family area only"
+                    className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
               <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
                   onClick={handleSaveVenue}
                   disabled={savingVenue}
-                  className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                  className="admin-primary-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-60"
                 >
                   {savingVenue ? 'Saving…' : 'Save venue'}
                 </button>
                 <button
                   type="button"
                   onClick={resetVenueForm}
-                  className="rounded-xl border border-neutral-300 px-4 py-2 text-sm font-semibold hover:bg-neutral-100"
+                  className="admin-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold"
                 >
                   Clear form
                 </button>
               </div>
 
-              <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+              <div className="admin-surface-subtle mt-6 rounded-2xl border p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold text-neutral-900">
@@ -3940,14 +4442,14 @@ export default function AdminMasterPage() {
                     </div>
                   </div>
                   {venueForm.id ? (
-                    <div className="rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs text-neutral-600">
+                    <div className="admin-surface rounded-full border px-3 py-1 text-xs text-neutral-600">
                       {venueAccessRows.length} user{venueAccessRows.length === 1 ? '' : 's'}
                     </div>
                   ) : null}
                 </div>
 
                 {!venueForm.id ? (
-                  <div className="rounded-xl border border-dashed border-neutral-300 bg-white px-3 py-4 text-sm text-neutral-500">
+                  <div className="admin-surface rounded-xl border border-dashed px-3 py-4 text-sm text-neutral-500">
                     Save the venue first, then assign portal users.
                   </div>
                 ) : (
@@ -3964,7 +4466,7 @@ export default function AdminMasterPage() {
                         type="button"
                         onClick={handleAddVenueAccess}
                         disabled={savingVenueAccess}
-                        className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                        className="admin-primary-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-60"
                       >
                         {savingVenueAccess ? 'Saving…' : 'Add portal access'}
                       </button>
@@ -3985,7 +4487,7 @@ export default function AdminMasterPage() {
                       {loadingVenueAccess ? (
                         <div className="text-sm text-neutral-500">Loading portal users…</div>
                       ) : venueAccessRows.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-neutral-300 bg-white px-3 py-4 text-sm text-neutral-500">
+                        <div className="admin-surface rounded-xl border border-dashed px-3 py-4 text-sm text-neutral-500">
                           No portal users assigned yet.
                         </div>
                       ) : (
@@ -3993,7 +4495,7 @@ export default function AdminMasterPage() {
                           {venueAccessRows.map((row) => (
                             <div
                               key={`${row.user_id}-${row.venue_id}`}
-                              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white px-3 py-3"
+                              className="admin-surface flex flex-wrap items-center justify-between gap-3 rounded-xl border px-3 py-3"
                             >
                               <div>
                                 <div className="text-sm font-semibold text-neutral-900">
@@ -4008,7 +4510,7 @@ export default function AdminMasterPage() {
                                 type="button"
                                 onClick={() => handleRemoveVenueAccess(row.user_id)}
                                 disabled={savingVenueAccess}
-                                className="rounded-xl border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                                className="admin-danger-button rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-60"
                               >
                                 Remove access
                               </button>
@@ -4390,3 +4892,4 @@ function HappyHourCategoryEditor({
     </div>
   );
 }
+

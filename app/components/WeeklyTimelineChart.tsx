@@ -4,7 +4,6 @@ import {
   DAY_KEYS,
   DAY_LABELS,
   getDisplayRows,
-  formatTimeForUi,
   type WeeklyHours,
 } from '@/lib/opening-hours';
 import type { ReactNode } from 'react';
@@ -18,8 +17,8 @@ type Props = {
   renderDayExtras?: (dayKey: (typeof DAY_KEYS)[number]) => ReactNode;
 };
 
-const WINDOW_START = 8 * 60; // 08:00
-const WINDOW_END = 28 * 60; // 04:00 next day
+const WINDOW_START = 8 * 60;
+const WINDOW_END = 28 * 60;
 const WINDOW_TOTAL = WINDOW_END - WINDOW_START;
 
 const TICKS = [
@@ -90,10 +89,9 @@ function getSegments(periods: Array<{ open: string; close: string }> | undefined
       return {
         left: toPercent(clampedStart),
         width: ((clampedEnd - clampedStart) / WINDOW_TOTAL) * 100,
-        timeRange: `${formatTimeForUi(period.open)} - ${formatTimeForUi(period.close)}`,
       };
     })
-    .filter(Boolean) as Array<{ left: number; width: number; timeRange: string }>;
+    .filter(Boolean) as Array<{ left: number; width: number }>;
 }
 
 function hasAnyHours(hours: WeeklyHours | null | undefined) {
@@ -121,19 +119,15 @@ function Row({
 
   return (
     <div className="grid grid-cols-[64px_1fr] gap-3">
-      <div className="pt-6 text-sm text-white/75">{label}</div>
+      <div className="pt-5 text-sm text-white/75">{label}</div>
 
       <div>
-        <div className="mb-1.5 flex items-center justify-between gap-3 text-[11px] font-semibold text-white">
-          <span className="text-white/50">Hours</span>
-          <span className="text-right">{segments.length > 0 ? text : 'Closed'}</span>
-        </div>
-
+        <div className="mb-1.5 text-[11px] font-medium text-white/56">{text}</div>
         <div className="relative h-7 rounded-md border border-white/10 bg-white/[0.03]">
           {TICKS.slice(1, -1).map((tick) => (
             <div
               key={tick.label}
-              className="absolute top-0 bottom-0 w-px bg-white/10"
+              className="absolute bottom-0 top-0 w-px bg-white/10"
               style={{ left: `${toPercent(tick.minute)}%` }}
             />
           ))}
@@ -141,7 +135,7 @@ function Row({
           {segments.map((segment, index) => (
             <div
               key={index}
-              className={`absolute top-0 bottom-0 rounded-md ${colorClass}`}
+              className={`absolute bottom-0 top-0 rounded-md ${colorClass}`}
               style={{
                 left: `${segment.left}%`,
                 width: `${segment.width}%`,
@@ -151,11 +145,11 @@ function Row({
 
           {showNow && nowLeft !== null ? (
             <div
-              className="absolute top-0 bottom-0 z-20 w-[2px] bg-cyan-400"
+              className="absolute bottom-0 top-0 z-20 w-[2px] bg-cyan-400"
               style={{ left: `${nowLeft}%` }}
             />
           ) : null}
-          </div>
+        </div>
       </div>
     </div>
   );
@@ -171,7 +165,7 @@ export default function WeeklyTimelineChart({
 }: Props) {
   const openingRows = getDisplayRows(openingHours, { emptyLabel: 'Closed' });
   const kitchenRows = getDisplayRows(kitchenHours, { emptyLabel: 'Closed' });
-  const happyHourRows = getDisplayRows(happyHourHours, { emptyLabel: 'Closed' });
+  const happyHourRows = getDisplayRows(happyHourHours, { emptyLabel: 'None' });
   const bottleShopRows = getDisplayRows(bottleShopHours, { emptyLabel: 'Closed' });
 
   const today = getLocalDayName(timezone);
@@ -190,21 +184,6 @@ export default function WeeklyTimelineChart({
           {hasAnyHours(happyHourHours) ? <LegendDot className="bg-pink-500" label="Happy Hour" /> : null}
           {hasAnyHours(bottleShopHours) ? <LegendDot className="bg-sky-500" label="Bottle Shop" /> : null}
           <LegendDot className="bg-cyan-400" label="Now" />
-        </div>
-      </div>
-
-      <div className="mb-3 grid grid-cols-[64px_1fr] gap-3">
-        <div />
-        <div className="relative h-4 text-[11px] text-white/50">
-          {TICKS.map((tick) => (
-            <div
-              key={tick.label}
-              className="absolute -translate-x-1/2"
-              style={{ left: `${toPercent(tick.minute)}%` }}
-            >
-              {tick.label}
-            </div>
-          ))}
         </div>
       </div>
 
@@ -258,7 +237,7 @@ export default function WeeklyTimelineChart({
                 {hasAnyHours(happyHourHours) ? (
                   <Row
                     label="Happy Hour"
-                    text={happyHourRow?.text ?? 'Closed'}
+                    text={happyHourRow?.text ?? 'None'}
                     periods={happyHourRow?.periods ?? []}
                     colorClass="bg-pink-500"
                     showNow={isToday && showNow}
