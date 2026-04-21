@@ -107,6 +107,23 @@ type PortalActivityEntry = {
   action: string;
   details: string;
 };
+type PortalEditorMode = 'overview' | 'edit';
+type PortalEditTarget = 'schedule' | 'venue';
+type PortalOverviewCard = {
+  title: string;
+  description: string;
+  lines: string[];
+};
+type PortalVenueDaySummary = {
+  day: DayOfWeek;
+  opening: string;
+  kitchen: string;
+  happyHour: string;
+  bottleShop: string;
+  deals: string[];
+  events: string[];
+  venueRules: string[];
+};
 type VenueFormState = {
   name: string;
   suburb: string;
@@ -390,6 +407,89 @@ function getExistingHours(venue: PortalVenueDetail | null, scheduleType: PortalS
   return null;
 }
 
+function buildPortalVenueDaySummaries(venue: PortalVenueDetail): PortalVenueDaySummary[] {
+  const liveRules = (venue.venue_schedule_rules ?? [])
+    .filter(
+      (rule) =>
+        rule.is_active !== false &&
+        !['draft', 'archived', 'deleted'].includes((rule.status ?? '').trim().toLowerCase())
+    )
+    .sort((a, b) => {
+      const dayDiff =
+        DAY_OPTIONS.findIndex((option) => option.value === a.day_of_week) -
+        DAY_OPTIONS.findIndex((option) => option.value === b.day_of_week);
+      if (dayDiff !== 0) return dayDiff;
+      const sortDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+      if (sortDiff !== 0) return sortDiff;
+      return a.start_time.localeCompare(b.start_time);
+    });
+
+  const openingHours = getExistingHours(venue, 'opening');
+  const kitchenHours = getExistingHours(venue, 'kitchen');
+  const happyHourHours = getExistingHours(venue, 'happy_hour');
+  const bottleShopHours = getExistingHours(venue, 'bottle_shop');
+
+  return DAY_OPTIONS.map((day) => {
+    const dayRules = liveRules.filter((rule) => rule.day_of_week === day.value);
+    const deals = dayRules
+      .filter(
+        (rule) =>
+          rule.schedule_type === 'daily_special' || rule.schedule_type === 'lunch_special'
+      )
+      .map((rule) => {
+        const label = getScheduleTypeLabel(rule.schedule_type as PortalScheduleType);
+        const time = `${rule.start_time.slice(0, 5)}-${rule.end_time.slice(0, 5)}`;
+        const text =
+          rule.deal_text?.trim() ||
+          rule.title?.trim() ||
+          rule.description?.trim() ||
+          rule.notes?.trim() ||
+          '';
+        return text ? `${label}: ${time} ${text}` : `${label}: ${time}`;
+      });
+    const events = dayRules
+      .filter((rule) => isEventScheduleType(rule.schedule_type as PortalScheduleType))
+      .map((rule) => {
+        const label = getScheduleTypeLabel(rule.schedule_type as PortalScheduleType);
+        const time = `${rule.start_time.slice(0, 5)}-${rule.end_time.slice(0, 5)}`;
+        const text =
+          rule.title?.trim() ||
+          rule.deal_text?.trim() ||
+          rule.description?.trim() ||
+          rule.notes?.trim() ||
+          '';
+        return text ? `${label}: ${time} ${text}` : `${label}: ${time}`;
+      });
+    const venueRules = dayRules
+      .filter((rule) => rule.schedule_type === 'venue_rule')
+      .map((rule) => {
+        const detailJson = normalizeScheduleRuleDetailJson(rule.detail_json);
+        const label = detailJson?.rule_kind === 'dog' ? 'Dog friendly' : 'Kids allowed';
+        const time = `${rule.start_time.slice(0, 5)}-${rule.end_time.slice(0, 5)}`;
+        const text =
+          rule.deal_text?.trim() || rule.notes?.trim() || rule.description?.trim() || '';
+        return text ? `${label}: ${time} ${text}` : `${label}: ${time}`;
+      });
+
+    return {
+      day: day.value,
+      opening: formatPeriods(openingHours?.[day.value] ?? []),
+      kitchen: formatPeriods(kitchenHours?.[day.value] ?? []),
+      happyHour: formatPeriods(happyHourHours?.[day.value] ?? []),
+      bottleShop: formatPeriods(bottleShopHours?.[day.value] ?? []),
+      deals,
+      events,
+      venueRules,
+    };
+  });
+}
+
+function takePortalOverviewPreviewLines(lines: string[], limit = 3) {
+  if (!lines.length) return ['Nothing set up yet'];
+  if (lines.length <= limit) return lines;
+  return [...lines.slice(0, limit), `+${lines.length - limit} more`];
+}
+
 export default function PortalVenueDetailPage() {
   const params = useParams<{ id: string }>();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -402,6 +502,8 @@ export default function PortalVenueDetailPage() {
   const [savingVenue, setSavingVenue] = useState(false);
   const [venueSaveMessage, setVenueSaveMessage] = useState<string | null>(null);
   const [venueSaveError, setVenueSaveError] = useState<string | null>(null);
+  const [portalMode, setPortalMode] = useState<PortalEditorMode>('overview');
+  const [portalEditTarget, setPortalEditTarget] = useState<PortalEditTarget>('schedule');
   const [scheduleType, setScheduleType] = useState<PortalScheduleType>('opening');
   const [saveMode, setSaveMode] = useState<SaveMode>('append');
   const [selectedDays, setSelectedDays] = useState<DayOfWeek[]>([]);
@@ -430,6 +532,7 @@ export default function PortalVenueDetailPage() {
     : savingVenue
     ? 'Saving venue details'
     : null;
+  const isPortalEditMode = portalMode === 'edit';
 
   async function portalAuthedFetch<T extends Record<string, unknown>>(input: string, init?: RequestInit) {
     const {
@@ -699,6 +802,8 @@ export default function PortalVenueDetailPage() {
   ) {
     resetScheduleForm();
     setScheduleType(nextScheduleType);
+    setPortalEditTarget('schedule');
+    setPortalMode('edit');
     if (nextScheduleType === 'venue_rule') {
       setVenueRuleKind(nextVenueRuleKind ?? 'kid');
     }
@@ -707,6 +812,8 @@ export default function PortalVenueDetailPage() {
   function loadDayIntoForm(day: DayOfWeek) {
     const rules = getLiveRules(venue, scheduleType).filter((rule) => rule.day_of_week === day);
     const periods = getExistingHours(venue, scheduleType)?.[day] ?? [];
+    setPortalEditTarget('schedule');
+    setPortalMode('edit');
     setSelectedDays([day]);
     if (rules.length > 0) {
       const first = rules[0];
@@ -764,6 +871,17 @@ export default function PortalVenueDetailPage() {
         : `No saved ${getScheduleTypeLabel(scheduleType).toLowerCase()} found for ${DAY_OPTIONS.find((option) => option.value === day)?.label}.`
     );
     setScheduleError(null);
+  }
+
+  function openPortalVenueEditor() {
+    setVenueSaveMessage(null);
+    setVenueSaveError(null);
+    setPortalEditTarget('venue');
+    setPortalMode('edit');
+  }
+
+  function backToPortalOverview() {
+    setPortalMode('overview');
   }
 
   async function handleSaveVenue() {
@@ -988,6 +1106,72 @@ export default function PortalVenueDetailPage() {
       ].filter(Boolean).length,
     [venue]
   );
+  const portalOverviewDaySummaries = useMemo(
+    () => (venue ? buildPortalVenueDaySummaries(venue) : []),
+    [venue]
+  );
+  const portalOverviewCards = useMemo<PortalOverviewCard[]>(() => {
+    if (!venue) return [];
+
+    const hourLines = portalOverviewDaySummaries.flatMap((summary) =>
+      [
+        summary.opening !== 'None' ? `${summary.day.toUpperCase()}: Opening ${summary.opening}` : null,
+        summary.kitchen !== 'None' ? `${summary.day.toUpperCase()}: Kitchen ${summary.kitchen}` : null,
+        summary.happyHour !== 'None'
+          ? `${summary.day.toUpperCase()}: Happy hour ${summary.happyHour}`
+          : null,
+        summary.bottleShop !== 'None'
+          ? `${summary.day.toUpperCase()}: Bottle shop ${summary.bottleShop}`
+          : null,
+      ].filter((line): line is string => Boolean(line))
+    );
+    const dealLines = portalOverviewDaySummaries.flatMap((summary) => summary.deals);
+    const eventLines = portalOverviewDaySummaries.flatMap((summary) => summary.events);
+    const venueRuleLines = portalOverviewDaySummaries.flatMap((summary) => summary.venueRules);
+
+    return [
+      {
+        title: 'Hours',
+        description: 'Opening, kitchen, happy hour, and bottle shop coverage.',
+        lines: takePortalOverviewPreviewLines(hourLines),
+      },
+      {
+        title: 'Deals',
+        description: 'Daily and lunch specials currently configured.',
+        lines: takePortalOverviewPreviewLines(dealLines),
+      },
+      {
+        title: 'Events',
+        description: 'Live event rows set up across the week.',
+        lines: takePortalOverviewPreviewLines(eventLines),
+      },
+      {
+        title: 'Venue rules',
+        description: 'Kid and dog access rules with public-facing summaries.',
+        lines: takePortalOverviewPreviewLines(venueRuleLines),
+      },
+    ];
+  }, [portalOverviewDaySummaries, venue]);
+  const portalVenueSummaryLines = useMemo(
+    () =>
+      [
+        venue?.address?.trim() ? venue.address.trim() : null,
+        venue?.phone?.trim() ? `Phone: ${venue.phone.trim()}` : null,
+        venue?.website_url?.trim() ? 'Website linked' : null,
+        venue?.instagram_url?.trim() ? 'Instagram linked' : null,
+        venue?.sport_types?.trim() ? `Sport: ${venue.sport_types.trim()}` : null,
+        venue?.sport_notes?.trim() ? `Sport notes: ${venue.sport_notes.trim()}` : null,
+        venue?.dog_friendly ? 'Dog friendly enabled' : null,
+        venue?.dog_friendly_notes?.trim()
+          ? `Dog notes: ${venue.dog_friendly_notes.trim()}`
+          : null,
+        venue?.kid_friendly ? 'Kid friendly enabled' : null,
+        venue?.kid_friendly_notes?.trim()
+          ? `Kid notes: ${venue.kid_friendly_notes.trim()}`
+          : null,
+      ].filter((line): line is string => Boolean(line)),
+    [venue]
+  );
 
   function updateHappyHourItem(
     category: HappyHourCategoryKey,
@@ -1077,7 +1261,7 @@ export default function PortalVenueDetailPage() {
     <div className="portal-shell min-h-screen bg-neutral-950 px-4 py-5 text-white sm:px-6 sm:py-8">
       <div className="mx-auto max-w-6xl">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-4">
-          <Link href="/portal" className="text-sm text-orange-200 hover:text-orange-100">â† Back to portal</Link>
+          <Link href="/portal" className="text-sm text-orange-200 hover:text-orange-100">Back to portal</Link>
           <Link href={venue ? buildPublicVenueHref(venue) : '/venues'} className="portal-ghost-button inline-flex min-h-[40px] items-center whitespace-nowrap rounded-xl border px-4 py-2 text-sm font-semibold">View this venue on website</Link>
         </div>
 
@@ -1109,355 +1293,490 @@ export default function PortalVenueDetailPage() {
           </div>
         </section>
 
-        <section className="mt-4 grid gap-2.5 sm:mt-5 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="portal-surface-subtle rounded-2xl border p-3.5">
-            <div className="text-xs uppercase tracking-[0.2em] text-white/50">Venue badges</div>
-            <div className="mt-2 text-xl font-semibold">{venueBadgeCount}</div>
-          </div>
-          <div className="portal-surface-subtle rounded-2xl border p-3.5">
-            <div className="text-xs uppercase tracking-[0.2em] text-white/50">Live event rows</div>
-            <div className="mt-2 text-xl font-semibold">{liveEventCount}</div>
-          </div>
-          <div className="portal-surface-subtle rounded-2xl border p-3.5">
-            <div className="text-xs uppercase tracking-[0.2em] text-white/50">Editing</div>
-            <div className="mt-2 text-sm font-semibold">{getScheduleTypePickerLabel(scheduleType, venueRuleKind)}</div>
-          </div>
-          <div className="portal-surface-subtle rounded-2xl border p-3.5">
-            <div className="text-xs uppercase tracking-[0.2em] text-white/50">Last update</div>
-            <div className="mt-2 text-sm font-semibold">
-              {venue.updated_at ? formatPortalTimestamp(venue.updated_at) : 'Not available'}
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-6 grid gap-4 sm:mt-8 sm:gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="portal-surface rounded-3xl border p-4 sm:p-6">
-            <h2 className="text-xl font-semibold">Venue profile</h2>
-            <p className="mt-2 text-sm leading-6 text-white/78">Update the public-facing details and venue tags for this venue.</p>
-            <div className="mt-5 space-y-4">
-              <div><label className="mb-1 block text-sm font-medium text-white/85">Venue name</label><input type="text" value={venueForm.name} onChange={(event) => updateVenueForm('name', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/85">Suburb</label><input type="text" value={venueForm.suburb} onChange={(event) => updateVenueForm('suburb', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/85">Address</label><input type="text" value={venueForm.address} onChange={(event) => updateVenueForm('address', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/85">Phone</label><input type="text" value={venueForm.phone} onChange={(event) => updateVenueForm('phone', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/85">Website</label><input type="text" value={venueForm.website_url} onChange={(event) => updateVenueForm('website_url', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/85">Instagram</label><input type="text" value={venueForm.instagram_url} onChange={(event) => updateVenueForm('instagram_url', event.target.value)} placeholder="@venuehandle or https://instagram.com/..." className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/85">Sport types</label><input type="text" value={venueForm.sport_types} onChange={(event) => updateVenueForm('sport_types', event.target.value)} placeholder="e.g. AFL, NRL, UFC" className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/85">Sport notes</label><textarea value={venueForm.sport_notes} onChange={(event) => updateVenueForm('sport_notes', event.target.value)} rows={2} placeholder="Optional notes like Sound for marquee games" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-            </div>
-            <div className="mt-4 grid gap-2 sm:mt-5 sm:grid-cols-2">
-              <button type="button" onClick={() => updateVenueForm('shows_sport', !venueForm.shows_sport)} className={`rounded-xl border px-3 py-3 text-left ${venueForm.shows_sport ? 'border-orange-300/40 bg-orange-500/10' : 'border-white/10 bg-black/25 hover:bg-white/[0.04]'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Shows live sport</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{venueForm.shows_sport ? 'Yes' : 'No'}</div></button>
-              <button type="button" onClick={() => updateVenueForm('plays_with_sound', !venueForm.plays_with_sound)} disabled={!venueForm.shows_sport && !venueForm.plays_with_sound} className={`rounded-xl border px-3 py-3 text-left ${venueForm.plays_with_sound ? 'border-orange-300/40 bg-orange-500/10' : venueForm.shows_sport ? 'border-white/10 bg-black/25 hover:bg-white/[0.04]' : 'border-white/10 bg-black/10 text-white/40'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Sport with sound</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{!venueForm.shows_sport && !venueForm.plays_with_sound ? 'Enable sport first' : venueForm.plays_with_sound ? 'Yes' : 'No'}</div></button>
-              <button type="button" onClick={() => updateVenueForm('dog_friendly', !venueForm.dog_friendly)} className={`rounded-xl border px-3 py-3 text-left ${venueForm.dog_friendly ? 'border-orange-300/40 bg-orange-500/10' : 'border-white/10 bg-black/25 hover:bg-white/[0.04]'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Dog friendly</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{venueForm.dog_friendly ? 'Yes' : 'No'}</div></button>
-              <button type="button" onClick={() => updateVenueForm('kid_friendly', !venueForm.kid_friendly)} className={`rounded-xl border px-3 py-3 text-left ${venueForm.kid_friendly ? 'border-orange-300/40 bg-orange-500/10' : 'border-white/10 bg-black/25 hover:bg-white/[0.04]'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Kid friendly</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{venueForm.kid_friendly ? 'Yes' : 'No'}</div></button>
-            </div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div><label className="mb-1 block text-sm font-medium text-white/85">Dog-friendly notes</label><textarea value={venueForm.dog_friendly_notes} onChange={(event) => updateVenueForm('dog_friendly_notes', event.target.value)} rows={2} placeholder="Optional notes like Beer garden only" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-              <div><label className="mb-1 block text-sm font-medium text-white/85">Kid-friendly notes</label><textarea value={venueForm.kid_friendly_notes} onChange={(event) => updateVenueForm('kid_friendly_notes', event.target.value)} rows={2} placeholder="Optional notes like Kids until 8pm in dining room" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-            </div>
-            {venueSaveMessage ? <div className="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{venueSaveMessage}</div> : null}
-            {venueSaveError ? <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{venueSaveError}</div> : null}
-            <div className="portal-focus-band mt-4 rounded-2xl border border-white/10 bg-[#0f1419]/92 p-3 shadow-[0_18px_48px_rgba(0,0,0,0.28)] sm:mt-5 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
-              <div className="mb-2 text-xs uppercase tracking-[0.16em] text-white/45 sm:hidden">Save venue</div>
-              <button type="button" onClick={handleSaveVenue} disabled={savingVenue} className="portal-primary-button min-h-[44px] rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{savingVenue ? 'Saving...' : 'Save venue details'}</button>
-            </div>
-          </div>
-
-          <div className="portal-surface rounded-3xl border p-4 sm:p-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-semibold">Hours, deals, events, and venue rules</h2>
-                <p className="mt-2 text-sm leading-6 text-white/76">Manage opening hours, specials, events, and time-based kid or dog access using the existing schedule flow.</p>
+        {!isPortalEditMode ? (
+          <>
+            <section className="mt-4 grid gap-2.5 sm:mt-5 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="portal-surface-subtle rounded-2xl border p-3.5">
+                <div className="text-xs uppercase tracking-[0.2em] text-white/50">Venue badges</div>
+                <div className="mt-2 text-xl font-semibold">{venueBadgeCount}</div>
               </div>
-              <div className="portal-surface-subtle rounded-2xl border px-4 py-3 text-sm text-white/68">{getScheduleTypePickerLabel(scheduleType, venueRuleKind)}</div>
-            </div>
-
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <div>
-                <GroupedScheduleTypeSelector
-                  scheduleType={scheduleType}
-                  venueRuleKind={venueRuleKind}
-                  onSelect={handleScheduleTypeSelection}
-                  variant="portal"
-                />
-                {isEventScheduleType(scheduleType) ? (
-                  <div className="mt-2 text-xs text-white/55">
-                    Event rows only show publicly when published details exist for that venue and day.
-                  </div>
-                ) : isVenueRuleScheduleType(scheduleType) ? (
-                  <div className="mt-2 text-xs text-white/55">
-                    Public signal: {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}
-                  </div>
-                ) : (
-                  <div className="mt-2 text-xs text-white/55">
-                    Keep hours, deals, and venue rules tidy here so the public venue page stays in sync.
-                  </div>
-                )}
+              <div className="portal-surface-subtle rounded-2xl border p-3.5">
+                <div className="text-xs uppercase tracking-[0.2em] text-white/50">Live event rows</div>
+                <div className="mt-2 text-xl font-semibold">{liveEventCount}</div>
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-white/82">Mode</label>
-                <PortalSelect
-                  value={saveMode}
-                  options={[
-                    { value: 'append', label: 'Add to existing' },
-                    { value: 'replace', label: 'Overwrite selected days' },
-                  ]}
-                  onChange={setSaveMode}
-                />
+              <div className="portal-surface-subtle rounded-2xl border p-3.5">
+                <div className="text-xs uppercase tracking-[0.2em] text-white/50">Current focus</div>
+                <div className="mt-2 text-sm font-semibold">Overview mode</div>
               </div>
-            </div>
+              <div className="portal-surface-subtle rounded-2xl border p-3.5">
+                <div className="text-xs uppercase tracking-[0.2em] text-white/50">Last update</div>
+                <div className="mt-2 text-sm font-semibold">
+                  {venue.updated_at ? formatPortalTimestamp(venue.updated_at) : 'Not available'}
+                </div>
+              </div>
+            </section>
 
-            <div className="mt-4 flex flex-wrap gap-2 sm:mt-5">
-              <button type="button" onClick={() => setDaysPreset('weekdays')} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">Mon-Fri</button>
-              <button type="button" onClick={() => setDaysPreset('weekend')} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">Weekend</button>
-              <button type="button" onClick={() => setDaysPreset('all')} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">All days</button>
-              <button type="button" onClick={() => setDaysPreset('clear')} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">Clear days</button>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2 sm:mt-5">
-              {DAY_OPTIONS.map((day) => {
-                const active = selectedDays.includes(day.value);
-                return <button key={day.value} type="button" onClick={() => toggleDay(day.value)} className={`min-h-[42px] rounded-xl border px-3 py-2 text-sm font-semibold ${active ? 'border-orange-400 bg-orange-500 text-black shadow-[0_0_0_2px_rgba(251,146,60,0.22)]' : 'portal-ghost-button'}`} aria-pressed={active}>{active ? `Selected ${day.label}` : day.label}</button>;
-              })}
-            </div>
-
-            <div className="portal-surface-subtle mt-4 rounded-2xl border p-4 sm:mt-5">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-white">Current saved entries</h3>
-                  <p className="mt-1 text-xs text-white/62">
-                    Load a saved day straight into the editor before updating deals or times.
+            <section className="portal-surface mt-6 rounded-3xl border p-4 sm:mt-8 sm:p-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-300/75">
+                    Current setup at a glance
+                  </div>
+                  <h2 className="mt-2 text-2xl font-semibold">Overview mode</h2>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-white/76">
+                    Review what is already configured for this venue, then choose one thing to edit. Overview stays read-only so the workflow stays clear on both desktop and mobile.
                   </p>
                 </div>
-                <div className="portal-surface rounded-xl border px-3 py-2 text-xs text-white/66">
-                  {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => handleScheduleTypeSelection('opening')} className="portal-primary-button rounded-xl border px-4 py-2 text-sm font-semibold">Edit hours</button>
+                  <button type="button" onClick={() => handleScheduleTypeSelection('daily_special')} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold">Edit deals</button>
+                  <button type="button" onClick={() => handleScheduleTypeSelection('trivia')} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold">Edit events</button>
+                  <button type="button" onClick={() => handleScheduleTypeSelection('venue_rule', 'kid')} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold">Edit venue rules</button>
+                  <button type="button" onClick={openPortalVenueEditor} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold">Edit venue details</button>
                 </div>
               </div>
 
-              <div className="grid gap-2 md:grid-cols-2">
-                {DAY_OPTIONS.map((day) => {
-                  const periods = existingHours?.[day.value] ?? [];
-                  const dayRules = currentRules.filter((rule) => rule.day_of_week === day.value);
-                  const selected = selectedDays.includes(day.value);
-                  const summary = dayRules.length
-                    ? dayRules
-                        .map((rule) => {
-                          const time = `${rule.start_time.slice(0, 5)}-${rule.end_time.slice(0, 5)}`;
-                          const text =
-                            rule.title?.trim() ||
-                            rule.deal_text?.trim() ||
-                            rule.description?.trim() ||
-                            '';
-                          return text ? `${time} ${text}` : time;
-                        })
-                        .join(' | ')
-                    : formatPeriods(periods);
+              <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                <div className="portal-surface-subtle rounded-2xl border p-4">
+                  <div className="text-sm font-semibold text-white">Venue details</div>
+                  <div className="mt-1 text-sm text-white/64">
+                    Public-facing details, tags, and rule notes already set on this venue.
+                  </div>
+                  <div className="mt-4 space-y-2 text-sm text-white/78">
+                    {takePortalOverviewPreviewLines(portalVenueSummaryLines, 6).map((line) => (
+                      <div key={line} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-                  return (
-                    <button
-                      key={day.value}
-                      type="button"
-                      onClick={() => loadDayIntoForm(day.value)}
-                      className={`portal-surface rounded-xl border p-3 text-left transition hover:border-orange-300/30 hover:bg-white/[0.02] ${
-                        selected
-                          ? 'border-orange-300/55 bg-orange-500/[0.12] shadow-[0_0_0_2px_rgba(251,146,60,0.18)]'
-                          : ''
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {portalOverviewCards.map((card) => (
+                    <div key={card.title} className="portal-surface-subtle rounded-2xl border p-4">
+                      <div className="text-sm font-semibold text-white">{card.title}</div>
+                      <div className="mt-1 text-sm text-white/60">{card.description}</div>
+                      <div className="mt-4 space-y-2 text-sm text-white/78">
+                        {card.lines.map((line) => (
+                          <div key={`${card.title}-${line}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                            {line}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <div className="text-sm font-semibold text-white">Weekly snapshot</div>
+                <div className="mt-1 text-sm text-white/60">
+                  A light summary of what is configured this week, without dropping you into the editor yet.
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {portalOverviewDaySummaries.map((summary) => {
+                    const lines = [
+                      summary.opening !== 'None' ? `Opening: ${summary.opening}` : null,
+                      summary.kitchen !== 'None' ? `Kitchen: ${summary.kitchen}` : null,
+                      summary.happyHour !== 'None' ? `Happy hour: ${summary.happyHour}` : null,
+                      summary.bottleShop !== 'None' ? `Bottle shop: ${summary.bottleShop}` : null,
+                      summary.deals[0] ?? null,
+                      summary.events[0] ?? null,
+                      summary.venueRules[0] ?? null,
+                    ].filter((line): line is string => Boolean(line));
+
+                    return (
+                      <div key={summary.day} className="portal-surface-subtle rounded-2xl border p-4">
                         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-300/75">
-                          {day.label}
+                          {DAY_OPTIONS.find((option) => option.value === summary.day)?.label}
                         </div>
-                        {selected ? (
-                          <span className="rounded-full border border-orange-300/35 bg-orange-500/18 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-orange-50">
-                            Selected
-                          </span>
+                        <div className="mt-3 space-y-2 text-sm text-white/78">
+                          {lines.length > 0 ? (
+                            lines.map((line) => (
+                              <div key={`${summary.day}-${line}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                                {line}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="rounded-xl border border-dashed border-white/10 px-3 py-2 text-white/48">
+                              Nothing configured yet
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+          </>
+        ) : (
+          <>
+            <section className="portal-surface mt-6 rounded-3xl border p-4 sm:mt-8 sm:p-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <button type="button" onClick={backToPortalOverview} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold">
+                    Back to overview
+                  </button>
+                  <div className="mt-3 text-2xl font-semibold">{venue.name ?? 'Untitled venue'}</div>
+                  <div className="mt-1 text-sm text-white/64">
+                    Editing:{' '}
+                    {portalEditTarget === 'venue'
+                      ? 'Venue details'
+                      : getScheduleTypePickerLabel(scheduleType, venueRuleKind)}
+                  </div>
+                </div>
+                <div className="portal-surface-subtle rounded-2xl border px-4 py-3 text-sm text-white/68">
+                  {portalEditTarget === 'venue'
+                    ? 'Focused venue edit'
+                    : 'Focused schedule edit'}
+                </div>
+              </div>
+            </section>
+
+            <section className="mt-6">
+              {portalEditTarget === 'venue' ? (
+                <div className="portal-surface rounded-3xl border p-4 sm:p-6">
+                  <h2 className="text-xl font-semibold">Venue details</h2>
+                  <p className="mt-2 text-sm leading-6 text-white/78">Update the public-facing details and venue tags for this venue.</p>
+                  <div className="mt-5 space-y-4">
+                    <div><label className="mb-1 block text-sm font-medium text-white/85">Venue name</label><input type="text" value={venueForm.name} onChange={(event) => updateVenueForm('name', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                    <div><label className="mb-1 block text-sm font-medium text-white/85">Suburb</label><input type="text" value={venueForm.suburb} onChange={(event) => updateVenueForm('suburb', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                    <div><label className="mb-1 block text-sm font-medium text-white/85">Address</label><input type="text" value={venueForm.address} onChange={(event) => updateVenueForm('address', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                    <div><label className="mb-1 block text-sm font-medium text-white/85">Phone</label><input type="text" value={venueForm.phone} onChange={(event) => updateVenueForm('phone', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                    <div><label className="mb-1 block text-sm font-medium text-white/85">Website</label><input type="text" value={venueForm.website_url} onChange={(event) => updateVenueForm('website_url', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                    <div><label className="mb-1 block text-sm font-medium text-white/85">Instagram</label><input type="text" value={venueForm.instagram_url} onChange={(event) => updateVenueForm('instagram_url', event.target.value)} placeholder="@venuehandle or https://instagram.com/..." className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                    <div><label className="mb-1 block text-sm font-medium text-white/85">Sport types</label><input type="text" value={venueForm.sport_types} onChange={(event) => updateVenueForm('sport_types', event.target.value)} placeholder="e.g. AFL, NRL, UFC" className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                    <div><label className="mb-1 block text-sm font-medium text-white/85">Sport notes</label><textarea value={venueForm.sport_notes} onChange={(event) => updateVenueForm('sport_notes', event.target.value)} rows={2} placeholder="Optional notes like Sound for marquee games" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                  </div>
+                  <div className="mt-4 grid gap-2 sm:mt-5 sm:grid-cols-2">
+                    <button type="button" onClick={() => updateVenueForm('shows_sport', !venueForm.shows_sport)} className={`rounded-xl border px-3 py-3 text-left ${venueForm.shows_sport ? 'border-orange-300/40 bg-orange-500/10' : 'border-white/10 bg-black/25 hover:bg-white/[0.04]'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Shows live sport</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{venueForm.shows_sport ? 'Yes' : 'No'}</div></button>
+                    <button type="button" onClick={() => updateVenueForm('plays_with_sound', !venueForm.plays_with_sound)} disabled={!venueForm.shows_sport && !venueForm.plays_with_sound} className={`rounded-xl border px-3 py-3 text-left ${venueForm.plays_with_sound ? 'border-orange-300/40 bg-orange-500/10' : venueForm.shows_sport ? 'border-white/10 bg-black/25 hover:bg-white/[0.04]' : 'border-white/10 bg-black/10 text-white/40'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Sport with sound</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{!venueForm.shows_sport && !venueForm.plays_with_sound ? 'Enable sport first' : venueForm.plays_with_sound ? 'Yes' : 'No'}</div></button>
+                    <button type="button" onClick={() => updateVenueForm('dog_friendly', !venueForm.dog_friendly)} className={`rounded-xl border px-3 py-3 text-left ${venueForm.dog_friendly ? 'border-orange-300/40 bg-orange-500/10' : 'border-white/10 bg-black/25 hover:bg-white/[0.04]'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Dog friendly</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{venueForm.dog_friendly ? 'Yes' : 'No'}</div></button>
+                    <button type="button" onClick={() => updateVenueForm('kid_friendly', !venueForm.kid_friendly)} className={`rounded-xl border px-3 py-3 text-left ${venueForm.kid_friendly ? 'border-orange-300/40 bg-orange-500/10' : 'border-white/10 bg-black/25 hover:bg-white/[0.04]'}`}><div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">Kid friendly</div><div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/50">{venueForm.kid_friendly ? 'Yes' : 'No'}</div></button>
+                  </div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div><label className="mb-1 block text-sm font-medium text-white/85">Dog-friendly notes</label><textarea value={venueForm.dog_friendly_notes} onChange={(event) => updateVenueForm('dog_friendly_notes', event.target.value)} rows={2} placeholder="Optional notes like Beer garden only" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                    <div><label className="mb-1 block text-sm font-medium text-white/85">Kid-friendly notes</label><textarea value={venueForm.kid_friendly_notes} onChange={(event) => updateVenueForm('kid_friendly_notes', event.target.value)} rows={2} placeholder="Optional notes like Kids until 8pm in dining room" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                  </div>
+                  {venueSaveMessage ? <div className="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{venueSaveMessage}</div> : null}
+                  {venueSaveError ? <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{venueSaveError}</div> : null}
+                  <div className="portal-focus-band mt-4 rounded-2xl border border-white/10 bg-[#0f1419]/92 p-3 shadow-[0_18px_48px_rgba(0,0,0,0.28)] sm:mt-5 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
+                    <div className="mb-2 text-xs uppercase tracking-[0.16em] text-white/45 sm:hidden">Save venue</div>
+                    <div className="flex flex-wrap gap-2.5">
+                      <button type="button" onClick={handleSaveVenue} disabled={savingVenue} className="portal-primary-button min-h-[44px] rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{savingVenue ? 'Saving...' : 'Save venue details'}</button>
+                      <button type="button" onClick={backToPortalOverview} className="portal-ghost-button min-h-[44px] rounded-xl border px-4 py-2 text-sm font-semibold">Back to overview</button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {portalEditTarget === 'schedule' ? (
+                <div className="portal-surface rounded-3xl border p-4 sm:p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-xl font-semibold">Edit schedule</h2>
+                      <p className="mt-2 text-sm leading-6 text-white/76">Choose one edit type, update only the relevant fields, then save and return to overview when you are done.</p>
+                    </div>
+                    <div className="portal-surface-subtle rounded-2xl border px-4 py-3 text-sm text-white/68">{getScheduleTypePickerLabel(scheduleType, venueRuleKind)}</div>
+                  </div>
+
+                  <div className="portal-surface-subtle mt-5 rounded-2xl border p-4">
+                    <div className="text-sm font-semibold text-white">Ready to save</div>
+                    <div className="mt-1 text-xs text-white/62">
+                      Review the impact below before saving or deleting anything.
+                    </div>
+                    <div className="mt-3 grid gap-3 text-sm text-white/76 md:grid-cols-2">
+                      <div><span className="font-medium text-white">Schedule type:</span> {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}</div>
+                      <div><span className="font-medium text-white">Existing rows:</span> {saveMode === 'replace' ? 'Overwrite selected days' : 'Keep existing and add new rows'}</div>
+                      <div><span className="font-medium text-white">Venue:</span> {venue.name ?? 'Untitled venue'}</div>
+                      <div><span className="font-medium text-white">Days:</span> {selectedDays.length ? selectedDays.join(', ') : 'No days selected'}</div>
+                      <div><span className="font-medium text-white">Time blocks entered:</span> {timeBlocks.length}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <div>
+                      <div className="mb-2 text-sm font-semibold text-white">What do you want to update?</div>
+                      <div className="text-xs text-white/55">Choose one edit type, then work in the focused form below.</div>
+                      <div className="mt-3">
+                        <GroupedScheduleTypeSelector
+                          scheduleType={scheduleType}
+                          venueRuleKind={venueRuleKind}
+                          onSelect={handleScheduleTypeSelection}
+                          variant="portal"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-white/82">Mode</label>
+                      <PortalSelect
+                        value={saveMode}
+                        options={[
+                          { value: 'append', label: 'Add to existing' },
+                          { value: 'replace', label: 'Overwrite selected days' },
+                        ]}
+                        onChange={setSaveMode}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2 sm:mt-5">
+                    <button type="button" onClick={() => setDaysPreset('weekdays')} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">Mon-Fri</button>
+                    <button type="button" onClick={() => setDaysPreset('weekend')} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">Weekend</button>
+                    <button type="button" onClick={() => setDaysPreset('all')} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">All days</button>
+                    <button type="button" onClick={() => setDaysPreset('clear')} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">Clear days</button>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2 sm:mt-5">
+                    {DAY_OPTIONS.map((day) => {
+                      const active = selectedDays.includes(day.value);
+                      return <button key={day.value} type="button" onClick={() => toggleDay(day.value)} className={`min-h-[42px] rounded-xl border px-3 py-2 text-sm font-semibold ${active ? 'border-orange-400 bg-orange-500 text-black shadow-[0_0_0_2px_rgba(251,146,60,0.22)]' : 'portal-ghost-button'}`} aria-pressed={active}>{active ? `Selected ${day.label}` : day.label}</button>;
+                    })}
+                  </div>
+
+                  <div className="portal-surface-subtle mt-4 rounded-2xl border p-4 sm:mt-5">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-white">Current saved entries</h3>
+                        <p className="mt-1 text-xs text-white/62">
+                          Load a saved day straight into the editor before updating deals or times.
+                        </p>
+                      </div>
+                      <div className="portal-surface rounded-xl border px-3 py-2 text-xs text-white/66">
+                        {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {DAY_OPTIONS.map((day) => {
+                        const periods = existingHours?.[day.value] ?? [];
+                        const dayRules = currentRules.filter((rule) => rule.day_of_week === day.value);
+                        const selected = selectedDays.includes(day.value);
+                        const summary = dayRules.length
+                          ? dayRules
+                              .map((rule) => {
+                                const time = `${rule.start_time.slice(0, 5)}-${rule.end_time.slice(0, 5)}`;
+                                const text =
+                                  rule.title?.trim() ||
+                                  rule.deal_text?.trim() ||
+                                  rule.description?.trim() ||
+                                  '';
+                                return text ? `${time} ${text}` : time;
+                              })
+                              .join(' | ')
+                          : formatPeriods(periods);
+
+                        return (
+                          <button
+                            key={day.value}
+                            type="button"
+                            onClick={() => loadDayIntoForm(day.value)}
+                            className={`portal-surface rounded-xl border p-3 text-left transition hover:border-orange-300/30 hover:bg-white/[0.02] ${
+                              selected
+                                ? 'border-orange-300/55 bg-orange-500/[0.12] shadow-[0_0_0_2px_rgba(251,146,60,0.18)]'
+                                : ''
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-300/75">
+                                {day.label}
+                              </div>
+                              {selected ? (
+                                <span className="rounded-full border border-orange-300/35 bg-orange-500/18 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-orange-50">
+                                  Selected
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="mt-1 text-sm font-medium text-white">{summary}</div>
+                            <div className="mt-2 text-[11px] text-white/55">
+                              {dayRules.length || periods.length
+                                ? 'Load this day into editor'
+                                : 'Start a new entry for this day'}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 sm:mt-6">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-white/85">Time blocks</div>
+                        {isVenueRuleScheduleType(scheduleType) ? (
+                          <div className="mt-1 text-xs text-white/56">
+                            These times control when the rule is active publicly.
+                          </div>
                         ) : null}
                       </div>
-                      <div className="mt-1 text-sm font-medium text-white">{summary}</div>
-                      <div className="mt-2 text-[11px] text-white/55">
-                        {dayRules.length || periods.length
-                          ? 'Load this day into editor'
-                          : 'Start a new entry for this day'}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                      <button type="button" onClick={addTimeBlock} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">Add block</button>
+                    </div>
+                    <div className="space-y-3">
+                      {timeBlocks.map((block, index) => (
+                        <div key={`${index}-${block.start_time}-${block.end_time}`} className="portal-surface-subtle grid gap-2.5 rounded-2xl border p-3 md:grid-cols-[1fr_1fr_auto]">
+                          <input type="time" value={block.start_time} onChange={(event) => updateTimeBlock(index, 'start_time', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" />
+                          <input type="time" value={block.end_time} onChange={(event) => updateTimeBlock(index, 'end_time', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" />
+                          <button type="button" onClick={() => removeTimeBlock(index)} className="portal-danger-button rounded-xl border px-3 py-2 text-sm">Remove</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
-            <div className="mt-5 sm:mt-6">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-white/85">Time blocks</div>
-                  {isVenueRuleScheduleType(scheduleType) ? (
-                    <div className="mt-1 text-xs text-white/56">
-                      These times control when the rule is active publicly.
+                  {(scheduleType === 'daily_special' || scheduleType === 'lunch_special' || isEventScheduleType(scheduleType)) ? (
+                    <div className="mt-4 grid gap-3 md:mt-5 md:grid-cols-2">
+                      <div><label className="mb-1 block text-sm font-medium text-white/82">Title</label><input type="text" value={title} onChange={(event) => setTitle(event.target.value)} placeholder={scheduleType === 'daily_special' ? 'e.g. Steak Night' : scheduleType === 'lunch_special' ? 'e.g. Lunch Special' : 'Optional event title'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                      <div><label className="mb-1 block text-sm font-medium text-white/82">{isEventScheduleType(scheduleType) ? 'Summary' : 'Deal text / summary'}</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder={scheduleType === 'daily_special' ? 'e.g. Parmi + chips $20' : scheduleType === 'lunch_special' ? 'e.g. Lunch special $15' : 'Short event summary for the public card'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
                     </div>
                   ) : null}
-                </div>
-                <button type="button" onClick={addTimeBlock} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">Add block</button>
-              </div>
-              <div className="space-y-3">
-                {timeBlocks.map((block, index) => (
-                  <div key={`${index}-${block.start_time}-${block.end_time}`} className="portal-surface-subtle grid gap-2.5 rounded-2xl border p-3 md:grid-cols-[1fr_1fr_auto]">
-                    <input type="time" value={block.start_time} onChange={(event) => updateTimeBlock(index, 'start_time', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" />
-                    <input type="time" value={block.end_time} onChange={(event) => updateTimeBlock(index, 'end_time', event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" />
-                    <button type="button" onClick={() => removeTimeBlock(index)} className="portal-danger-button rounded-xl border px-3 py-2 text-sm">Remove</button>
+                  {isVenueRuleScheduleType(scheduleType) ? (
+                    <div className="mt-4"><label className="mb-1 block text-sm font-medium text-white/82">Public summary</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder={venueRuleKind === 'kid' ? 'e.g. Kids until 8pm' : 'e.g. Dogs front bar only'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                  ) : null}
+                  {scheduleType === 'happy_hour' ? (
+                    <div className="mt-4"><label className="mb-1 block text-sm font-medium text-white/82">Deal text / summary</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder="e.g. $7 schooners / $15 burgers" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                  ) : null}
+                  {(scheduleType === 'daily_special' || scheduleType === 'lunch_special') ? (
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-white/82">Structured price</label>
+                        <input type="number" inputMode="decimal" min="0" step="0.01" value={specialPrice} onChange={(event) => setSpecialPrice(event.target.value)} placeholder={scheduleType === 'lunch_special' ? 'e.g. 15' : 'e.g. 20'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" />
+                        <div className="mt-1 text-xs text-white/55">
+                          Used for filterable special pricing without changing your public copy.
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  {(isDealScheduleType(scheduleType) || isEventScheduleType(scheduleType) || scheduleType === 'happy_hour') ? (
+                    <div className="mt-3.5"><label className="mb-1 block text-sm font-medium text-white/82">Description</label><textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} placeholder={isDealScheduleType(scheduleType) ? 'Optional detail for this special or offer' : isEventScheduleType(scheduleType) ? 'Optional event detail for the public card or venue page' : 'Optional happy hour detail if you need more context'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                  ) : null}
+                  {(isDealScheduleType(scheduleType) || isEventScheduleType(scheduleType) || isVenueRuleScheduleType(scheduleType) || scheduleType === 'happy_hour') ? (
+                    <div className="mt-3.5"><label className="mb-1 block text-sm font-medium text-white/82">Notes</label><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder={isVenueRuleScheduleType(scheduleType) ? 'Optional nuance such as Beer garden only or Front bar only' : 'Optional notes'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                  ) : null}
+                  {scheduleType === 'happy_hour' ? (
+                    <div className="mt-5 space-y-4">
+                      <div className="portal-surface-subtle rounded-2xl border border-orange-300/20 px-4 py-3 text-sm text-orange-50">
+                        Add beer, wine, spirits, cocktails, and food items so the public venue page can show structured happy hour deals instead of a single summary line.
+                      </div>
+                      <div className="grid gap-3.5 xl:grid-cols-2">
+                        <HappyHourCategoryEditor
+                          label="Beer"
+                          items={happyHourForm.beer}
+                          onAdd={() => addHappyHourItem('beer')}
+                          onRemove={(itemId) => removeHappyHourItem('beer', itemId)}
+                          onUpdateItem={(itemId, field, value) =>
+                            updateHappyHourItem('beer', itemId, field, value)
+                          }
+                          onAddPrice={(itemId) => addHappyHourPrice('beer', itemId)}
+                          onRemovePrice={(itemId, priceId) =>
+                            removeHappyHourPrice('beer', itemId, priceId)
+                          }
+                          onUpdatePrice={(itemId, priceId, field, value) =>
+                            updateHappyHourPrice('beer', itemId, priceId, field, value)
+                          }
+                        />
+                        <HappyHourCategoryEditor
+                          label="Wine"
+                          items={happyHourForm.wine}
+                          onAdd={() => addHappyHourItem('wine')}
+                          onRemove={(itemId) => removeHappyHourItem('wine', itemId)}
+                          onUpdateItem={(itemId, field, value) =>
+                            updateHappyHourItem('wine', itemId, field, value)
+                          }
+                          onAddPrice={(itemId) => addHappyHourPrice('wine', itemId)}
+                          onRemovePrice={(itemId, priceId) =>
+                            removeHappyHourPrice('wine', itemId, priceId)
+                          }
+                          onUpdatePrice={(itemId, priceId, field, value) =>
+                            updateHappyHourPrice('wine', itemId, priceId, field, value)
+                          }
+                        />
+                        <HappyHourCategoryEditor
+                          label="Spirits"
+                          items={happyHourForm.spirits}
+                          onAdd={() => addHappyHourItem('spirits')}
+                          onRemove={(itemId) => removeHappyHourItem('spirits', itemId)}
+                          onUpdateItem={(itemId, field, value) =>
+                            updateHappyHourItem('spirits', itemId, field, value)
+                          }
+                          onAddPrice={(itemId) => addHappyHourPrice('spirits', itemId)}
+                          onRemovePrice={(itemId, priceId) =>
+                            removeHappyHourPrice('spirits', itemId, priceId)
+                          }
+                          onUpdatePrice={(itemId, priceId, field, value) =>
+                            updateHappyHourPrice('spirits', itemId, priceId, field, value)
+                          }
+                        />
+                        <HappyHourCategoryEditor
+                          label="Cocktails"
+                          items={happyHourForm.cocktails}
+                          onAdd={() => addHappyHourItem('cocktails')}
+                          onRemove={(itemId) => removeHappyHourItem('cocktails', itemId)}
+                          onUpdateItem={(itemId, field, value) =>
+                            updateHappyHourItem('cocktails', itemId, field, value)
+                          }
+                          onAddPrice={(itemId) => addHappyHourPrice('cocktails', itemId)}
+                          onRemovePrice={(itemId, priceId) =>
+                            removeHappyHourPrice('cocktails', itemId, priceId)
+                          }
+                          onUpdatePrice={(itemId, priceId, field, value) =>
+                            updateHappyHourPrice('cocktails', itemId, priceId, field, value)
+                          }
+                        />
+                      </div>
+                      <HappyHourCategoryEditor
+                        label="Food"
+                        items={happyHourForm.food}
+                        onAdd={() => addHappyHourItem('food')}
+                        onRemove={(itemId) => removeHappyHourItem('food', itemId)}
+                        onUpdateItem={(itemId, field, value) =>
+                          updateHappyHourItem('food', itemId, field, value)
+                        }
+                        onAddPrice={(itemId) => addHappyHourPrice('food', itemId)}
+                        onRemovePrice={(itemId, priceId) =>
+                          removeHappyHourPrice('food', itemId, priceId)
+                        }
+                        onUpdatePrice={(itemId, priceId, field, value) =>
+                          updateHappyHourPrice('food', itemId, priceId, field, value)
+                        }
+                      />
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-white/82">
+                          Happy hour notes
+                        </label>
+                        <textarea
+                          value={happyHourForm.notes}
+                          onChange={(event) =>
+                            setHappyHourForm((current) => ({
+                              ...current,
+                              notes: event.target.value,
+                            }))
+                          }
+                          rows={3}
+                          placeholder="Optional notes shown with the deal details"
+                          className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40"
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {scheduleMessage ? <div className="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{scheduleMessage}</div> : null}
+                  {scheduleError ? <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{scheduleError}</div> : null}
+
+                  <div className="portal-focus-band mt-5 rounded-2xl border border-white/10 bg-[#0f1419]/92 p-3 shadow-[0_18px_48px_rgba(0,0,0,0.28)] sm:mt-6 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
+                    <div className="mb-2 text-xs uppercase tracking-[0.16em] text-white/45 sm:hidden">Save schedule</div>
+                    <div className="flex flex-wrap gap-2.5">
+                      <button type="button" onClick={handleSaveSchedule} disabled={savingSchedule || clearingSchedule} className="portal-primary-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{savingSchedule ? 'Saving...' : 'Save entry'}</button>
+                      <button type="button" onClick={resetScheduleForm} disabled={savingSchedule || clearingSchedule} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">Clear form</button>
+                      <button type="button" onClick={backToPortalOverview} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold">Back to overview</button>
+                      <button type="button" onClick={handleDeleteSelectedDays} disabled={savingSchedule || clearingSchedule} className="portal-danger-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{clearingSchedule ? 'Working...' : 'Delete selected days'}</button>
+                      <button type="button" onClick={handleDeleteAllForType} disabled={savingSchedule || clearingSchedule} className="portal-danger-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">Delete all {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}</button>
+                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {(scheduleType === 'daily_special' || scheduleType === 'lunch_special' || isEventScheduleType(scheduleType)) ? (
-              <div className="mt-4 grid gap-3 md:mt-5 md:grid-cols-2">
-                <div><label className="mb-1 block text-sm font-medium text-white/82">Title</label><input type="text" value={title} onChange={(event) => setTitle(event.target.value)} placeholder={scheduleType === 'daily_special' ? 'e.g. Steak Night' : scheduleType === 'lunch_special' ? 'e.g. Lunch Special' : 'Optional event title'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-                <div><label className="mb-1 block text-sm font-medium text-white/82">{isEventScheduleType(scheduleType) ? 'Summary' : 'Deal text / summary'}</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder={scheduleType === 'daily_special' ? 'e.g. Parmi + chips $20' : scheduleType === 'lunch_special' ? 'e.g. Lunch special $15' : 'Short event summary for the public card'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-              </div>
-            ) : null}
-            {isVenueRuleScheduleType(scheduleType) ? (
-              <div className="mt-4"><label className="mb-1 block text-sm font-medium text-white/82">Public summary</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder={venueRuleKind === 'kid' ? 'e.g. Kids until 8pm' : 'e.g. Dogs front bar only'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-            ) : null}
-            {scheduleType === 'happy_hour' ? (
-              <div className="mt-4"><label className="mb-1 block text-sm font-medium text-white/82">Deal text / summary</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder="e.g. $7 schooners / $15 burgers" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-            ) : null}
-            {(scheduleType === 'daily_special' || scheduleType === 'lunch_special') ? (
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-white/82">Structured price</label>
-                  <input type="number" inputMode="decimal" min="0" step="0.01" value={specialPrice} onChange={(event) => setSpecialPrice(event.target.value)} placeholder={scheduleType === 'lunch_special' ? 'e.g. 15' : 'e.g. 20'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" />
-                  <div className="mt-1 text-xs text-white/55">
-                    Used for filterable special pricing without changing your public copy.
-                  </div>
                 </div>
-              </div>
-            ) : null}
-            {(isDealScheduleType(scheduleType) || isEventScheduleType(scheduleType) || scheduleType === 'happy_hour') ? (
-              <div className="mt-3.5"><label className="mb-1 block text-sm font-medium text-white/82">Description</label><textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} placeholder={isDealScheduleType(scheduleType) ? 'Optional detail for this special or offer' : isEventScheduleType(scheduleType) ? 'Optional event detail for the public card or venue page' : 'Optional happy hour detail if you need more context'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-            ) : null}
-            {(isDealScheduleType(scheduleType) || isEventScheduleType(scheduleType) || isVenueRuleScheduleType(scheduleType) || scheduleType === 'happy_hour') ? (
-              <div className="mt-3.5"><label className="mb-1 block text-sm font-medium text-white/82">Notes</label><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder={isVenueRuleScheduleType(scheduleType) ? 'Optional nuance such as Beer garden only or Front bar only' : 'Optional notes'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-            ) : null}
-            {scheduleType === 'happy_hour' ? (
-              <div className="mt-5 space-y-4">
-                <div className="portal-surface-subtle rounded-2xl border border-orange-300/20 px-4 py-3 text-sm text-orange-50">
-                  Add beer, wine, spirits, cocktails, and food items so the public venue page can show structured happy hour deals instead of a single summary line.
-                </div>
-                <div className="grid gap-3.5 xl:grid-cols-2">
-                  <HappyHourCategoryEditor
-                    label="Beer"
-                    items={happyHourForm.beer}
-                    onAdd={() => addHappyHourItem('beer')}
-                    onRemove={(itemId) => removeHappyHourItem('beer', itemId)}
-                    onUpdateItem={(itemId, field, value) =>
-                      updateHappyHourItem('beer', itemId, field, value)
-                    }
-                    onAddPrice={(itemId) => addHappyHourPrice('beer', itemId)}
-                    onRemovePrice={(itemId, priceId) =>
-                      removeHappyHourPrice('beer', itemId, priceId)
-                    }
-                    onUpdatePrice={(itemId, priceId, field, value) =>
-                      updateHappyHourPrice('beer', itemId, priceId, field, value)
-                    }
-                  />
-                  <HappyHourCategoryEditor
-                    label="Wine"
-                    items={happyHourForm.wine}
-                    onAdd={() => addHappyHourItem('wine')}
-                    onRemove={(itemId) => removeHappyHourItem('wine', itemId)}
-                    onUpdateItem={(itemId, field, value) =>
-                      updateHappyHourItem('wine', itemId, field, value)
-                    }
-                    onAddPrice={(itemId) => addHappyHourPrice('wine', itemId)}
-                    onRemovePrice={(itemId, priceId) =>
-                      removeHappyHourPrice('wine', itemId, priceId)
-                    }
-                    onUpdatePrice={(itemId, priceId, field, value) =>
-                      updateHappyHourPrice('wine', itemId, priceId, field, value)
-                    }
-                  />
-                  <HappyHourCategoryEditor
-                    label="Spirits"
-                    items={happyHourForm.spirits}
-                    onAdd={() => addHappyHourItem('spirits')}
-                    onRemove={(itemId) => removeHappyHourItem('spirits', itemId)}
-                    onUpdateItem={(itemId, field, value) =>
-                      updateHappyHourItem('spirits', itemId, field, value)
-                    }
-                    onAddPrice={(itemId) => addHappyHourPrice('spirits', itemId)}
-                    onRemovePrice={(itemId, priceId) =>
-                      removeHappyHourPrice('spirits', itemId, priceId)
-                    }
-                    onUpdatePrice={(itemId, priceId, field, value) =>
-                      updateHappyHourPrice('spirits', itemId, priceId, field, value)
-                    }
-                  />
-                  <HappyHourCategoryEditor
-                    label="Cocktails"
-                    items={happyHourForm.cocktails}
-                    onAdd={() => addHappyHourItem('cocktails')}
-                    onRemove={(itemId) => removeHappyHourItem('cocktails', itemId)}
-                    onUpdateItem={(itemId, field, value) =>
-                      updateHappyHourItem('cocktails', itemId, field, value)
-                    }
-                    onAddPrice={(itemId) => addHappyHourPrice('cocktails', itemId)}
-                    onRemovePrice={(itemId, priceId) =>
-                      removeHappyHourPrice('cocktails', itemId, priceId)
-                    }
-                    onUpdatePrice={(itemId, priceId, field, value) =>
-                      updateHappyHourPrice('cocktails', itemId, priceId, field, value)
-                    }
-                  />
-                </div>
-                <HappyHourCategoryEditor
-                  label="Food"
-                  items={happyHourForm.food}
-                  onAdd={() => addHappyHourItem('food')}
-                  onRemove={(itemId) => removeHappyHourItem('food', itemId)}
-                  onUpdateItem={(itemId, field, value) =>
-                    updateHappyHourItem('food', itemId, field, value)
-                  }
-                  onAddPrice={(itemId) => addHappyHourPrice('food', itemId)}
-                  onRemovePrice={(itemId, priceId) =>
-                    removeHappyHourPrice('food', itemId, priceId)
-                  }
-                  onUpdatePrice={(itemId, priceId, field, value) =>
-                    updateHappyHourPrice('food', itemId, priceId, field, value)
-                  }
-                />
-                <div>
-                    <label className="mb-1 block text-sm font-medium text-white/82">
-                    Happy hour notes
-                  </label>
-                  <textarea
-                    value={happyHourForm.notes}
-                    onChange={(event) =>
-                      setHappyHourForm((current) => ({
-                        ...current,
-                        notes: event.target.value,
-                      }))
-                    }
-                    rows={3}
-                    placeholder="Optional notes shown with the deal details"
-                    className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40"
-                  />
-                </div>
-              </div>
-            ) : null}
-
-            {scheduleMessage ? <div className="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{scheduleMessage}</div> : null}
-            {scheduleError ? <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">{scheduleError}</div> : null}
-
-            <div className="portal-focus-band mt-5 rounded-2xl border border-white/10 bg-[#0f1419]/92 p-3 shadow-[0_18px_48px_rgba(0,0,0,0.28)] sm:mt-6 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
-              <div className="mb-2 text-xs uppercase tracking-[0.16em] text-white/45 sm:hidden">Save schedule</div>
-              <div className="flex flex-wrap gap-2.5">
-                <button type="button" onClick={handleSaveSchedule} disabled={savingSchedule || clearingSchedule} className="portal-primary-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{savingSchedule ? 'Saving...' : 'Save entry'}</button>
-                <button type="button" onClick={resetScheduleForm} disabled={savingSchedule || clearingSchedule} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">Clear form</button>
-                <button type="button" onClick={handleDeleteSelectedDays} disabled={savingSchedule || clearingSchedule} className="portal-danger-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{clearingSchedule ? 'Working...' : 'Delete selected days'}</button>
-                <button type="button" onClick={handleDeleteAllForType} disabled={savingSchedule || clearingSchedule} className="portal-danger-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">Delete all {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}</button>
-              </div>
-            </div>
-          </div>
-        </section>
+              ) : null}
+            </section>
+          </>
+        )}
 
         <section className="portal-surface mt-6 rounded-3xl border p-4 sm:p-6">
           <div className="flex items-center justify-between gap-3">

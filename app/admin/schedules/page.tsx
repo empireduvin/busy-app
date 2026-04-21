@@ -281,10 +281,12 @@ type VenueDaySummary = {
   happyHour: string | null;
   bottleShop: string | null;
   happyHourDetails: string[];
+  deals: string[];
   events: Array<{
     scheduleType: ScheduleType;
     summary: string;
   }>;
+  venueRules: string[];
 };
 
 const CORE_SINGLE_VENUE_TYPES: ScheduleType[] = ['opening', 'kitchen', 'happy_hour', 'bottle_shop'];
@@ -693,6 +695,32 @@ function buildVenueDaySummaries(venue: Venue): VenueDaySummary[] {
           summary: title ? `${label}: ${time} ${title}` : `${label}: ${time}`,
         };
       });
+    const dealLines = dayRules
+      .filter(
+        (rule) =>
+          rule.schedule_type === 'daily_special' || rule.schedule_type === 'lunch_special'
+      )
+      .map((rule) => {
+        const label = getScheduleTypeLabel(rule.schedule_type);
+        const time = `${rule.start_time?.slice(0, 5) ?? ''}-${rule.end_time?.slice(0, 5) ?? ''}`;
+        const text =
+          rule.deal_text?.trim() ||
+          rule.title?.trim() ||
+          rule.description?.trim() ||
+          rule.notes?.trim() ||
+          '';
+        return text ? `${label}: ${time} ${text}` : `${label}: ${time}`;
+      });
+    const venueRuleLines = dayRules
+      .filter((rule) => rule.schedule_type === 'venue_rule')
+      .map((rule) => {
+        const detailJson = normalizeScheduleRuleDetailJson(rule.detail_json);
+        const label = detailJson?.rule_kind === 'dog' ? 'Dog friendly' : 'Kids allowed';
+        const time = `${rule.start_time?.slice(0, 5) ?? ''}-${rule.end_time?.slice(0, 5) ?? ''}`;
+        const text =
+          rule.deal_text?.trim() || rule.notes?.trim() || rule.description?.trim() || '';
+        return text ? `${label}: ${time} ${text}` : `${label}: ${time}`;
+      });
 
     return {
       day: day.value,
@@ -703,9 +731,17 @@ function buildVenueDaySummaries(venue: Venue): VenueDaySummary[] {
         getNormalizedVenueHoursForScheduleType(venue, 'bottle_shop')?.[day.value] ?? []
       ),
       happyHourDetails,
+      deals: dealLines,
       events: eventLines,
+      venueRules: venueRuleLines,
     };
   });
+}
+
+function takeOverviewPreviewLines(lines: string[], limit = 3) {
+  if (!lines.length) return ['Nothing set up yet'];
+  if (lines.length <= limit) return lines;
+  return [...lines.slice(0, limit), `+${lines.length - limit} more`];
 }
 
 function formatAdminActivityTimestamp(value: string) {
@@ -1321,6 +1357,7 @@ export default function AdminMasterPage() {
   const [portalUserCurrentVenueOnly, setPortalUserCurrentVenueOnly] = useState(false);
   const [showVenuePickerMobile, setShowVenuePickerMobile] = useState(true);
   const [scheduleWorkspaceArmed, setScheduleWorkspaceArmed] = useState(false);
+  const [adminMode, setAdminMode] = useState<'overview' | 'edit'>('overview');
 
   function requireSupabaseClient() {
     if (!supabase) {
@@ -1654,11 +1691,13 @@ export default function AdminMasterPage() {
   useEffect(() => {
     if (selectedVenueIds.length === 0) {
       setScheduleWorkspaceArmed(false);
+      setAdminMode('overview');
     }
   }, [selectedVenueIds]);
 
   function toggleVenue(id: string) {
     setScheduleWorkspaceArmed(false);
+    setAdminMode('overview');
     setScheduleMessage(null);
     setScheduleErrorMessage(null);
     setSelectedVenueIds((current) =>
@@ -1668,6 +1707,7 @@ export default function AdminMasterPage() {
 
   function toggleVenueCheckbox(id: string) {
     setScheduleWorkspaceArmed(false);
+    setAdminMode('overview');
     setScheduleMessage(null);
     setScheduleErrorMessage(null);
     setSelectedVenueIds((current) =>
@@ -1680,6 +1720,7 @@ export default function AdminMasterPage() {
   function selectAllFiltered() {
     const filteredIds = filteredVenues.map((venue) => venue.id);
     setScheduleWorkspaceArmed(false);
+    setAdminMode('overview');
     setScheduleMessage(null);
     setScheduleErrorMessage(null);
     setSelectedVenueIds((current) => {
@@ -1691,6 +1732,7 @@ export default function AdminMasterPage() {
   function clearFiltered() {
     const filteredIds = new Set(filteredVenues.map((venue) => venue.id));
     setScheduleWorkspaceArmed(false);
+    setAdminMode('overview');
     setScheduleMessage(null);
     setScheduleErrorMessage(null);
     setSelectedVenueIds((current) =>
@@ -1778,6 +1820,7 @@ export default function AdminMasterPage() {
       setVenueRuleKind(nextVenueRuleKind ?? 'kid');
     }
     setScheduleWorkspaceArmed(true);
+    setAdminMode('edit');
   }
 
   function loadExistingRowsIntoScheduleForm(
@@ -1846,6 +1889,7 @@ export default function AdminMasterPage() {
     targetScheduleType: ScheduleType
   ) {
     setScheduleWorkspaceArmed(true);
+    setAdminMode('edit');
     setSelectedVenueIds([venue.id]);
     const rows = getExistingSchedulePreviewRows(venue, targetScheduleType).filter(
       (row) => row.day_of_week === day
@@ -2028,6 +2072,7 @@ export default function AdminMasterPage() {
 
   function populateVenueFormFromExistingVenue(venue: Venue) {
     setScheduleWorkspaceArmed(false);
+    setAdminMode('overview');
     setVenueForm({
       id: venue.id ?? null,
       name: venue.name ?? '',
@@ -2065,6 +2110,7 @@ export default function AdminMasterPage() {
     setTab('schedules');
     setSelectedVenueIds([venue.id]);
     setScheduleWorkspaceArmed(true);
+    setAdminMode('edit');
     setScheduleErrorMessage(null);
     setScheduleMessage(
       `Loaded ${venue.name ?? 'venue'} into the weekly editor. Review existing details below and amend directly.`
@@ -2981,7 +3027,10 @@ export default function AdminMasterPage() {
 
   const selectedCount = selectedVenueIds.length;
   const isSingleVenueMode = selectedCount === 1;
-  const isScheduleWorkspaceActive = selectedCount > 0 && scheduleWorkspaceArmed;
+  const isScheduleWorkspaceActive = selectedCount > 0 && adminMode === 'edit';
+  const focusedOverviewVenue = selectedVenueIds.length
+    ? venues.find((venue) => venue.id === selectedVenueIds[0]) ?? null
+    : null;
   const selectedVenueSummary =
     selectedCount === 0
       ? 'No venues selected yet'
@@ -2997,6 +3046,62 @@ export default function AdminMasterPage() {
   const enteredTimeBlockCount = timeBlocks.filter(
     (block) => block.start_time.trim() && block.end_time.trim()
   ).length;
+  const focusedVenueDaySummaries = useMemo(
+    () => (focusedOverviewVenue ? buildVenueDaySummaries(focusedOverviewVenue) : []),
+    [focusedOverviewVenue]
+  );
+  const focusedVenueOverviewCards = useMemo(() => {
+    if (!focusedOverviewVenue) return [];
+
+    const openingCount = focusedVenueDaySummaries.filter((summary) => summary.opening).length;
+    const kitchenCount = focusedVenueDaySummaries.filter((summary) => summary.kitchen).length;
+    const happyHourCount = focusedVenueDaySummaries.filter(
+      (summary) => summary.happyHour || summary.happyHourDetails.length > 0
+    ).length;
+    const bottleShopCount = focusedVenueDaySummaries.filter(
+      (summary) => summary.bottleShop
+    ).length;
+
+    return [
+      {
+        title: 'Hours',
+        description: 'Opening, kitchen, happy hour, and bottle shop coverage.',
+        lines: [
+          `Opening hours: ${openingCount > 0 ? `${openingCount} day${openingCount === 1 ? '' : 's'} configured` : 'Not set'}`,
+          `Kitchen hours: ${kitchenCount > 0 ? `${kitchenCount} day${kitchenCount === 1 ? '' : 's'} configured` : 'Not set'}`,
+          `Happy hour: ${happyHourCount > 0 ? `${happyHourCount} day${happyHourCount === 1 ? '' : 's'} configured` : 'Not set'}`,
+          `Bottle shop: ${bottleShopCount > 0 ? `${bottleShopCount} day${bottleShopCount === 1 ? '' : 's'} configured` : 'Not set'}`,
+        ],
+      },
+      {
+        title: 'Deals',
+        description: 'Daily and lunch specials currently configured.',
+        lines: takeOverviewPreviewLines(
+          focusedVenueDaySummaries.flatMap((summary) =>
+            summary.deals.map((deal) => `${getDayLabel(summary.day)} ${deal}`)
+          )
+        ),
+      },
+      {
+        title: 'Events',
+        description: 'Live events and weekly programming already in place.',
+        lines: takeOverviewPreviewLines(
+          focusedVenueDaySummaries.flatMap((summary) =>
+            summary.events.map((eventItem) => `${getDayLabel(summary.day)} ${eventItem.summary}`)
+          )
+        ),
+      },
+      {
+        title: 'Venue rules',
+        description: 'Time-based kid and dog access settings.',
+        lines: takeOverviewPreviewLines(
+          focusedVenueDaySummaries.flatMap((summary) =>
+            summary.venueRules.map((rule) => `${getDayLabel(summary.day)} ${rule}`)
+          )
+        ),
+      },
+    ];
+  }, [focusedOverviewVenue, focusedVenueDaySummaries]);
   const activeAdminTask = savingSchedule
     ? 'Saving schedule changes'
     : clearingSchedule
@@ -3302,10 +3407,12 @@ export default function AdminMasterPage() {
               <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-neutral-900">
-                    Edit schedule
+                    {isScheduleWorkspaceActive ? 'Edit schedule' : 'Overview'}
                   </h2>
                   <p className="mt-1 text-sm text-neutral-700">
-                    Selected venue context stays here so you can edit and save without losing your place.
+                    {isScheduleWorkspaceActive
+                      ? 'Work on one edit type here, save it, then return to overview.'
+                      : 'Review the current setup first, then choose exactly what you want to edit.'}
                   </p>
                 </div>
                 <div className="admin-surface-subtle rounded-xl border px-3 py-2 text-xs text-neutral-700">
@@ -3345,32 +3452,166 @@ export default function AdminMasterPage() {
               ) : null}
               {selectedCount > 0 && !isScheduleWorkspaceActive ? (
                 <div className="admin-surface-subtle mb-4 rounded-2xl border p-3.5 sm:p-4">
-                  <div className="text-sm font-semibold text-neutral-900">
-                    Selection ready
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">
+                        Current setup at a glance
+                      </div>
+                      <div className="mt-2 text-lg font-semibold text-neutral-900">
+                        {focusedOverviewVenue?.name ?? 'Venue selected'}
+                      </div>
+                      <div className="mt-1 text-sm text-neutral-600">
+                        {focusedOverviewVenue?.suburb ?? '-'}
+                        {focusedOverviewVenue?.venue_type_id
+                          ? ` | ${venueTypeNameById.get(focusedOverviewVenue.venue_type_id) ?? focusedOverviewVenue.venue_type_id}`
+                          : ''}
+                      </div>
+                      <div className="mt-3 max-w-2xl text-sm text-neutral-700">
+                        Overview mode is read-only. Choose one edit action to work on a single thing, save it, then come back here.
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleScheduleTypeSelection('opening')}
+                        className="admin-primary-button rounded-xl border px-3 py-2 text-sm font-semibold"
+                      >
+                        Edit hours
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleScheduleTypeSelection('daily_special')}
+                        className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                      >
+                        Edit deals
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleScheduleTypeSelection('trivia')}
+                        className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                      >
+                        Edit events
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleScheduleTypeSelection('venue_rule', 'kid')}
+                        className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                      >
+                        Edit venue rules
+                      </button>
+                      {focusedOverviewVenue ? (
+                        <button
+                          type="button"
+                          onClick={() => populateVenueFormFromExistingVenue(focusedOverviewVenue)}
+                          className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                        >
+                          Edit venue details
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="mt-1 text-sm text-neutral-700">
-                    Your selection is highlighted, but editing will only start when you choose an action.
+                  {selectedCount > 1 ? (
+                    <div className="mt-4 border-t border-black/5 pt-4">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">
+                        Focus a venue for overview
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {selectedVenuesForSummary.map((venue) => (
+                          <button
+                            key={venue.id}
+                            type="button"
+                            onClick={() =>
+                              setSelectedVenueIds([
+                                venue.id,
+                                ...selectedVenueIds.filter((id) => id !== venue.id),
+                              ])
+                            }
+                            className={`rounded-xl border px-3 py-2 text-sm font-medium ${
+                              venue.id === focusedOverviewVenue?.id
+                                ? 'border-orange-400 bg-orange-500 text-black'
+                                : 'admin-ghost-button'
+                            }`}
+                          >
+                            {venue.name ?? 'Unnamed venue'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    {focusedVenueOverviewCards.map((card) => (
+                      <div key={card.title} className="rounded-2xl border border-black/5 bg-white/40 p-4">
+                        <div className="text-sm font-semibold text-neutral-900">{card.title}</div>
+                        <div className="mt-1 text-sm text-neutral-600">{card.description}</div>
+                        <div className="mt-3 space-y-2 text-sm text-neutral-700">
+                          {card.lines.map((line) => (
+                            <div key={`${card.title}-${line}`} className="rounded-xl border border-black/5 bg-white px-3 py-2">
+                              {line}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="mt-3 rounded-xl border border-black/5 bg-white/40 px-3 py-3 text-sm text-neutral-700">
-                    {selectedCount === 1
-                      ? `${selectedVenuesForSummary[0]?.name ?? '1 venue selected'} is selected. Choose Edit schedule to open the weekly editor or Edit venue to open the venue profile form.`
-                      : `${selectedVenueSummary}. Use Edit schedule to work across the selected venues without forcing a single-venue view.`}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  {focusedOverviewVenue ? (
+                    <div className="mt-4">
+                      <div className="text-sm font-semibold text-neutral-900">Weekly snapshot</div>
+                      <div className="mt-1 text-sm text-neutral-600">
+                        A concise view of what is already configured this week, without dropping straight into the editor.
+                      </div>
+                      <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+                        {focusedVenueDaySummaries.map((summary) => {
+                          const summaryLines = [
+                            summary.opening ? `Opening: ${summary.opening}` : null,
+                            summary.kitchen ? `Kitchen: ${summary.kitchen}` : null,
+                            summary.happyHour
+                              ? `Happy hour: ${summary.happyHour}`
+                              : summary.happyHourDetails[0] ?? null,
+                            summary.bottleShop ? `Bottle shop: ${summary.bottleShop}` : null,
+                            summary.deals[0] ?? null,
+                            summary.events[0]?.summary ?? null,
+                            summary.venueRules[0] ?? null,
+                          ].filter((line): line is string => Boolean(line));
+
+                          return (
+                            <div key={summary.day} className="rounded-2xl border border-black/5 bg-white p-3">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">
+                                {getDayLabel(summary.day)}
+                              </div>
+                              <div className="mt-3 space-y-2 text-sm text-neutral-700">
+                                {summaryLines.length > 0 ? (
+                                  summaryLines.map((line) => (
+                                    <div key={`${summary.day}-${line}`} className="rounded-lg border border-black/5 bg-white/60 px-3 py-2">
+                                      {line}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="rounded-lg border border-dashed border-black/10 px-3 py-2 text-neutral-500">
+                                    Nothing configured yet
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => {
-                        setScheduleWorkspaceArmed(true);
+                        setAdminMode('edit');
                         setScheduleErrorMessage(null);
                         setScheduleMessage(
                           selectedCount === 1
-                            ? `Loaded ${selectedVenuesForSummary[0]?.name ?? 'the selected venue'} into the weekly editor.`
-                            : `Loaded ${selectedVenueSummary.toLowerCase()} into the schedule editor.`
+                            ? `Loaded ${selectedVenuesForSummary[0]?.name ?? 'the selected venue'} into focused edit mode.`
+                            : `Loaded ${selectedVenueSummary.toLowerCase()} into focused edit mode.`
                         );
                       }}
                       className="admin-primary-button rounded-xl border px-3 py-2 text-sm font-semibold"
                     >
-                      Edit schedule
+                      Start editing
                     </button>
                     {singleSelectedVenue ? (
                       <button
@@ -3378,307 +3619,52 @@ export default function AdminMasterPage() {
                         onClick={() => populateVenueFormFromExistingVenue(singleSelectedVenue)}
                         className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
                       >
-                        Edit venue
+                        Edit venue details
                       </button>
                     ) : null}
                   </div>
                 </div>
               ) : null}
-              <div className={selectedCount > 0 && !isScheduleWorkspaceActive ? 'hidden' : ''}>
-              {isSingleVenueMode && isScheduleWorkspaceActive ? (
-                <div className="admin-surface-subtle mb-4 rounded-2xl border p-3 sm:p-4">
+              {selectedCount === 0 ? (
+                <div className="admin-surface-subtle mb-4 rounded-2xl border border-dashed p-4 sm:p-5">
                   <div className="text-sm font-semibold text-neutral-900">
-                    Weekly view
+                    Select venue first
                   </div>
-                  <div className="mt-1 text-sm text-neutral-700">
-                    Load a day into the editor below, then save.
-                  </div>
-
-                  <div className="mt-4 space-y-4">
-                    {selectedVenuesForSummary.map((venue) => {
-                      const venueTypeName = venue.venue_type_id
-                        ? venueTypeNameById.get(venue.venue_type_id) ?? venue.venue_type_id
-                        : '-';
-                      const daySummaries = buildVenueDaySummaries(venue);
-
-                      return (
-                        <div
-                          key={venue.id}
-                          className="admin-surface rounded-2xl border p-3.5 sm:p-4"
-                        >
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <div className="text-base font-semibold text-neutral-900">
-                                {venue.name ?? 'Unnamed venue'}
-                              </div>
-                              <div className="mt-1 text-sm text-neutral-600">
-                                {venue.suburb ?? '-'} | {venueTypeName}
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => setSelectedVenueIds([venue.id])}
-                              className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
-                            >
-                              Focus this venue
-                            </button>
-                          </div>
-
-                          <div className="mt-4 overflow-x-auto rounded-xl border border-white/6">
-                            <div className="sm:hidden space-y-2">
-                              {daySummaries.map((summary) => (
-                                <div
-                                  key={`${venue.id}-${summary.day}-mobile`}
-                                  className="rounded-xl border border-white/8 bg-black/18 p-3"
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="text-sm font-semibold text-neutral-900">
-                                      {getDayLabel(summary.day)}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleEditVenueDayForType(venue, summary.day, scheduleType)}
-                                      className="admin-ghost-button rounded-lg border px-2.5 py-1.5 text-[11px] font-medium"
-                                    >
-                                      Edit day
-                                    </button>
-                                  </div>
-
-                                  <div className="mt-3 grid gap-2 text-sm text-neutral-700">
-                                    <div className="rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2">
-                                      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">Open</div>
-                                      <div className="mt-1">{summary.opening ?? 'None'}</div>
-                                    </div>
-                                    <div className="rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2">
-                                      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">Kitchen</div>
-                                      <div className="mt-1">{summary.kitchen ?? 'None'}</div>
-                                    </div>
-                                    <div className="rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2">
-                                      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">Happy hour</div>
-                                      <div className="mt-1 font-medium text-neutral-800">{summary.happyHour ?? 'None'}</div>
-                                      {summary.happyHourDetails.length > 0 ? (
-                                        <div className="mt-2 flex flex-wrap gap-1.5">
-                                          {summary.happyHourDetails.map((detail, index) => (
-                                            <span
-                                              key={`${summary.day}-happy-mobile-${index}`}
-                                              className="rounded-full border border-pink-100 bg-pink-50 px-2 py-1 text-[11px] text-pink-900"
-                                            >
-                                              {detail}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                    <div className="rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2">
-                                      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">Bottle shop</div>
-                                      <div className="mt-1">{summary.bottleShop ?? 'None'}</div>
-                                    </div>
-                                    <div className="rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2">
-                                      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">Events</div>
-                                      <div className="mt-1 space-y-1.5">
-                                        {summary.events.length > 0 ? (
-                                          summary.events.map((eventItem, index) => (
-                                            <div
-                                              key={`${summary.day}-event-mobile-${index}`}
-                                              className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-2 text-xs text-blue-900"
-                                            >
-                                              <div>{eventItem.summary}</div>
-                                              <button
-                                                type="button"
-                                                onClick={() =>
-                                                  handleEditVenueDayForType(
-                                                    venue,
-                                                    summary.day,
-                                                    eventItem.scheduleType
-                                                  )
-                                                }
-                                                className="mt-2 rounded-lg border border-neutral-300 bg-white/80 px-2 py-1 text-[11px] font-medium text-neutral-700 hover:bg-white"
-                                              >
-                                                Edit {getScheduleTypeLabel(eventItem.scheduleType).toLowerCase()}
-                                              </button>
-                                            </div>
-                                          ))
-                                        ) : (
-                                          <div>None</div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <div className="mt-3 grid grid-cols-2 gap-2">
-                                    {CORE_SINGLE_VENUE_TYPES.map((type) => (
-                                      <button
-                                        key={`${summary.day}-${type}-mobile`}
-                                        type="button"
-                                        onClick={() =>
-                                          handleEditVenueDayForType(venue, summary.day, type)
-                                        }
-                                        className="admin-ghost-button rounded-xl border px-3 py-2 text-xs font-medium"
-                                      >
-                                        {type === 'opening'
-                                          ? 'Opening'
-                                          : type === 'kitchen'
-                                            ? 'Kitchen'
-                                            : type === 'bottle_shop'
-                                              ? 'Bottle shop'
-                                              : 'Happy hour'}
-                                      </button>
-                                    ))}
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setScheduleWorkspaceArmed(true);
-                                        setSelectedVenueIds([venue.id]);
-                                        setScheduleType('trivia');
-                                        setSelectedDays([summary.day]);
-                                        setTimeBlocks([{ start_time: '', end_time: '' }]);
-                                        setTitle('');
-                                        setDescription('');
-                                        setDealText('');
-                                        setNotes('');
-                                        setSaveMode('append');
-                                        setScheduleErrorMessage(null);
-                                        setScheduleMessage(
-                                          `Add an event for ${venue.name ?? 'this venue'} on ${getDayLabel(summary.day)}. Choose the event type below, then save.`
-                                        );
-                                      }}
-                                      className="admin-ghost-button col-span-2 rounded-xl border px-3 py-2 text-xs font-medium"
-                                    >
-                                      Add event
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                            <div className="hidden min-w-[1180px] sm:block">
-                              <div className="grid grid-cols-[72px_1.1fr_1.1fr_1.1fr_1.1fr_1.7fr_360px] gap-3 border-b border-black/5 pb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                                <div>Day</div>
-                                <div>Open</div>
-                                <div>Kitchen</div>
-                                <div>Happy Hour</div>
-                                <div>Bottle Shop</div>
-                                <div>Events</div>
-                                <div>Actions</div>
-                              </div>
-
-                              <div className="admin-zebra divide-y divide-black/5">
-                                {daySummaries.map((summary) => (
-                                  <div
-                                    key={`${venue.id}-${summary.day}`}
-                                    className="grid grid-cols-[72px_1.1fr_1.1fr_1.1fr_1.1fr_1.7fr_360px] gap-3 py-3 text-sm"
-                                  >
-                                    <div className="font-medium text-neutral-900">
-                                      {getDayLabel(summary.day)}
-                                    </div>
-                                    <div className="text-neutral-700">
-                                      {summary.opening ?? 'None'}
-                                    </div>
-                                    <div className="text-neutral-700">
-                                      {summary.kitchen ?? 'None'}
-                                    </div>
-                                    <div className="text-neutral-700">
-                                      <div className="font-medium text-neutral-800">
-                                        {summary.happyHour ?? 'None'}
-                                      </div>
-                                      {summary.happyHourDetails.length > 0 ? (
-                                        <div className="mt-2 space-y-1.5">
-                                          {summary.happyHourDetails.map((detail, index) => (
-                                            <div
-                                              key={`${summary.day}-happy-${index}`}
-                                              className="rounded-lg border border-pink-100 bg-pink-50 px-2 py-1 text-xs text-pink-900"
-                                            >
-                                              {detail}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                    <div className="text-neutral-700">
-                                      {summary.bottleShop ?? 'None'}
-                                    </div>
-                                    <div className="text-neutral-700">
-                                      {summary.events.length > 0 ? (
-                                        <div className="space-y-1.5">
-                                          {summary.events.map((eventItem, index) => (
-                                            <div
-                                              key={`${summary.day}-event-${index}`}
-                                              className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-2 text-xs text-blue-900"
-                                            >
-                                              <div>{eventItem.summary}</div>
-                                              <button
-                                                type="button"
-                                                onClick={() =>
-                                                  handleEditVenueDayForType(
-                                                    venue,
-                                                    summary.day,
-                                                    eventItem.scheduleType
-                                                  )
-                                                }
-                                                className="mt-2 rounded-lg border border-neutral-300 bg-white/80 px-2 py-1 text-[11px] font-medium text-neutral-700 hover:bg-white"
-                                              >
-                                                Edit {getScheduleTypeLabel(eventItem.scheduleType).toLowerCase()}
-                                              </button>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ) : (
-                                        'None'
-                                      )}
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                      {CORE_SINGLE_VENUE_TYPES.map((type) => (
-                                        <button
-                                          key={`${summary.day}-${type}`}
-                                          type="button"
-                                          onClick={() =>
-                                            handleEditVenueDayForType(venue, summary.day, type)
-                                          }
-                                          className="admin-ghost-button rounded-xl border px-3 py-2 text-xs font-medium"
-                                          >
-                                            {type === 'opening'
-                                              ? 'Edit opening'
-                                              : type === 'kitchen'
-                                              ? 'Edit kitchen'
-                                              : type === 'bottle_shop'
-                                              ? 'Edit bottle shop'
-                                              : 'Edit happy hour'}
-                                        </button>
-                                      ))}
-                                      <button
-                                        type="button"
-                                      onClick={() => {
-                                          setScheduleWorkspaceArmed(true);
-                                          setSelectedVenueIds([venue.id]);
-                                          setScheduleType('trivia');
-                                          setSelectedDays([summary.day]);
-                                          setTimeBlocks([{ start_time: '', end_time: '' }]);
-                                          setTitle('');
-                                          setDescription('');
-                                          setDealText('');
-                                          setNotes('');
-                                          setSaveMode('append');
-                                          setScheduleErrorMessage(null);
-                                          setScheduleMessage(
-                                            `Add an event for ${venue.name ?? 'this venue'} on ${getDayLabel(summary.day)}. Choose the event type below, then save.`
-                                          );
-                                        }}
-                                        className="admin-ghost-button rounded-xl border px-3 py-2 text-xs font-medium"
-                                      >
-                                        Add event
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="mt-1 text-sm text-neutral-600">
+                    Choose one or more venues on the left to review the current setup, then move into a focused edit mode only when you are ready.
                   </div>
                 </div>
               ) : null}
+              <div className={isScheduleWorkspaceActive ? '' : 'hidden'}>
+                {isScheduleWorkspaceActive ? (
+                  <div className="admin-surface-subtle mb-4 rounded-2xl border p-3.5 sm:p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminMode('overview');
+                            setScheduleWorkspaceArmed(false);
+                          }}
+                          className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                        >
+                          Back to overview
+                        </button>
+                        <div className="mt-3 text-lg font-semibold text-neutral-900">
+                          {focusedOverviewVenue?.name ?? selectedVenueSummary}
+                        </div>
+                        <div className="mt-1 text-sm text-neutral-600">
+                          Editing: {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}
+                        </div>
+                      </div>
+                      <div className="admin-surface rounded-xl border px-3 py-2 text-xs text-neutral-700">
+                        {selectedCount === 1
+                          ? 'Focused edit mode'
+                          : `${selectedVenueSummary} in edit mode`}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
               <div className="admin-surface-subtle mb-4 rounded-2xl border p-3.5 sm:p-4">
                 <div className="text-sm font-semibold text-neutral-900">Ready to save</div>
