@@ -3240,27 +3240,35 @@ export default function AdminMasterPage() {
                               type="button"
                               key={venue.id}
                               onClick={() => toggleVenue(venue.id)}
-                              className={`flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                              className={`block w-full rounded-2xl border px-3 py-3 text-left transition ${
                                 isSelected
                                   ? "border-orange-400/60 bg-orange-500/10 shadow-[0_0_0_1px_rgba(251,146,60,0.2)]"
                                   : "border-white/6 bg-white/[0.02] hover:border-white/12 hover:bg-white/[0.04]"
                               }`}
                             >
-                              <input
-                                type="checkbox"
-                                className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent text-orange-400 focus:ring-orange-400/30"
-                                checked={isSelected}
-                                onChange={() => toggleVenueCheckbox(venue.id)}
-                                onClick={(event) => event.stopPropagation()}
-                              />
-                              <div className="min-w-0 flex-1">
-                                <div className="truncate text-base font-semibold text-white">{venue.name}</div>
-                                <div className="text-sm uppercase tracking-[0.18em] text-white/45">{venue.suburb}</div>
-                                <div className="text-sm text-white/60">
-                                  {venue.venue_type_id ? venueTypeNameById.get(venue.venue_type_id) ?? venue.venue_type_id : "-"}
+                              <div className="flex items-start gap-3">
+                                <input
+                                  type="checkbox"
+                                  className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-transparent text-orange-400 focus:ring-orange-400/30"
+                                  checked={isSelected}
+                                  onChange={() => toggleVenueCheckbox(venue.id)}
+                                  onClick={(event) => event.stopPropagation()}
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="break-words text-base font-semibold leading-5 text-white">
+                                    {venue.name}
+                                  </div>
+                                  <div className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
+                                    {venue.suburb}
+                                  </div>
+                                  <div className="mt-1 text-sm text-white/75">
+                                    {venue.venue_type_id
+                                      ? venueTypeNameById.get(venue.venue_type_id) ?? venue.venue_type_id
+                                      : "-"}
+                                  </div>
                                 </div>
                               </div>
-                              <div className="flex shrink-0 gap-2">
+                              <div className="mt-3 flex flex-wrap gap-2 pl-7">
                                 <button
                                   type="button"
                                   className="rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-white/85 transition hover:border-white/20 hover:bg-white/5"
