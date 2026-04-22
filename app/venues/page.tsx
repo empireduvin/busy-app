@@ -3,6 +3,7 @@
 import SaveVenueButton from '@/app/components/SaveVenueButton';
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import { isBottleShopVenueType } from '@/lib/venue-type-rules';
+import { getVenueProductGuardrails } from '@/lib/venue-product-guardrails';
 import {
   getCompactSpecialLine,
   getSpecialPrice,
@@ -209,7 +210,7 @@ const EVENT_FILTER_OPTIONS: Array<{ type: ScheduleType; label: string }> = [
   { type: 'special_event', label: '\u2728 Special Event' },
 ];
 
-const DEFAULT_VENUE_TYPE_FILTERS = ['Cafe', 'Bottle Shop'];
+const DEFAULT_VENUE_TYPE_FILTERS = ['Bottle Shop'];
 
 function hasText(v: string | null | undefined) {
   return Boolean(v && v.trim().length > 0);
@@ -1086,6 +1087,18 @@ function VenuesPageContent() {
     });
 
     result.sort((a, b) => {
+      if (sortBy === 'NAME') {
+        const aGuardrails = getVenueProductGuardrails(a);
+        const bGuardrails = getVenueProductGuardrails(b);
+        const fitDiff =
+          Number(bGuardrails.coreDiscoveryEligible) - Number(aGuardrails.coreDiscoveryEligible);
+        if (fitDiff !== 0) return fitDiff;
+
+        const publishDiff =
+          Number(bGuardrails.isPublishReady) - Number(aGuardrails.isPublishReady);
+        if (publishDiff !== 0) return publishDiff;
+      }
+
       if (sortBy === 'RATING_DESC') {
         return (b.google_rating ?? -1) - (a.google_rating ?? -1);
       }

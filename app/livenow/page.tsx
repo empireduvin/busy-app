@@ -5,6 +5,7 @@ import PublicVenueCard from '@/app/components/PublicVenueCard';
 import SaveVenueButton from '@/app/components/SaveVenueButton';
 import { usePublicVenueCollections } from '@/app/components/usePublicVenueCollections';
 import { formatTimeForUi, isOpenNow } from '@/lib/opening-hours';
+import { getVenueProductGuardrails } from '@/lib/venue-product-guardrails';
 import {
   HAPPY_HOUR_CATEGORIES,
   buildHoursJsonFromRules,
@@ -72,6 +73,7 @@ export default function LiveNowPage() {
 
   const liveRows = useMemo(() => {
     return liveVenues
+      .filter((venue) => getVenueProductGuardrails(venue).coreDiscoveryEligible)
       .map((venue) => buildLiveNowRow(venue))
       .filter((row) => row.isLiveNow)
       .filter((row) => matchesLiveFilter(row, activeFilter))

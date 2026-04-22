@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { GroupedScheduleTypeSelector } from '@/app/components/GroupedScheduleTypeSelector';
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
+import { getVenueProductGuardrails } from '@/lib/venue-product-guardrails';
 import {
   type HappyHourDetailItem,
   type HappyHourDetailJson,
@@ -96,6 +97,8 @@ type Venue = {
   name: string | null;
   suburb: string | null;
   venue_type_id: string | null;
+  status?: string | null;
+  updated_at?: string | null;
   google_place_id?: string | null;
   address?: string | null;
   lat?: number | null;
@@ -109,6 +112,8 @@ type Venue = {
   plays_with_sound?: boolean | null;
   sport_types?: string | null;
   sport_notes?: string | null;
+  byo_allowed?: boolean | null;
+  byo_notes?: string | null;
   dog_friendly?: boolean | null;
   dog_friendly_notes?: string | null;
   kid_friendly?: boolean | null;
@@ -613,6 +618,25 @@ function getExistingSchedulePreviewRows(
   );
 }
 
+function getExistingScheduleRowsForEdit(
+  venue: Venue | null | undefined,
+  currentScheduleType: ScheduleType,
+  currentVenueRuleKind?: VenueRuleKind
+): ExistingSchedulePreviewRow[] {
+  const rows = getExistingSchedulePreviewRows(venue, currentScheduleType);
+
+  if (currentScheduleType !== 'venue_rule') {
+    return rows;
+  }
+
+  const targetKind = currentVenueRuleKind ?? 'kid';
+
+  return rows.filter((row) => {
+    const detailJson = normalizeScheduleRuleDetailJson(row.detail_json);
+    return (detailJson?.rule_kind ?? 'kid') === targetKind;
+  });
+}
+
 function formatPeriodList(periods: OpeningPeriod[] = []): string | null {
   if (!periods.length) return null;
   return periods.map((period) => `${period.open}-${period.close}`).join(', ');
@@ -751,6 +775,16 @@ function formatAdminActivityTimestamp(value: string) {
   });
 }
 
+function formatVenueUpdatedAt(value: string | null | undefined) {
+  if (!value) return 'No recent update';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'No recent update';
+  return date.toLocaleDateString('en-AU', {
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
 function formatActivityDays(days: DayOfWeek[]) {
   if (!days.length) return 'No days';
   return days.map((day) => getDayLabel(day)).join(', ');
@@ -791,7 +825,7 @@ function formatScheduleActivityDetails(params: {
 
   return [
     `Type: ${getScheduleTypeLabel(params.scheduleType)}`,
-    `Mode: ${params.saveMode === 'replace' ? 'Overwrite selected days' : 'Add to existing'}`,
+    `Mode: ${params.saveMode === 'replace' ? 'Replace all' : 'Edit existing'}`,
     `Venues: ${venueNames || 'None'}`,
     `Days: ${formatActivityDays(params.selectedDays)}`,
     `Times: ${formatActivityTimeBlocks(params.cleanedTimeBlocks)}`,
@@ -1314,7 +1348,7 @@ export default function AdminMasterPage() {
   const [selectedVenueIds, setSelectedVenueIds] = useState<string[]>([]);
   const [scheduleType, setScheduleType] = useState<ScheduleType>('opening');
   const [selectedDays, setSelectedDays] = useState<DayOfWeek[]>([]);
-  const [saveMode, setSaveMode] = useState<SaveMode>('replace');
+  const [saveMode, setSaveMode] = useState<SaveMode>('append');
   const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([
     { start_time: '', end_time: '' },
   ]);
@@ -1676,6 +1710,25 @@ export default function AdminMasterPage() {
     });
   }, [venues, search, venueTypeNameById]);
 
+  const venueGuardrailsById = useMemo(
+    () =>
+      new Map(
+        venues.map((venue) => [
+          venue.id,
+          getVenueProductGuardrails({
+            ...venue,
+            venue_types: venue.venue_type_id
+              ? {
+                  id: venue.venue_type_id,
+                  label: venueTypeNameById.get(venue.venue_type_id) ?? venue.venue_type_id,
+                }
+              : null,
+          }),
+        ])
+      ),
+    [venueTypeNameById, venues]
+  );
+
   const singleSelectedVenue = useMemo(() => {
     if (selectedVenueIds.length !== 1) return null;
     return venues.find((venue) => venue.id === selectedVenueIds[0]) ?? null;
@@ -1801,6 +1854,7 @@ export default function AdminMasterPage() {
   function resetScheduleForm() {
     setSelectedDays([]);
     setTimeBlocks([{ start_time: '', end_time: '' }]);
+    setSaveMode('append');
     setTitle('');
     setDescription('');
     setDealText('');
@@ -1816,17 +1870,50 @@ export default function AdminMasterPage() {
   ) {
     resetScheduleForm();
     setScheduleType(nextScheduleType);
+    const targetVenueRuleKind = nextScheduleType === 'venue_rule' ? nextVenueRuleKind ?? 'kid' : 'kid';
     if (nextScheduleType === 'venue_rule') {
-      setVenueRuleKind(nextVenueRuleKind ?? 'kid');
+      setVenueRuleKind(targetVenueRuleKind);
     }
     setScheduleWorkspaceArmed(true);
     setAdminMode('edit');
+
+    const sourceVenue =
+      focusedOverviewVenue ??
+      singleSelectedVenue ??
+      selectedVenuesForSummary[0] ??
+      null;
+
+    const rows = getExistingScheduleRowsForEdit(
+      sourceVenue,
+      nextScheduleType,
+      targetVenueRuleKind
+    );
+
+    if (rows.length > 0) {
+      loadExistingRowsIntoScheduleForm(
+        nextScheduleType,
+        rows,
+        selectedCount > 1
+          ? `Loaded existing ${getScheduleTypePickerLabel(nextScheduleType, targetVenueRuleKind).toLowerCase()} from ${sourceVenue?.name ?? 'the focused venue'} as your edit starting point. Changes will still save to the selected venues.`
+          : `Loaded existing ${getScheduleTypePickerLabel(nextScheduleType, targetVenueRuleKind).toLowerCase()} below. Review it, make changes, then save.`,
+        targetVenueRuleKind
+      );
+      return;
+    }
+
+    setScheduleErrorMessage(null);
+    setScheduleMessage(
+      selectedCount > 1
+        ? `No existing ${getScheduleTypePickerLabel(nextScheduleType, targetVenueRuleKind).toLowerCase()} was found on ${sourceVenue?.name ?? 'the focused venue'}. Start with a fresh form, then save to the selected venues.`
+        : `No existing ${getScheduleTypePickerLabel(nextScheduleType, targetVenueRuleKind).toLowerCase()} was found. Start with a fresh form below.`
+    );
   }
 
   function loadExistingRowsIntoScheduleForm(
     targetScheduleType: ScheduleType,
     rows: ExistingSchedulePreviewRow[],
-    successMessage?: string
+    successMessage?: string,
+    targetVenueRuleKind?: VenueRuleKind
   ) {
     if (!rows.length) {
       setScheduleErrorMessage('No existing rows were found to load.');
@@ -1870,10 +1957,12 @@ export default function AdminMasterPage() {
     }
 
     if (targetScheduleType === 'venue_rule') {
-      setVenueRuleKind(mergedDetailJson?.rule_kind === 'dog' ? 'dog' : 'kid');
+      setVenueRuleKind(
+        targetVenueRuleKind ?? (mergedDetailJson?.rule_kind === 'dog' ? 'dog' : 'kid')
+      );
     }
 
-    setSaveMode('replace');
+    setSaveMode('append');
     setScheduleErrorMessage(null);
     setScheduleMessage(
       successMessage ??
@@ -3031,6 +3120,9 @@ export default function AdminMasterPage() {
   const focusedOverviewVenue = selectedVenueIds.length
     ? venues.find((venue) => venue.id === selectedVenueIds[0]) ?? null
     : null;
+  const focusedOverviewGuardrails = focusedOverviewVenue
+    ? venueGuardrailsById.get(focusedOverviewVenue.id) ?? null
+    : null;
   const selectedVenueSummary =
     selectedCount === 0
       ? 'No venues selected yet'
@@ -3117,8 +3209,17 @@ export default function AdminMasterPage() {
     : null;
   const scheduleReplaceWarning =
     saveMode === 'replace'
-      ? 'Overwrite days will remove existing rows for the selected days before saving the new set.'
-      : 'Add to existing will keep current rows and add the new rows alongside them.';
+      ? `You are replacing: ${getScheduleTypePickerLabel(scheduleType, venueRuleKind)}. Existing rows for the selected days will be removed and replaced when you save.`
+      : `You are editing: ${getScheduleTypePickerLabel(scheduleType, venueRuleKind)}. Existing rows are loaded below, and any new rows you add will be saved alongside your updates.`;
+  const focusedExistingEditRows = useMemo(
+    () =>
+      getExistingScheduleRowsForEdit(
+        focusedOverviewVenue,
+        scheduleType,
+        venueRuleKind
+      ),
+    [focusedOverviewVenue, scheduleType, venueRuleKind]
+  );
 
   return (
     <div className="admin-shell min-h-screen bg-neutral-100 text-neutral-950">
@@ -3340,6 +3441,7 @@ export default function AdminMasterPage() {
                       ) : (
                         filteredVenues.map((venue) => {
                           const isSelected = selectedVenueIds.includes(venue.id);
+                          const guardrails = venueGuardrailsById.get(venue.id);
                           return (
                             <button
                               type="button"
@@ -3370,6 +3472,46 @@ export default function AdminMasterPage() {
                                     {venue.venue_type_id
                                       ? venueTypeNameById.get(venue.venue_type_id) ?? venue.venue_type_id
                                       : "-"}
+                                  </div>
+                                  {guardrails ? (
+                                    <div className="mt-2 flex flex-wrap gap-1.5">
+                                      <span
+                                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                                          guardrails.isPublishReady
+                                            ? 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100'
+                                            : 'border-amber-400/35 bg-amber-500/12 text-amber-100'
+                                        }`}
+                                      >
+                                        {guardrails.isPublishReady ? 'Publish ready' : 'Incomplete'}
+                                      </span>
+                                      <span
+                                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                                          guardrails.hasReasonToGo
+                                            ? 'border-sky-400/35 bg-sky-500/12 text-sky-100'
+                                            : 'border-white/12 bg-white/[0.03] text-white/60'
+                                        }`}
+                                      >
+                                        {guardrails.hasReasonToGo ? 'Reason to go' : 'No hook yet'}
+                                      </span>
+                                      {guardrails.isOffStrategy ? (
+                                        <span className="rounded-full border border-rose-400/35 bg-rose-500/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-100">
+                                          Off strategy
+                                        </span>
+                                      ) : null}
+                                      {guardrails.supportiveSignals.slice(0, 2).map((signal) => (
+                                        <span
+                                          key={`${venue.id}-${signal}`}
+                                          className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/65"
+                                        >
+                                          {signal}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                  <div className="mt-2 text-[11px] text-white/45">
+                                    {venue.status ? `Status: ${venue.status}` : 'Status: active'}
+                                    {' | '}
+                                    Updated {formatVenueUpdatedAt(venue.updated_at)}
                                   </div>
                                 </div>
                               </div>
@@ -3538,6 +3680,124 @@ export default function AdminMasterPage() {
                       </div>
                     </div>
                   ) : null}
+                  {focusedOverviewGuardrails ? (
+                    <div className="mt-4 grid gap-3 lg:grid-cols-[1.15fr_0.85fr]">
+                      <div className="rounded-2xl border border-black/5 bg-white/50 p-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">
+                          Publish readiness
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span
+                            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                              focusedOverviewGuardrails.isPublishReady
+                                ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                                : 'border-amber-300 bg-amber-50 text-amber-800'
+                            }`}
+                          >
+                            {focusedOverviewGuardrails.isPublishReady
+                              ? 'Publish ready'
+                              : 'Not publish ready yet'}
+                          </span>
+                          <span
+                            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                              focusedOverviewGuardrails.hasReasonToGo
+                                ? 'border-sky-300 bg-sky-50 text-sky-800'
+                                : 'border-neutral-300 bg-neutral-50 text-neutral-700'
+                            }`}
+                          >
+                            {focusedOverviewGuardrails.hasReasonToGo
+                              ? 'Has reason to go'
+                              : 'No reason to go yet'}
+                          </span>
+                          <span
+                            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                              focusedOverviewGuardrails.fitsFirstRound
+                                ? 'border-neutral-300 bg-neutral-50 text-neutral-800'
+                                : 'border-rose-300 bg-rose-50 text-rose-800'
+                            }`}
+                          >
+                            {focusedOverviewGuardrails.fitsFirstRound
+                              ? 'Fits First Round'
+                              : 'Review product fit'}
+                          </span>
+                        </div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500">
+                              Reasons to go
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {focusedOverviewGuardrails.reasonToGoSignals.length > 0 ? (
+                                focusedOverviewGuardrails.reasonToGoSignals.map((signal) => (
+                                  <span
+                                    key={signal}
+                                    className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-800"
+                                  >
+                                    {signal}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-sm text-neutral-500">
+                                  Add a happy hour, special, sport, trivia, live music, or another real social hook.
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500">
+                              Supporting signals
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {focusedOverviewGuardrails.supportiveSignals.length > 0 ? (
+                                focusedOverviewGuardrails.supportiveSignals.map((signal) => (
+                                  <span
+                                    key={signal}
+                                    className="rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-700"
+                                  >
+                                    {signal}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-sm text-neutral-500">
+                                  No supporting signals set yet.
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-black/5 bg-white/50 p-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">
+                          Product quality checks
+                        </div>
+                        <div className="mt-3 space-y-2 text-sm text-neutral-700">
+                          {focusedOverviewGuardrails.missingCriticalData.length > 0 ? (
+                            focusedOverviewGuardrails.missingCriticalData.map((item) => (
+                              <div
+                                key={item}
+                                className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900"
+                              >
+                                {item}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-900">
+                              Core publish checks are covered.
+                            </div>
+                          )}
+                          {focusedOverviewGuardrails.warnings.map((warning) => (
+                            <div
+                              key={warning}
+                              className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-900"
+                            >
+                              {warning}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="mt-4 grid gap-3 lg:grid-cols-2">
                     {focusedVenueOverviewCards.map((card) => (
                       <div key={card.title} className="rounded-2xl border border-black/5 bg-white/40 p-4">
@@ -3677,7 +3937,7 @@ export default function AdminMasterPage() {
                   </div>
                   <div>
                     <span className="font-medium">Existing rows:</span>{' '}
-                    {saveMode === 'replace' ? 'Overwrite selected days' : 'Keep existing and add new rows'}
+                    {saveMode === 'replace' ? 'Replace all' : 'Edit existing'}
                   </div>
                   <div>
                     <span className="font-medium">Venues:</span> {selectedVenueSummary}
@@ -3729,15 +3989,58 @@ export default function AdminMasterPage() {
                     onChange={(e) => setSaveMode(e.target.value as SaveMode)}
                     className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                   >
-                    <option value="replace">Overwrite days</option>
-                    <option value="append">Add to existing</option>
+                    <option value="append">Edit existing</option>
+                    <option value="replace">Replace all</option>
                   </select>
                   <div className="mt-2 text-xs text-neutral-500">
                     {saveMode === 'replace'
-                      ? 'Best when you want the selected days to exactly match the rows below.'
-                      : 'Best when you want to layer in extra sessions without removing current rows.'}
+                      ? 'Best when you want the selected days to exactly match the rows below and remove older matching rows.'
+                      : 'Best when you want to load what already exists, adjust it safely, and add new rows if needed.'}
                   </div>
                 </div>
+              </div>
+              <div className="admin-surface-subtle mt-4 rounded-2xl border p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-neutral-900">Existing data loaded</div>
+                    <div className="mt-1 text-xs text-neutral-600">
+                      {focusedExistingEditRows.length
+                        ? 'These are the current live rows loaded into the form as your starting point.'
+                        : 'No live rows were found for this edit type yet, so you are starting with a fresh form.'}
+                    </div>
+                  </div>
+                  <div className="admin-surface rounded-xl border px-3 py-2 text-xs text-neutral-700">
+                    {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}
+                  </div>
+                </div>
+                {focusedExistingEditRows.length ? (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {focusedExistingEditRows.map((row) => {
+                      const summary =
+                        row.title?.trim() ||
+                        row.deal_text?.trim() ||
+                        row.description?.trim() ||
+                        row.notes?.trim() ||
+                        '';
+                      return (
+                        <div
+                          key={`${row.id}-${row.day_of_week}-${row.start_time}-${row.end_time}`}
+                          className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                        >
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-700">
+                            {getDayLabel(row.day_of_week)}
+                          </div>
+                          <div className="mt-1 font-medium">
+                            {row.start_time}-{row.end_time}
+                          </div>
+                          {summary ? (
+                            <div className="mt-1 text-xs text-neutral-600">{summary}</div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
               <div className="mt-3.5 sm:mt-4">
                 <div className="mb-2 flex flex-wrap gap-2">

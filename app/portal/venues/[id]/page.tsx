@@ -114,6 +114,18 @@ type PortalOverviewCard = {
   description: string;
   lines: string[];
 };
+type PortalExistingSchedulePreviewRow = {
+  id: string;
+  day_of_week: DayOfWeek;
+  start_time: string;
+  end_time: string;
+  sort_order: number;
+  title: string | null;
+  description: string | null;
+  deal_text: string | null;
+  notes: string | null;
+  detail_json: ScheduleRuleDetailJson | null;
+};
 type PortalVenueDaySummary = {
   day: DayOfWeek;
   opening: string;
@@ -405,6 +417,76 @@ function getExistingHours(venue: PortalVenueDetail | null, scheduleType: PortalS
   if (scheduleType === 'happy_hour') return venue?.happy_hour_hours ?? null;
   if (scheduleType === 'bottle_shop') return ruleHours;
   return null;
+}
+
+function sortPortalExistingPreviewRows(rows: PortalExistingSchedulePreviewRow[]) {
+  return [...rows].sort((a, b) => {
+    const dayDiff =
+      DAY_OPTIONS.findIndex((option) => option.value === a.day_of_week) -
+      DAY_OPTIONS.findIndex((option) => option.value === b.day_of_week);
+    if (dayDiff !== 0) return dayDiff;
+
+    const startDiff = a.start_time.localeCompare(b.start_time);
+    if (startDiff !== 0) return startDiff;
+
+    return a.end_time.localeCompare(b.end_time);
+  });
+}
+
+function getPortalExistingScheduleRowsForEdit(
+  venue: PortalVenueDetail | null,
+  scheduleType: PortalScheduleType,
+  currentVenueRuleKind?: VenueRuleKind
+): PortalExistingSchedulePreviewRow[] {
+  if (!venue) return [];
+
+  const liveRules = getLiveRules(venue, scheduleType)
+    .map((rule, index) => ({
+      id: rule.id ?? `rule-${scheduleType}-${rule.day_of_week}-${index}`,
+      day_of_week: rule.day_of_week,
+      start_time: rule.start_time?.slice(0, 5) ?? '',
+      end_time: rule.end_time?.slice(0, 5) ?? '',
+      sort_order: rule.sort_order ?? index,
+      title: rule.title ?? null,
+      description: rule.description ?? null,
+      deal_text: rule.deal_text ?? null,
+      notes: rule.notes ?? null,
+      detail_json: normalizeScheduleRuleDetailJson(rule.detail_json),
+    }))
+    .filter((row) => row.start_time && row.end_time);
+
+  if (liveRules.length > 0) {
+    const filtered =
+      scheduleType === 'venue_rule'
+        ? liveRules.filter(
+            (row) =>
+              (normalizeScheduleRuleDetailJson(row.detail_json)?.rule_kind ?? 'kid') ===
+              (currentVenueRuleKind ?? 'kid')
+          )
+        : liveRules;
+
+    return sortPortalExistingPreviewRows(filtered);
+  }
+
+  const periods = getExistingHours(venue, scheduleType);
+  if (!periods) return [];
+
+  const rows = DAY_OPTIONS.flatMap((day) =>
+    (periods[day.value] ?? []).map((period, index) => ({
+      id: `${scheduleType}-${day.value}-${period.open}-${period.close}-${index}`,
+      day_of_week: day.value,
+      start_time: period.open,
+      end_time: period.close,
+      sort_order: index,
+      title: null,
+      description: null,
+      deal_text: null,
+      notes: null,
+      detail_json: null,
+    }))
+  );
+
+  return sortPortalExistingPreviewRows(rows);
 }
 
 function buildPortalVenueDaySummaries(venue: PortalVenueDetail): PortalVenueDaySummary[] {
@@ -802,15 +884,107 @@ export default function PortalVenueDetailPage() {
   ) {
     resetScheduleForm();
     setScheduleType(nextScheduleType);
+    const targetVenueRuleKind =
+      nextScheduleType === 'venue_rule' ? nextVenueRuleKind ?? 'kid' : 'kid';
     setPortalEditTarget('schedule');
     setPortalMode('edit');
     if (nextScheduleType === 'venue_rule') {
-      setVenueRuleKind(nextVenueRuleKind ?? 'kid');
+      setVenueRuleKind(targetVenueRuleKind);
     }
+
+    const rows = getPortalExistingScheduleRowsForEdit(
+      venue,
+      nextScheduleType,
+      targetVenueRuleKind
+    );
+
+    if (rows.length > 0) {
+      loadExistingRowsIntoScheduleForm(
+        nextScheduleType,
+        rows,
+        `Loaded existing ${getScheduleTypePickerLabel(
+          nextScheduleType,
+          targetVenueRuleKind
+        ).toLowerCase()} below. Review it, make changes, then save.`,
+        targetVenueRuleKind
+      );
+      return;
+    }
+
+    setScheduleMessage(
+      `No existing ${getScheduleTypePickerLabel(
+        nextScheduleType,
+        targetVenueRuleKind
+      ).toLowerCase()} was found. Start with a fresh form below.`
+    );
+    setScheduleError(null);
+  }
+
+  function loadExistingRowsIntoScheduleForm(
+    targetScheduleType: PortalScheduleType,
+    rows: PortalExistingSchedulePreviewRow[],
+    successMessage?: string,
+    targetVenueRuleKind?: VenueRuleKind
+  ) {
+    if (!rows.length) {
+      setScheduleError('No existing rows were found to load.');
+      return;
+    }
+
+    const sortedRows = sortPortalExistingPreviewRows(rows);
+    const uniqueDays = Array.from(
+      new Set(sortedRows.map((row) => row.day_of_week))
+    ) as DayOfWeek[];
+    const firstRow = sortedRows[0];
+    const mergedDetailJson = normalizeScheduleRuleDetailJson(
+      sortedRows.find((row) => row.detail_json)?.detail_json ?? null
+    );
+
+    setScheduleType(targetScheduleType);
+    setSelectedDays(uniqueDays);
+    setTimeBlocks(
+      sortedRows.map((row) => ({
+        start_time: row.start_time,
+        end_time: row.end_time,
+      }))
+    );
+    setTitle(firstRow?.title ?? '');
+    setDescription(firstRow?.description ?? '');
+    setDealText(firstRow?.deal_text ?? '');
+    setSpecialPrice(
+      mergedDetailJson?.special_price != null ? String(mergedDetailJson.special_price) : ''
+    );
+    setNotes(firstRow?.notes ?? mergedDetailJson?.notes ?? '');
+
+    if (targetScheduleType === 'happy_hour') {
+      setHappyHourForm({
+        beer: parseDetailCategoryToItems(mergedDetailJson?.beer),
+        wine: parseDetailCategoryToItems(mergedDetailJson?.wine),
+        spirits: parseDetailCategoryToItems(mergedDetailJson?.spirits),
+        cocktails: parseDetailCategoryToItems(mergedDetailJson?.cocktails),
+        food: parseDetailCategoryToItems(mergedDetailJson?.food),
+        notes: mergedDetailJson?.notes ?? firstRow?.notes ?? '',
+      });
+    }
+
+    if (targetScheduleType === 'venue_rule') {
+      setVenueRuleKind(
+        targetVenueRuleKind ?? (mergedDetailJson?.rule_kind === 'dog' ? 'dog' : 'kid')
+      );
+    }
+
+    setSaveMode('append');
+    setScheduleMessage(
+      successMessage ??
+        `Loaded ${getScheduleTypeLabel(targetScheduleType)} for ${uniqueDays.join(', ')}.`
+    );
+    setScheduleError(null);
   }
 
   function loadDayIntoForm(day: DayOfWeek) {
-    const rules = getLiveRules(venue, scheduleType).filter((rule) => rule.day_of_week === day);
+    const rules = getPortalExistingScheduleRowsForEdit(venue, scheduleType, venueRuleKind).filter(
+      (rule) => rule.day_of_week === day
+    );
     const periods = getExistingHours(venue, scheduleType)?.[day] ?? [];
     setPortalEditTarget('schedule');
     setPortalMode('edit');
@@ -844,7 +1018,7 @@ export default function PortalVenueDetailPage() {
       if (scheduleType === 'venue_rule') {
         setVenueRuleKind(detailJson?.rule_kind === 'dog' ? 'dog' : 'kid');
       }
-      setSaveMode('replace');
+      setSaveMode('append');
       setScheduleMessage(
         `Loaded ${getScheduleTypePickerLabel(scheduleType, venueRuleKind)} for ${DAY_OPTIONS.find((option) => option.value === day)?.label}.`
       );
@@ -1087,7 +1261,25 @@ export default function PortalVenueDetailPage() {
   }
 
   const existingHours = useMemo(() => getExistingHours(venue, scheduleType), [venue, scheduleType]);
-  const currentRules = useMemo(() => getLiveRules(venue, scheduleType), [venue, scheduleType]);
+  const currentRules = useMemo(
+    () =>
+      getLiveRules(venue, scheduleType).filter((rule) => {
+        if (scheduleType !== 'venue_rule') return true;
+        return (
+          (normalizeScheduleRuleDetailJson(rule.detail_json)?.rule_kind ?? 'kid') ===
+          venueRuleKind
+        );
+      }),
+    [venue, scheduleType, venueRuleKind]
+  );
+  const currentEditRows = useMemo(
+    () => getPortalExistingScheduleRowsForEdit(venue, scheduleType, venueRuleKind),
+    [venue, scheduleType, venueRuleKind]
+  );
+  const scheduleImpactMessage =
+    saveMode === 'replace'
+      ? `You are replacing: ${getScheduleTypePickerLabel(scheduleType, venueRuleKind)}. Existing rows for the selected days will be removed and replaced when you save.`
+      : `You are editing: ${getScheduleTypePickerLabel(scheduleType, venueRuleKind)}. Existing rows are loaded below, and any new rows you add will be saved alongside your updates.`;
   const liveEventCount = useMemo(
     () =>
       EVENT_SCHEDULE_TYPES.reduce(
@@ -1488,10 +1680,19 @@ export default function PortalVenueDetailPage() {
                     </div>
                     <div className="mt-3 grid gap-3 text-sm text-white/76 md:grid-cols-2">
                       <div><span className="font-medium text-white">Schedule type:</span> {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}</div>
-                      <div><span className="font-medium text-white">Existing rows:</span> {saveMode === 'replace' ? 'Overwrite selected days' : 'Keep existing and add new rows'}</div>
+                      <div><span className="font-medium text-white">Existing rows:</span> {saveMode === 'replace' ? 'Replace all' : 'Edit existing'}</div>
                       <div><span className="font-medium text-white">Venue:</span> {venue.name ?? 'Untitled venue'}</div>
                       <div><span className="font-medium text-white">Days:</span> {selectedDays.length ? selectedDays.join(', ') : 'No days selected'}</div>
                       <div><span className="font-medium text-white">Time blocks entered:</span> {timeBlocks.length}</div>
+                    </div>
+                    <div
+                      className={`mt-3 rounded-xl px-3 py-2 text-sm ${
+                        saveMode === 'replace'
+                          ? 'border border-amber-300/30 bg-amber-400/10 text-amber-50'
+                          : 'border border-sky-300/30 bg-sky-400/10 text-sky-50'
+                      }`}
+                    >
+                      {scheduleImpactMessage}
                     </div>
                   </div>
 
@@ -1513,12 +1714,61 @@ export default function PortalVenueDetailPage() {
                       <PortalSelect
                         value={saveMode}
                         options={[
-                          { value: 'append', label: 'Add to existing' },
-                          { value: 'replace', label: 'Overwrite selected days' },
+                          { value: 'append', label: 'Edit existing' },
+                          { value: 'replace', label: 'Replace all' },
                         ]}
                         onChange={setSaveMode}
                       />
+                      <div className="mt-2 text-xs text-white/56">
+                        {saveMode === 'replace'
+                          ? 'Best when you want the selected days to exactly match the rows below and remove older matching rows.'
+                          : 'Best when you want to load what already exists, adjust it safely, and add new rows if needed.'}
+                      </div>
                     </div>
+                  </div>
+
+                  <div className="portal-surface-subtle mt-4 rounded-2xl border p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-white">Existing data loaded</h3>
+                        <p className="mt-1 text-xs text-white/62">
+                          {currentEditRows.length
+                            ? 'These current live rows are already loaded into the form as your starting point.'
+                            : 'No live rows were found for this edit type yet, so you are starting with a fresh form.'}
+                        </p>
+                      </div>
+                      <div className="portal-surface rounded-xl border px-3 py-2 text-xs text-white/66">
+                        {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}
+                      </div>
+                    </div>
+                    {currentEditRows.length ? (
+                      <div className="mt-3 grid gap-2 md:grid-cols-2">
+                        {currentEditRows.map((row) => {
+                          const summary =
+                            row.title?.trim() ||
+                            row.deal_text?.trim() ||
+                            row.description?.trim() ||
+                            row.notes?.trim() ||
+                            '';
+                          return (
+                            <div
+                              key={`${row.id}-${row.day_of_week}-${row.start_time}-${row.end_time}`}
+                              className="portal-surface rounded-xl border p-3 text-sm"
+                            >
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-300/75">
+                                {DAY_OPTIONS.find((option) => option.value === row.day_of_week)?.label ?? row.day_of_week}
+                              </div>
+                              <div className="mt-1 font-medium text-white">
+                                {row.start_time}-{row.end_time}
+                              </div>
+                              {summary ? (
+                                <div className="mt-1 text-xs text-white/62">{summary}</div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2 sm:mt-5">

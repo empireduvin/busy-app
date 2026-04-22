@@ -5,6 +5,7 @@ import PublicVenueCard from '@/app/components/PublicVenueCard';
 import SaveVenueButton from '@/app/components/SaveVenueButton';
 import { usePublicVenueCollections } from '@/app/components/usePublicVenueCollections';
 import { formatTimeForUi } from '@/lib/opening-hours';
+import { getVenueProductGuardrails } from '@/lib/venue-product-guardrails';
 import { type DayOfWeek } from '@/lib/schedule-rules';
 import {
   HAPPY_HOUR_CATEGORIES,
@@ -87,6 +88,7 @@ export default function WeekPage() {
   const rows = useMemo(
     () =>
       liveVenues
+        .filter((venue) => getVenueProductGuardrails(venue).coreDiscoveryEligible)
         .map((venue) => buildWeekRow(venue, selectedDay))
         .filter((row) => row.isRelevantOnDay)
         .filter((row) => matchesWeekFilter(row, activeFilter))

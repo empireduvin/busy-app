@@ -5,6 +5,7 @@ import PublicVenueCard from '@/app/components/PublicVenueCard';
 import SaveVenueButton from '@/app/components/SaveVenueButton';
 import { usePublicVenueCollections } from '@/app/components/usePublicVenueCollections';
 import { formatTimeForUi } from '@/lib/opening-hours';
+import { getVenueProductGuardrails } from '@/lib/venue-product-guardrails';
 import {
   HAPPY_HOUR_CATEGORIES,
   getCompactSpecialLine,
@@ -73,6 +74,7 @@ export default function TodayPage() {
   const rows = useMemo(
     () =>
       liveVenues
+        .filter((venue) => getVenueProductGuardrails(venue).coreDiscoveryEligible)
         .map((venue) => buildTodayRow(venue))
         .filter((row) => row.isRelevantToday)
         .filter((row) => matchesTodayFilter(row, activeFilter))
