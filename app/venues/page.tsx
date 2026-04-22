@@ -1240,16 +1240,20 @@ function VenuesPageContent() {
     const updateVisibility = () => {
       const currentScrollY = window.scrollY;
       const delta = currentScrollY - lastFilterScrollYRef.current;
-      const scrollingDown = delta > 8;
-      const scrollingUp = delta < -8;
+      const scrollingDown = delta > 14;
+      const scrollingUp = delta < -10;
 
       if (window.innerWidth >= 640) {
         setMobileFiltersHidden(false);
-      } else if (currentScrollY <= 120) {
+      } else if (showFilters) {
         setMobileFiltersHidden(false);
-      } else if (scrollingDown) {
+      } else if (currentScrollY <= 140) {
+        setMobileFiltersHidden(false);
+      } else if (scrollingDown && currentScrollY > 220) {
         setMobileFiltersHidden(true);
       } else if (scrollingUp) {
+        setMobileFiltersHidden(false);
+      } else if (currentScrollY <= 120) {
         setMobileFiltersHidden(false);
       }
 
@@ -1265,7 +1269,7 @@ function VenuesPageContent() {
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [showFilters]);
 
   function clearFilters() {
     setSearchTerm('');
@@ -1320,22 +1324,22 @@ function VenuesPageContent() {
 
   return (
     <div className="min-h-screen overflow-x-clip bg-black text-white">
-      <div className="mx-auto max-w-6xl px-3 py-4 sm:px-6 sm:py-8">
-        <div className="rounded-[1.45rem] border border-white/9 bg-white/[0.03] px-3.5 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur sm:rounded-3xl sm:px-5 sm:py-4">
+      <div className="mx-auto max-w-6xl px-3 py-2.5 sm:px-6 sm:py-8">
+        <div className="rounded-[1.3rem] border border-white/9 bg-white/[0.03] px-3 py-2.5 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur sm:rounded-3xl sm:px-5 sm:py-4">
           <div className="text-[11px] font-semibold uppercase tracking-[0.26em] text-orange-300/78">
             {'\u{1F37B} Venues'}
           </div>
-          <div className="mt-1.5 flex flex-col gap-1.5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="mt-1 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h1 className="text-[22px] font-semibold tracking-tight text-white sm:text-[32px]">
                 Where to go tonight
               </h1>
-              <p className="max-w-2xl text-[13px] leading-5 text-white/66 sm:text-sm">
+              <p className="max-w-2xl text-[12px] leading-5 text-white/66 sm:text-sm">
                 Search Newtown, Enmore, and Erskineville by suburb, venue type, and what matters
                 right now.
               </p>
             </div>
-            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/42">
+            <div className="hidden text-[11px] font-medium uppercase tracking-[0.18em] text-white/42 sm:block">
               Search first. Map if you need it.
             </div>
           </div>
@@ -1343,7 +1347,7 @@ function VenuesPageContent() {
 
         <div
           className={[
-            'z-40 mt-3 rounded-[1.4rem] border border-white/9 bg-white/[0.04] p-2.5 shadow-[0_16px_36px_rgba(0,0,0,0.2)] backdrop-blur transition-transform duration-200 ease-out sm:mt-4 sm:rounded-3xl sm:p-4',
+            'z-40 mt-2 rounded-[1.2rem] border border-white/9 bg-white/[0.04] p-2 shadow-[0_16px_36px_rgba(0,0,0,0.2)] backdrop-blur transition-transform duration-200 ease-out sm:mt-4 sm:rounded-3xl sm:p-4',
             'sticky top-[68px] sm:top-auto lg:sticky lg:top-24',
             mobileFiltersHidden ? '-translate-y-[108%] sm:translate-y-0' : 'translate-y-0',
           ].join(' ')}
@@ -1421,7 +1425,7 @@ function VenuesPageContent() {
           </div>
 
           {searchSuggestions.length > 0 ? (
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5 overflow-hidden">
+            <div className="mt-2 hidden flex-wrap items-center gap-1.5 overflow-hidden sm:flex">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
                 Quick picks
               </div>
@@ -1445,7 +1449,7 @@ function VenuesPageContent() {
             </div>
           ) : null}
 
-          <div className="mt-2 space-y-2">
+          <div className="mt-1.5 space-y-1.5 sm:mt-2 sm:space-y-2">
             <div>
               <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/42">
                 Best bets
@@ -1476,7 +1480,7 @@ function VenuesPageContent() {
           </div>
 
           {hasActiveFilters ? (
-            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:mt-2.5 sm:gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
                 Filters on
               </span>

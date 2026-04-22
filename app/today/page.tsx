@@ -99,6 +99,13 @@ export default function TodayPage() {
           rows: rows.filter((row) => row.todayHappyHourRules.length > 0),
         },
         {
+          id: 'specials-today',
+          title: 'Specials today',
+          description: 'Daily and lunch specials worth planning around.',
+          kind: 'mixed' as SectionKind,
+          rows: rows.filter((row) => row.todaySpecialRules.length > 0),
+        },
+        {
           id: 'events-today',
           title: 'Events today',
           description: 'Trivia, music, comedy, karaoke, and live sessions across the day.',
@@ -118,6 +125,17 @@ export default function TodayPage() {
       },
     ];
   }, [activeFilter, rows]);
+
+  const renderedRows = useMemo(() => {
+    const seen = new Set<string>();
+    return sections.flatMap((section) =>
+      section.rows.filter((row) => {
+        if (seen.has(row.venue.id)) return false;
+        seen.add(row.venue.id);
+        return true;
+      })
+    );
+  }, [sections]);
 
   const hasActiveFilters = activeFilter !== 'all' || timeFilter !== 'any' || searchTerm.trim().length > 0;
 
@@ -156,13 +174,13 @@ export default function TodayPage() {
       {
         label: 'Lunch specials',
         value: rows.filter((row) => row.hasLunchSpecials).length,
-        sectionId: activeFilter === 'all' ? 'happy-hour-today' : 'today-matches',
+        sectionId: activeFilter === 'all' ? 'specials-today' : 'today-matches',
         emptyLabel: 'No lunch deals',
       },
       {
         label: 'Specials today',
         value: rows.filter((row) => row.todaySpecialRules.length > 0).length,
-        sectionId: activeFilter === 'all' ? 'happy-hour-today' : 'today-matches',
+        sectionId: activeFilter === 'all' ? 'specials-today' : 'today-matches',
         emptyLabel: 'No specials yet',
       },
     ],
@@ -172,7 +190,7 @@ export default function TodayPage() {
   const mapVenues = useMemo(() => {
     const seen = new Set<string>();
 
-    return rows
+    return renderedRows
       .filter(
         (row) =>
           typeof row.venue.lat === 'number' &&
@@ -191,7 +209,7 @@ export default function TodayPage() {
         lat: row.venue.lat,
         lng: row.venue.lng,
       }));
-  }, [rows]);
+  }, [renderedRows]);
 
   function resetFilters() {
     setActiveFilter('all');
@@ -211,21 +229,21 @@ export default function TodayPage() {
 
   return (
     <div className="min-h-screen overflow-x-clip bg-black text-white">
-      <div className="mx-auto max-w-6xl px-3 py-3.5 sm:px-6 sm:py-8">
-        <section className="rounded-[1.4rem] border border-white/9 bg-gradient-to-br from-orange-500/14 via-[#120805] to-black p-3 sm:rounded-3xl sm:p-6">
+      <div className="mx-auto max-w-6xl px-3 py-2.5 sm:px-6 sm:py-8">
+        <section className="rounded-[1.25rem] border border-white/9 bg-gradient-to-br from-orange-500/14 via-[#120805] to-black p-2.5 sm:rounded-3xl sm:p-6">
           <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-orange-300/80">
             {'\u{1F37B} Today'}
           </div>
-          <div className="mt-2 flex flex-col gap-2.5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="mt-1.5 flex flex-col gap-1.5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
               <h1 className="text-[24px] font-semibold tracking-tight sm:text-4xl">
                 Plan the best stop for today
               </h1>
-              <p className="mt-1.5 text-[13px] leading-5 text-white/70 sm:text-base">
+              <p className="mt-1 text-[12px] leading-5 text-white/70 sm:mt-1.5 sm:text-base">
                 Deals and events worth knowing about before you head out.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="hidden flex-wrap gap-2 sm:flex">
               <Link
                 href="/livenow"
                 className="inline-flex min-h-[30px] items-center justify-center rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1 text-[11px] font-medium text-white/58 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-white"
@@ -240,7 +258,7 @@ export default function TodayPage() {
               </Link>
             </div>
           </div>
-          <div className="mt-2.5 grid grid-cols-3 gap-1.5 sm:max-w-[420px] sm:gap-2">
+          <div className="mt-2 grid grid-cols-3 gap-1 sm:max-w-[420px] sm:gap-2">
             {headlineStats.map((stat) =>
               stat.value > 0 ? (
                 <a
@@ -268,13 +286,13 @@ export default function TodayPage() {
           </div>
         </section>
 
-        <section className="mt-3.5 rounded-[1.4rem] border border-white/7 bg-white/[0.025] p-3 sm:mt-5 sm:rounded-3xl sm:border-white/10 sm:bg-white/5 sm:p-4">
-          <div className="mb-2 flex items-center justify-between gap-3">
+        <section className="mt-2.5 rounded-[1.25rem] border border-white/7 bg-white/[0.025] p-2.5 sm:mt-5 sm:rounded-3xl sm:border-white/10 sm:bg-white/5 sm:p-4">
+          <div className="mb-1.5 flex items-center justify-between gap-3 sm:mb-2">
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/40">
                 Filters
               </div>
-              <p className="mt-1 text-[12px] leading-5 text-white/62 sm:text-sm">
+              <p className="mt-1 hidden text-[12px] leading-5 text-white/62 sm:block sm:text-sm">
                 Start with lunch specials, happy hour, or the time you want to head out.
               </p>
             </div>
@@ -473,7 +491,7 @@ export default function TodayPage() {
               {error}
             </div>
           ) : null}
-          {!loading && !error && rows.length === 0 ? (
+          {!loading && !error && renderedRows.length === 0 ? (
             <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.04] p-5 text-white/72">
               <div>Nothing matches this today filter yet.</div>
               <div className="mt-2 text-white/62">
@@ -491,9 +509,9 @@ export default function TodayPage() {
             </div>
           ) : null}
 
-          {!loading && !error && rows.length > 0 ? (
+          {!loading && !error && renderedRows.length > 0 ? (
             <div className="mb-3 px-1 text-sm text-white/64 sm:mb-4 sm:rounded-2xl sm:border sm:border-white/10 sm:bg-white/[0.03] sm:px-4 sm:py-3">
-              Showing {rows.length} venue{rows.length === 1 ? '' : 's'}
+              Showing {renderedRows.length} venue{renderedRows.length === 1 ? '' : 's'}
               {searchTerm.trim() ? ` for "${searchTerm.trim()}"` : ''}
               {activeFilter !== 'all' ? ` in ${getFilterHeading(activeFilter).toLowerCase()}` : ''}
               {timeFilter !== 'any'

@@ -528,7 +528,7 @@ export function getCompactSpecialLine(
     }
 
     if (dealText && !textAlreadyHasPrice(dealText)) return `${dealText} ${priceLabel}`;
-    if (title && !textAlreadyHasPrice(title)) return `${priceLabel} ${title}`;
+    if (title && !textAlreadyHasPrice(title)) return `${title} ${priceLabel}`;
     if (description && !textAlreadyHasPrice(description)) return `${description} ${priceLabel}`;
     return `Daily special ${priceLabel}`;
   }

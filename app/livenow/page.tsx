@@ -118,6 +118,17 @@ export default function LiveNowPage() {
     ];
   }, [activeFilter, liveRows]);
 
+  const renderedRows = useMemo(() => {
+    const seen = new Set<string>();
+    return sections.flatMap((section) =>
+      section.rows.filter((row) => {
+        if (seen.has(row.venue.id)) return false;
+        seen.add(row.venue.id);
+        return true;
+      })
+    );
+  }, [sections]);
+
   const hasActiveFilters = activeFilter !== 'all' || timeFilter !== 'any' || searchTerm.trim().length > 0;
 
   const appliedFilterLabels = useMemo(() => {
@@ -165,7 +176,7 @@ export default function LiveNowPage() {
   const mapVenues = useMemo(() => {
     const seen = new Set<string>();
 
-    return liveRows
+    return renderedRows
       .filter(
         (row) =>
           typeof row.venue.lat === 'number' &&
@@ -184,7 +195,7 @@ export default function LiveNowPage() {
         lat: row.venue.lat,
         lng: row.venue.lng,
       }));
-  }, [liveRows]);
+  }, [renderedRows]);
 
   function resetFilters() {
     setActiveFilter('all');
@@ -204,21 +215,21 @@ export default function LiveNowPage() {
 
   return (
     <div className="min-h-screen overflow-x-clip bg-black text-white">
-      <div className="mx-auto max-w-6xl px-3 py-3.5 sm:px-6 sm:py-8">
-        <section className="rounded-[1.4rem] border border-white/9 bg-gradient-to-br from-orange-500/14 via-[#120805] to-black p-3 sm:rounded-3xl sm:p-6">
+      <div className="mx-auto max-w-6xl px-3 py-2 sm:px-6 sm:py-8">
+        <section className="rounded-[1.2rem] border border-white/9 bg-gradient-to-br from-orange-500/14 via-[#120805] to-black p-2.5 sm:rounded-3xl sm:p-6">
           <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-orange-300/80">
             {'\u{1F525} Live now'}
           </div>
-          <div className="mt-2 flex flex-col gap-2.5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="mt-1 flex flex-col gap-1 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
-              <h1 className="text-[24px] font-semibold tracking-tight sm:text-4xl">
+              <h1 className="text-[22px] font-semibold tracking-tight sm:text-4xl">
                 What&apos;s worth tapping right now
               </h1>
-              <p className="mt-1.5 text-[13px] leading-5 text-white/70 sm:text-base">
+              <p className="mt-0.5 text-[12px] leading-5 text-white/70 sm:mt-1 sm:text-base">
                 Live deals and events across Newtown, Enmore, and Erskineville.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="hidden flex-wrap gap-2 sm:flex">
               <Link
                 href="/today"
                 className="inline-flex min-h-[30px] items-center justify-center rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1 text-[11px] font-medium text-white/58 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-white"
@@ -233,13 +244,13 @@ export default function LiveNowPage() {
               </Link>
             </div>
           </div>
-          <div className="mt-2.5 grid grid-cols-3 gap-1.5 sm:max-w-[420px] sm:gap-2">
+          <div className="mt-1.5 grid grid-cols-3 gap-1 sm:mt-2 sm:max-w-[420px] sm:gap-2">
             {headlineStats.map((stat) =>
               stat.value > 0 ? (
                 <a
                   key={stat.label}
                   href={`#${stat.sectionId}`}
-                    className="rounded-2xl border border-white/9 bg-black/22 px-2.5 py-2 transition hover:border-orange-300/25 hover:bg-orange-500/8 sm:px-3"
+                    className="rounded-xl border border-white/9 bg-black/22 px-2 py-1.5 transition hover:border-orange-300/25 hover:bg-orange-500/8 sm:rounded-2xl sm:px-3 sm:py-2"
                 >
                   <div className="text-base font-semibold text-white">{stat.value}</div>
                   <div className="text-[10px] uppercase tracking-[0.14em] text-white/46">
@@ -249,7 +260,7 @@ export default function LiveNowPage() {
               ) : (
                 <div
                   key={stat.label}
-                  className="rounded-2xl border border-white/9 bg-black/16 px-2.5 py-2 opacity-60 sm:px-3"
+                  className="rounded-xl border border-white/9 bg-black/16 px-2 py-1.5 opacity-60 sm:rounded-2xl sm:px-3 sm:py-2"
                 >
                   <div className="text-base font-semibold text-white">{stat.value}</div>
                   <div className="text-[10px] uppercase tracking-[0.14em] text-white/46">
@@ -261,13 +272,13 @@ export default function LiveNowPage() {
           </div>
         </section>
 
-        <section className="mt-3.5 rounded-[1.4rem] border border-white/7 bg-white/[0.025] p-3 sm:mt-5 sm:rounded-3xl sm:border-white/10 sm:bg-white/5 sm:p-4">
-          <div className="mb-2 flex items-center justify-between gap-3">
+        <section className="mt-2 rounded-[1.2rem] border border-white/7 bg-white/[0.025] p-2.5 sm:mt-5 sm:rounded-3xl sm:border-white/10 sm:bg-white/5 sm:p-4">
+          <div className="mb-1.5 flex items-center justify-between gap-3 sm:mb-2">
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/40">
                 Filters
               </div>
-              <p className="mt-1 text-[12px] leading-5 text-white/62 sm:text-sm">
+              <p className="mt-1 hidden text-[12px] leading-5 text-white/62 sm:block sm:text-sm">
                 Start with happy hour now, live events, or the time window that suits.
               </p>
             </div>
@@ -392,7 +403,7 @@ export default function LiveNowPage() {
           </div>
 
           {hasActiveFilters ? (
-            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:mt-2">
               <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
                 Applied
               </span>
@@ -411,7 +422,7 @@ export default function LiveNowPage() {
               >
                 Reset filters
               </button>
-              <div className="text-[11px] text-white/50">
+              <div className="hidden text-[11px] text-white/50 sm:block">
                 Back to the full live view across happy hour and events.
               </div>
             </div>
@@ -466,7 +477,7 @@ export default function LiveNowPage() {
               {error}
             </div>
           ) : null}
-          {!loading && !error && liveRows.length === 0 ? (
+          {!loading && !error && renderedRows.length === 0 ? (
             <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.04] p-5 text-white/72">
               <div>Nothing&apos;s live for this filter right now.</div>
               <div className="mt-2 text-white/62">
@@ -484,9 +495,9 @@ export default function LiveNowPage() {
             </div>
           ) : null}
 
-          {!loading && !error && liveRows.length > 0 ? (
+          {!loading && !error && renderedRows.length > 0 ? (
             <div className="mb-3 px-1 text-sm text-white/64 sm:mb-4 sm:rounded-2xl sm:border sm:border-white/10 sm:bg-white/[0.03] sm:px-4 sm:py-3">
-              Showing {liveRows.length} live venue{liveRows.length === 1 ? '' : 's'}
+              Showing {renderedRows.length} live venue{renderedRows.length === 1 ? '' : 's'}
               {searchTerm.trim() ? ` for "${searchTerm.trim()}"` : ''}
               {activeFilter !== 'all' ? ` in ${getFilterHeading(activeFilter).toLowerCase()}` : ''}
               {timeFilter !== 'any'
