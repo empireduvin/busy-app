@@ -662,7 +662,10 @@ function VenuesPageContent() {
   const [expandedVenueIds, setExpandedVenueIds] = useState<Record<string, boolean>>({});
   const [showDesktopMap, setShowDesktopMap] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [mobileFiltersHidden, setMobileFiltersHidden] = useState(false);
   const mapSectionRef = useRef<HTMLElement | null>(null);
+  const lastFilterScrollYRef = useRef(0);
+  const filterTickingRef = useRef(false);
 
   useEffect(() => {
     const nextSearch = searchParams.get('search') ?? '';
@@ -1231,6 +1234,39 @@ function VenuesPageContent() {
     return () => window.clearTimeout(timeout);
   }, [showDesktopMap]);
 
+  useEffect(() => {
+    lastFilterScrollYRef.current = window.scrollY;
+
+    const updateVisibility = () => {
+      const currentScrollY = window.scrollY;
+      const delta = currentScrollY - lastFilterScrollYRef.current;
+      const scrollingDown = delta > 8;
+      const scrollingUp = delta < -8;
+
+      if (window.innerWidth >= 640) {
+        setMobileFiltersHidden(false);
+      } else if (currentScrollY <= 120) {
+        setMobileFiltersHidden(false);
+      } else if (scrollingDown) {
+        setMobileFiltersHidden(true);
+      } else if (scrollingUp) {
+        setMobileFiltersHidden(false);
+      }
+
+      lastFilterScrollYRef.current = currentScrollY;
+      filterTickingRef.current = false;
+    };
+
+    const handleScroll = () => {
+      if (filterTickingRef.current) return;
+      filterTickingRef.current = true;
+      window.requestAnimationFrame(updateVisibility);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   function clearFilters() {
     setSearchTerm('');
     setSuburb('ALL');
@@ -1305,7 +1341,13 @@ function VenuesPageContent() {
           </div>
         </div>
 
-        <div className="z-40 mt-3 rounded-[1.4rem] border border-white/9 bg-white/[0.04] p-2.5 shadow-[0_16px_36px_rgba(0,0,0,0.2)] backdrop-blur sm:mt-4 sm:rounded-3xl sm:p-4 lg:sticky lg:top-24">
+        <div
+          className={[
+            'z-40 mt-3 rounded-[1.4rem] border border-white/9 bg-white/[0.04] p-2.5 shadow-[0_16px_36px_rgba(0,0,0,0.2)] backdrop-blur transition-transform duration-200 ease-out sm:mt-4 sm:rounded-3xl sm:p-4',
+            'sticky top-[68px] sm:top-auto lg:sticky lg:top-24',
+            mobileFiltersHidden ? '-translate-y-[108%] sm:translate-y-0' : 'translate-y-0',
+          ].join(' ')}
+        >
           <div className="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(260px,1.45fr)_minmax(170px,0.9fr)_minmax(170px,0.95fr)_auto]">
             <div className="relative">
               <input

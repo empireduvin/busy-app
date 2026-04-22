@@ -1,6 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import DealScheduleItemsEditor, {
+  type DealScheduleItemDraft,
+} from '@/app/components/DealScheduleItemsEditor';
 import { GroupedScheduleTypeSelector } from '@/app/components/GroupedScheduleTypeSelector';
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
@@ -1017,6 +1020,19 @@ function blankHappyHourForm(): HappyHourFormState {
   };
 }
 
+function createBlankDealItem(): DealScheduleItemDraft {
+  return {
+    id: `deal-item-${Math.random().toString(36).slice(2, 10)}`,
+    selectedDays: [],
+    timeBlocks: [{ start_time: '', end_time: '' }],
+    title: '',
+    dealText: '',
+    specialPrice: '',
+    description: '',
+    notes: '',
+  };
+}
+
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error) return error.message;
   if (error && typeof error === 'object') {
@@ -1357,6 +1373,12 @@ export default function AdminMasterPage() {
   const [dealText, setDealText] = useState('');
   const [specialPrice, setSpecialPrice] = useState('');
   const [notes, setNotes] = useState('');
+  const [dealItems, setDealItems] = useState<DealScheduleItemDraft[]>([
+    createBlankDealItem(),
+  ]);
+  const [loadedScheduleRowsSnapshot, setLoadedScheduleRowsSnapshot] = useState<
+    ExistingSchedulePreviewRow[]
+  >([]);
   const [venueRuleKind, setVenueRuleKind] = useState<VenueRuleKind>('kid');
   const [happyHourForm, setHappyHourForm] = useState<HappyHourFormState>(blankHappyHourForm());
   const [savingSchedule, setSavingSchedule] = useState(false);
@@ -1851,6 +1873,174 @@ export default function AdminMasterPage() {
     });
   }
 
+  function updateDealItemField(
+    itemId: string,
+    field: 'title' | 'dealText' | 'specialPrice' | 'description' | 'notes',
+    value: string
+  ) {
+    setDealItems((current) =>
+      current.map((item) => (item.id === itemId ? { ...item, [field]: value } : item))
+    );
+  }
+
+  function toggleDealItemDay(itemId: string, day: DayOfWeek) {
+    setDealItems((current) =>
+      current.map((item) =>
+        item.id !== itemId
+          ? item
+          : {
+              ...item,
+              selectedDays: item.selectedDays.includes(day)
+                ? item.selectedDays.filter((value) => value !== day)
+                : [...item.selectedDays, day],
+            }
+      )
+    );
+  }
+
+  function setDealItemDaysPreset(
+    itemId: string,
+    preset: 'weekdays' | 'weekend' | 'all' | 'clear'
+  ) {
+    const nextDays =
+      preset === 'weekdays'
+        ? ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+        : preset === 'weekend'
+        ? ['saturday', 'sunday']
+        : preset === 'all'
+        ? DAY_OPTIONS.map((day) => day.value)
+        : [];
+
+    setDealItems((current) =>
+      current.map((item) => (item.id === itemId ? { ...item, selectedDays: nextDays as DayOfWeek[] } : item))
+    );
+  }
+
+  function addDealItem() {
+    setDealItems((current) => [...current, createBlankDealItem()]);
+  }
+
+  function removeDealItem(itemId: string) {
+    setDealItems((current) =>
+      current.length === 1 ? [createBlankDealItem()] : current.filter((item) => item.id !== itemId)
+    );
+  }
+
+  function addDealItemTimeBlock(itemId: string) {
+    setDealItems((current) =>
+      current.map((item) =>
+        item.id === itemId
+          ? { ...item, timeBlocks: [...item.timeBlocks, { start_time: '', end_time: '' }] }
+          : item
+      )
+    );
+  }
+
+  function removeDealItemTimeBlock(itemId: string, index: number) {
+    setDealItems((current) =>
+      current.map((item) => {
+        if (item.id !== itemId) return item;
+        if (item.timeBlocks.length === 1) return item;
+        return {
+          ...item,
+          timeBlocks: item.timeBlocks.filter((_, blockIndex) => blockIndex !== index),
+        };
+      })
+    );
+  }
+
+  function updateDealItemTimeBlock(
+    itemId: string,
+    index: number,
+    field: keyof TimeBlock,
+    value: string
+  ) {
+    setDealItems((current) =>
+      current.map((item) =>
+        item.id !== itemId
+          ? item
+          : {
+              ...item,
+              timeBlocks: item.timeBlocks.map((block, blockIndex) =>
+                blockIndex === index ? { ...block, [field]: value } : block
+              ),
+            }
+      )
+    );
+  }
+
+  function populateSharedScheduleFormFromRows(
+    targetScheduleType: ScheduleType,
+    rows: ExistingSchedulePreviewRow[],
+    targetVenueRuleKind?: VenueRuleKind
+  ) {
+    const sortedRows = sortExistingPreviewRows(rows);
+    const uniqueDays = Array.from(
+      new Set(sortedRows.map((row) => row.day_of_week))
+    ) as DayOfWeek[];
+    const firstRow = sortedRows[0];
+    const mergedDetailJson = normalizeScheduleRuleDetailJson(
+      sortedRows.find((row) => row.detail_json)?.detail_json ?? null
+    );
+
+    setSelectedDays(uniqueDays);
+    setTimeBlocks(
+      sortedRows.map((row) => ({
+        start_time: row.start_time,
+        end_time: row.end_time,
+      }))
+    );
+    setTitle(firstRow?.title ?? '');
+    setDescription(firstRow?.description ?? '');
+    setDealText(firstRow?.deal_text ?? '');
+    setSpecialPrice(
+      mergedDetailJson?.special_price != null ? String(mergedDetailJson.special_price) : ''
+    );
+    setNotes(firstRow?.notes ?? mergedDetailJson?.notes ?? '');
+
+    if (targetScheduleType === 'happy_hour') {
+      setHappyHourForm({
+        beer: parseDetailCategoryToItems(mergedDetailJson?.beer),
+        wine: parseDetailCategoryToItems(mergedDetailJson?.wine),
+        spirits: parseDetailCategoryToItems(mergedDetailJson?.spirits),
+        cocktails: parseDetailCategoryToItems(mergedDetailJson?.cocktails),
+        food: parseDetailCategoryToItems(mergedDetailJson?.food),
+        notes: mergedDetailJson?.notes ?? firstRow?.notes ?? '',
+      });
+    }
+
+    if (targetScheduleType === 'venue_rule') {
+      setVenueRuleKind(
+        targetVenueRuleKind ?? (mergedDetailJson?.rule_kind === 'dog' ? 'dog' : 'kid')
+      );
+    }
+  }
+
+  function populateDealItemsFromRows(rows: ExistingSchedulePreviewRow[]) {
+    const sortedRows = sortExistingPreviewRows(rows);
+    if (!sortedRows.length) {
+      setDealItems([createBlankDealItem()]);
+      return;
+    }
+
+    setDealItems(
+      sortedRows.map((row, index) => {
+        const detailJson = normalizeScheduleRuleDetailJson(row.detail_json);
+        return {
+          id: row.id || `deal-item-loaded-${index}`,
+          selectedDays: [row.day_of_week],
+          timeBlocks: [{ start_time: row.start_time, end_time: row.end_time }],
+          title: row.title ?? '',
+          dealText: row.deal_text ?? '',
+          specialPrice:
+            detailJson?.special_price != null ? String(detailJson.special_price) : '',
+          description: row.description ?? '',
+          notes: row.notes ?? detailJson?.notes ?? '',
+        };
+      })
+    );
+  }
+
   function resetScheduleForm() {
     setSelectedDays([]);
     setTimeBlocks([{ start_time: '', end_time: '' }]);
@@ -1860,6 +2050,8 @@ export default function AdminMasterPage() {
     setDealText('');
     setSpecialPrice('');
     setNotes('');
+    setDealItems([createBlankDealItem()]);
+    setLoadedScheduleRowsSnapshot([]);
     setVenueRuleKind('kid');
     setHappyHourForm(blankHappyHourForm());
   }
@@ -1920,45 +2112,25 @@ export default function AdminMasterPage() {
       return;
     }
 
-    const sortedRows = sortExistingPreviewRows(rows);
-    const uniqueDays = Array.from(
-      new Set(sortedRows.map((row) => row.day_of_week))
-    ) as DayOfWeek[];
-    const firstRow = sortedRows[0];
-    const mergedDetailJson = normalizeScheduleRuleDetailJson(
-      sortedRows.find((row) => row.detail_json)?.detail_json ?? null
-    );
-
     setScheduleType(targetScheduleType);
-    setSelectedDays(uniqueDays);
-    setTimeBlocks(
-      sortedRows.map((row) => ({
-        start_time: row.start_time,
-        end_time: row.end_time,
-      }))
-    );
-    setTitle(firstRow?.title ?? '');
-    setDescription(firstRow?.description ?? '');
-    setDealText(firstRow?.deal_text ?? '');
-    setSpecialPrice(
-      mergedDetailJson?.special_price != null ? String(mergedDetailJson.special_price) : ''
-    );
-    setNotes(firstRow?.notes ?? mergedDetailJson?.notes ?? '');
+    setLoadedScheduleRowsSnapshot(sortExistingPreviewRows(rows));
 
-    if (targetScheduleType === 'happy_hour') {
-      setHappyHourForm({
-        beer: parseDetailCategoryToItems(mergedDetailJson?.beer),
-        wine: parseDetailCategoryToItems(mergedDetailJson?.wine),
-        spirits: parseDetailCategoryToItems(mergedDetailJson?.spirits),
-        cocktails: parseDetailCategoryToItems(mergedDetailJson?.cocktails),
-        food: parseDetailCategoryToItems(mergedDetailJson?.food),
-        notes: mergedDetailJson?.notes ?? firstRow?.notes ?? '',
-      });
-    }
-
-    if (targetScheduleType === 'venue_rule') {
-      setVenueRuleKind(
-        targetVenueRuleKind ?? (mergedDetailJson?.rule_kind === 'dog' ? 'dog' : 'kid')
+    if (isDealScheduleType(targetScheduleType)) {
+      populateDealItemsFromRows(rows);
+      setSelectedDays(
+        Array.from(new Set(rows.map((row) => row.day_of_week))) as DayOfWeek[]
+      );
+      setTimeBlocks([{ start_time: '', end_time: '' }]);
+      setTitle('');
+      setDescription('');
+      setDealText('');
+      setSpecialPrice('');
+      setNotes('');
+    } else {
+      populateSharedScheduleFormFromRows(
+        targetScheduleType,
+        rows,
+        targetVenueRuleKind
       );
     }
 
@@ -1966,7 +2138,9 @@ export default function AdminMasterPage() {
     setScheduleErrorMessage(null);
     setScheduleMessage(
       successMessage ??
-        `Loaded ${getScheduleTypeLabel(targetScheduleType)} for ${uniqueDays
+        `Loaded ${getScheduleTypeLabel(targetScheduleType)} for ${Array.from(
+          new Set(rows.map((row) => row.day_of_week))
+        )
           .map((day) => getDayLabel(day))
           .join(', ')}.`
     );
@@ -2011,6 +2185,48 @@ export default function AdminMasterPage() {
       `Loaded ${venue.name ?? 'venue'} ${getScheduleTypeLabel(targetScheduleType).toLowerCase()} for ${getDayLabel(day)}. Amend it below, then save.`
     );
   }
+
+  useEffect(() => {
+    if (!isDealScheduleType(scheduleType)) return;
+
+    const nextDays = Array.from(
+      new Set(dealItems.flatMap((item) => item.selectedDays))
+    ) as DayOfWeek[];
+
+    setSelectedDays((current) => {
+      if (
+        current.length === nextDays.length &&
+        current.every((day) => nextDays.includes(day))
+      ) {
+        return current;
+      }
+      return nextDays;
+    });
+  }, [dealItems, scheduleType]);
+
+  useEffect(() => {
+    if (isDealScheduleType(scheduleType)) return;
+    if (!loadedScheduleRowsSnapshot.length) return;
+
+    const scopedRows = loadedScheduleRowsSnapshot.filter((row) =>
+      selectedDays.includes(row.day_of_week)
+    );
+
+    if (!selectedDays.length || !scopedRows.length) {
+      setTimeBlocks([{ start_time: '', end_time: '' }]);
+      setTitle('');
+      setDescription('');
+      setDealText('');
+      setSpecialPrice('');
+      setNotes('');
+      if (scheduleType === 'happy_hour') {
+        setHappyHourForm(blankHappyHourForm());
+      }
+      return;
+    }
+
+    populateSharedScheduleFormFromRows(scheduleType, scopedRows, venueRuleKind);
+  }, [loadedScheduleRowsSnapshot, scheduleType, selectedDays, venueRuleKind]);
 
 
   function updateVenueForm<K extends keyof VenueFormState>(
@@ -2541,6 +2757,144 @@ export default function AdminMasterPage() {
         target: 'No venues',
         details: 'Please select at least one venue.',
       });
+      return;
+    }
+    if (isDealScheduleType(scheduleType)) {
+      const activeDealItems = dealItems.filter(
+        (item) =>
+          item.selectedDays.length > 0 ||
+          item.timeBlocks.some((block) => block.start_time.trim() || block.end_time.trim()) ||
+          item.title.trim() ||
+          item.dealText.trim() ||
+          item.description.trim() ||
+          item.notes.trim() ||
+          item.specialPrice.trim()
+      );
+
+      if (!activeDealItems.length) {
+        setScheduleErrorMessage('Please add at least one special item.');
+        return;
+      }
+
+      const selectedDealDays = Array.from(
+        new Set(activeDealItems.flatMap((item) => item.selectedDays))
+      ) as DayOfWeek[];
+
+      if (!selectedDealDays.length) {
+        setScheduleErrorMessage('Please select at least one day on a special item.');
+        return;
+      }
+
+      const rows = [];
+
+      for (const item of activeDealItems) {
+        if (!item.selectedDays.length) {
+          setScheduleErrorMessage('Each special item needs at least one day selected.');
+          return;
+        }
+
+        const cleanedItemTimeBlocks = item.timeBlocks
+          .map((block) => ({
+            start_time: block.start_time.trim(),
+            end_time: block.end_time.trim(),
+          }))
+          .filter((block) => block.start_time && block.end_time);
+
+        if (!cleanedItemTimeBlocks.length) {
+          setScheduleErrorMessage('Each special item needs at least one valid time block.');
+          return;
+        }
+
+        if (cleanedItemTimeBlocks.some((block) => block.start_time === block.end_time)) {
+          setScheduleErrorMessage('Start and end time cannot be the same.');
+          return;
+        }
+
+        if (!item.title.trim()) {
+          setScheduleErrorMessage('Please enter a title for each special item.');
+          return;
+        }
+
+        let structuredItemPrice: number | null = null;
+        try {
+          structuredItemPrice = parseStructuredPriceInput(item.specialPrice);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'Special price must be a valid number.';
+          setScheduleErrorMessage(message);
+          return;
+        }
+
+        const detailJson = normalizeScheduleRuleDetailJson({
+          special_price: structuredItemPrice,
+        });
+
+        for (const venueId of selectedVenueIds) {
+          for (const day of item.selectedDays) {
+            for (const [index, block] of cleanedItemTimeBlocks.entries()) {
+              rows.push({
+                venue_id: venueId,
+                schedule_type: scheduleType,
+                day_of_week: day,
+                start_time: block.start_time,
+                end_time: block.end_time,
+                sort_order: index + 1,
+                title: item.title.trim() || null,
+                description: item.description.trim() || null,
+                deal_text: item.dealText.trim() || null,
+                notes: item.notes.trim() || null,
+                detail_json: detailJson,
+                is_active: true,
+                status: 'published',
+              });
+            }
+          }
+        }
+      }
+
+      setSavingSchedule(true);
+      try {
+        await adminAuthedFetch('/api/admin/schedules', {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'save',
+            rows,
+            venueIds: selectedVenueIds,
+            scheduleType,
+            saveMode,
+            selectedDays: selectedDealDays,
+          }),
+        });
+        await loadAdminBootstrap();
+        setScheduleMessage(
+          `Saved ${rows.length} schedule row${rows.length === 1 ? '' : 's'}.`
+        );
+        appendActivityLog({
+          area: 'schedules',
+          action: 'Save schedule',
+          status: 'success',
+          target: getVenueTargetLabel(selectedVenueIds),
+          details: [
+            `Mode: ${saveMode === 'replace' ? 'Replace all' : 'Edit existing'}`,
+            `Days: ${formatActivityDays(selectedDealDays)}`,
+            `Items: ${activeDealItems.length}`,
+            `Rows affected: ${rows.length}`,
+          ].join(' | '),
+        });
+        resetScheduleForm();
+      } catch (error: unknown) {
+        const message = getAdminFriendlyErrorMessage(error, 'Failed to save schedule.');
+        setScheduleErrorMessage(message);
+        appendActivityLog({
+          area: 'schedules',
+          action: 'Save schedule',
+          status: 'failure',
+          target: getVenueTargetLabel(selectedVenueIds),
+          details: `Error: ${message} | Type: ${getScheduleTypeLabel(scheduleType)} | Days: ${formatActivityDays(selectedDealDays)}`,
+        });
+      } finally {
+        setSavingSchedule(false);
+      }
       return;
     }
     if (!selectedDays.length) {
@@ -3130,14 +3484,29 @@ export default function AdminMasterPage() {
       ? '1 venue selected'
       : `${selectedCount} venues selected`;
   const selectedDaySummary =
-    selectedDays.length === 0
+    (isDealScheduleType(scheduleType)
+      ? Array.from(new Set(dealItems.flatMap((item) => item.selectedDays))).length
+      : selectedDays.length) === 0
       ? 'No days selected yet'
-      : selectedDays.length === 1
+      : (isDealScheduleType(scheduleType)
+          ? Array.from(new Set(dealItems.flatMap((item) => item.selectedDays))).length
+          : selectedDays.length) === 1
       ? '1 day selected'
-      : `${selectedDays.length} days selected`;
-  const enteredTimeBlockCount = timeBlocks.filter(
-    (block) => block.start_time.trim() && block.end_time.trim()
-  ).length;
+      : `${
+          isDealScheduleType(scheduleType)
+            ? Array.from(new Set(dealItems.flatMap((item) => item.selectedDays))).length
+            : selectedDays.length
+        } days selected`;
+  const enteredTimeBlockCount = isDealScheduleType(scheduleType)
+    ? dealItems.reduce(
+        (count, item) =>
+          count +
+          item.timeBlocks.filter(
+            (block) => block.start_time.trim() && block.end_time.trim()
+          ).length,
+        0
+      )
+    : timeBlocks.filter((block) => block.start_time.trim() && block.end_time.trim()).length;
   const focusedVenueDaySummaries = useMemo(
     () => (focusedOverviewVenue ? buildVenueDaySummaries(focusedOverviewVenue) : []),
     [focusedOverviewVenue]
@@ -3217,8 +3586,8 @@ export default function AdminMasterPage() {
         focusedOverviewVenue,
         scheduleType,
         venueRuleKind
-      ),
-    [focusedOverviewVenue, scheduleType, venueRuleKind]
+      ).filter((row) => selectedDays.length === 0 || selectedDays.includes(row.day_of_week)),
+    [focusedOverviewVenue, scheduleType, selectedDays, venueRuleKind]
   );
 
   return (
@@ -4042,6 +4411,8 @@ export default function AdminMasterPage() {
                   </div>
                 ) : null}
               </div>
+              {!isDealScheduleType(scheduleType) ? (
+              <>
               <div className="mt-3.5 sm:mt-4">
                 <div className="mb-2 flex flex-wrap gap-2">
                   <button
@@ -4147,7 +4518,9 @@ export default function AdminMasterPage() {
                   ))}
                 </div>
               </div>
-              {(scheduleType === 'daily_special' || scheduleType === 'lunch_special' || isEventScheduleType(scheduleType)) && (
+              </>
+              ) : null}
+              {isEventScheduleType(scheduleType) && (
                 <div className="mt-3.5 grid gap-3 md:mt-4 md:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-sm font-medium">Title</label>
@@ -4214,26 +4587,21 @@ export default function AdminMasterPage() {
                 </div>
               )}
               {(scheduleType === 'daily_special' || scheduleType === 'lunch_special') && (
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium">Structured price</label>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
-                      step="0.01"
-                      value={specialPrice}
-                      onChange={(e) => setSpecialPrice(e.target.value)}
-                      placeholder={scheduleType === 'lunch_special' ? 'e.g. 15' : 'e.g. 20'}
-                      className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                    />
-                    <div className="mt-1 text-xs text-neutral-500">
-                      Used for filterable special pricing. Keep the public summary text as-is.
-                    </div>
-                  </div>
-                </div>
+                <DealScheduleItemsEditor
+                  items={dealItems}
+                  scheduleType={scheduleType}
+                  variant="admin"
+                  onAddItem={addDealItem}
+                  onRemoveItem={removeDealItem}
+                  onToggleDay={toggleDealItemDay}
+                  onSetDaysPreset={setDealItemDaysPreset}
+                  onAddTimeBlock={addDealItemTimeBlock}
+                  onRemoveTimeBlock={removeDealItemTimeBlock}
+                  onUpdateTimeBlock={updateDealItemTimeBlock}
+                  onUpdateField={updateDealItemField}
+                />
               )}
-              {(isDealScheduleType(scheduleType) || isEventScheduleType(scheduleType) || scheduleType === 'happy_hour') && (
+              {(!isDealScheduleType(scheduleType) && (isEventScheduleType(scheduleType) || scheduleType === 'happy_hour')) && (
                 <div className="mt-3">
                   <label className="mb-1 block text-sm font-medium">Description</label>
                   <textarea
@@ -4251,7 +4619,7 @@ export default function AdminMasterPage() {
                   />
                 </div>
               )}
-              {(isDealScheduleType(scheduleType) || isEventScheduleType(scheduleType) || isVenueRuleScheduleType(scheduleType) || scheduleType === 'happy_hour') && (
+              {(!isDealScheduleType(scheduleType) && (isEventScheduleType(scheduleType) || isVenueRuleScheduleType(scheduleType) || scheduleType === 'happy_hour')) && (
                 <div className="mt-3">
                   <label className="mb-1 block text-sm font-medium">Notes</label>
                   <textarea
