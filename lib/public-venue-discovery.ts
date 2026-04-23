@@ -448,6 +448,93 @@ export function getTodayRulesForType(rules: VenueScheduleRule[], timezone: strin
   return rules.filter((rule) => rule.day_of_week === today);
 }
 
+function normalizeDiscoveryText(value: string | null | undefined) {
+  return (value ?? '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+}
+
+export function isFoodLedSpecialRule(
+  rule: Pick<VenueScheduleRule, 'schedule_type' | 'title' | 'deal_text' | 'description' | 'notes'>
+) {
+  const text = [
+    rule.title,
+    rule.deal_text,
+    rule.description,
+    rule.notes,
+  ]
+    .map((value) => normalizeDiscoveryText(value))
+    .join(' ');
+
+  if (rule.schedule_type === 'lunch_special') return true;
+
+  return [
+    'parmi',
+    'parma',
+    'steak',
+    'burger',
+    'pizza',
+    'pasta',
+    'taco',
+    'tacos',
+    'schnitzel',
+    'snitzel',
+    'roast',
+    'meal',
+    'lunch',
+    'dinner',
+    'food',
+    'fries',
+    'chips',
+    'wings',
+    'dumpling',
+    'dumplings',
+    'salad',
+    'fish',
+    'chicken',
+    'beef',
+    'rice',
+    'noodle',
+    'noodles',
+    'banh mi',
+    'pho',
+  ].some((keyword) => text.includes(keyword));
+}
+
+function overlapsLunchWindow(startTime: string, endTime: string) {
+  const [startHour, startMinute] = startTime.slice(0, 5).split(':').map(Number);
+  const [endHour, endMinute] = endTime.slice(0, 5).split(':').map(Number);
+  const start = startHour * 60 + startMinute;
+  let end = endHour * 60 + endMinute;
+
+  if (end <= start) {
+    end += 24 * 60;
+  }
+
+  const lunchStart = 11 * 60;
+  const lunchEnd = 15 * 60;
+  return start < lunchEnd && end > lunchStart;
+}
+
+export function isLunchSpecialEligibleRule(
+  rule: Pick<
+    VenueScheduleRule,
+    'schedule_type' | 'title' | 'deal_text' | 'description' | 'notes' | 'start_time' | 'end_time'
+  >
+) {
+  if (rule.schedule_type === 'lunch_special') return true;
+  if (rule.schedule_type !== 'daily_special') return false;
+  if (!isFoodLedSpecialRule(rule)) return false;
+  return overlapsLunchWindow(rule.start_time, rule.end_time);
+}
+
+export function getLunchSpecialEligibleRules<
+  T extends Pick<
+    VenueScheduleRule,
+    'schedule_type' | 'title' | 'deal_text' | 'description' | 'notes' | 'start_time' | 'end_time'
+  >,
+>(rules: T[]) {
+  return rules.filter((rule) => isLunchSpecialEligibleRule(rule));
+}
+
 export function getRulesForDay(rules: VenueScheduleRule[], day: DayOfWeek) {
   return rules.filter((rule) => rule.day_of_week === day);
 }

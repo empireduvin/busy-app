@@ -9,6 +9,7 @@ import {
   getSpecialPrice,
   getCompactVenueRuleSignal,
   fetchPublicVenues,
+  getLunchSpecialEligibleRules,
   getPublishedDealRules,
   getPublishedVenueRulesByKind,
   splitVenuesByLaunchArea,
@@ -600,6 +601,15 @@ function getMinSpecialPrice(
   return Math.min(...prices);
 }
 
+function getMinRulePrice(rules: VenueScheduleRule[]): number | null {
+  const prices = rules
+    .map((rule) => getSpecialPrice(rule))
+    .filter((price): price is number => typeof price === 'number' && !Number.isNaN(price));
+
+  if (!prices.length) return null;
+  return Math.min(...prices);
+}
+
 function matchesMaxPrice(value: number | null, selected: string): boolean {
   if (selected === 'ALL') return true;
   if (value == null) return false;
@@ -960,7 +970,7 @@ function VenuesPageContent() {
         isRuleLiveNow(rule, timezone)
       );
       const liveFoodDealRules = liveDealRules.filter(isFoodDealRule);
-      const lunchSpecialRules = dealRules.filter((rule) => rule.schedule_type === 'lunch_special');
+      const lunchSpecialRules = getLunchSpecialEligibleRules(dealRules);
       const activeDogRule = getTodayRulesForType(getPublishedVenueRulesByKind(v, 'dog'), timezone).find(
         (rule) => isRuleLiveNow(rule, timezone)
       );
@@ -1046,7 +1056,7 @@ function VenuesPageContent() {
         return false;
       }
 
-      if (!matchesMaxPrice(getMinSpecialPrice(dealRules, 'lunch_special'), lunchSpecialMaxPrice)) {
+      if (!matchesMaxPrice(getMinRulePrice(lunchSpecialRules), lunchSpecialMaxPrice)) {
         return false;
       }
 
@@ -1240,16 +1250,16 @@ function VenuesPageContent() {
     const updateVisibility = () => {
       const currentScrollY = window.scrollY;
       const delta = currentScrollY - lastFilterScrollYRef.current;
-      const scrollingDown = delta > 14;
-      const scrollingUp = delta < -10;
+      const scrollingDown = delta > 18;
+      const scrollingUp = delta < -12;
 
       if (window.innerWidth >= 640) {
         setMobileFiltersHidden(false);
       } else if (showFilters) {
         setMobileFiltersHidden(false);
-      } else if (currentScrollY <= 140) {
+      } else if (currentScrollY <= 110) {
         setMobileFiltersHidden(false);
-      } else if (scrollingDown && currentScrollY > 220) {
+      } else if (scrollingDown && currentScrollY > 180) {
         setMobileFiltersHidden(true);
       } else if (scrollingUp) {
         setMobileFiltersHidden(false);
@@ -1349,7 +1359,7 @@ function VenuesPageContent() {
           className={[
             'z-40 mt-2 rounded-[1.2rem] border border-white/9 bg-white/[0.04] p-2 shadow-[0_16px_36px_rgba(0,0,0,0.2)] backdrop-blur transition-transform duration-200 ease-out sm:mt-4 sm:rounded-3xl sm:p-4',
             'sticky top-[68px] sm:top-auto lg:sticky lg:top-24',
-            mobileFiltersHidden ? '-translate-y-[108%] sm:translate-y-0' : 'translate-y-0',
+            mobileFiltersHidden ? '-translate-y-[125%] opacity-0 pointer-events-none sm:pointer-events-auto sm:opacity-100 sm:translate-y-0' : 'translate-y-0 opacity-100',
           ].join(' ')}
         >
           <div className="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(260px,1.45fr)_minmax(170px,0.9fr)_minmax(170px,0.95fr)_auto]">

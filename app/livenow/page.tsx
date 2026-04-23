@@ -11,6 +11,7 @@ import {
   buildHoursJsonFromRules,
   getCompactSpecialLine,
   getCompactVenueRuleSignal,
+  getLunchSpecialEligibleRules,
   getPublishedDealRules,
   getDisplayHappyHourItems,
   getPublishedEventRules,
@@ -39,7 +40,7 @@ type LiveNowFilter =
   | 'ends_soon';
 
 type TimeFilter = 'any' | 'afternoon' | 'evening' | 'late_night';
-type SectionKind = 'happy_hour' | 'events' | 'mixed';
+type SectionKind = 'happy_hour' | 'specials' | 'events' | 'mixed';
 type LiveNowRow = ReturnType<typeof buildLiveNowRow>;
 
 const LIVE_NOW_FILTERS: Array<{ value: LiveNowFilter; label: string }> = [
@@ -619,6 +620,7 @@ function buildLiveNowRow(venue: Venue) {
   const endsSoon = soonestEnd !== null && minutesUntil(soonestEnd, timezone) <= 30;
 
   const liveEventTypes = liveEventRules.map((rule) => rule.schedule_type);
+  const hasLunchSpecials = getLunchSpecialEligibleRules(liveSpecialRules).length > 0;
   const badges = [
     liveEventTypes.includes('trivia') ? 'Trivia now' : null,
     liveEventTypes.includes('live_music') ? 'Live music now' : null,
@@ -634,7 +636,7 @@ function buildLiveNowRow(venue: Venue) {
 
   const cardEyebrow =
     liveSpecialRules.length > 0
-      ? liveSpecialRules.some((rule) => rule.schedule_type === 'lunch_special')
+      ? hasLunchSpecials
         ? '\u2600 LUNCH'
         : '\u{1F525} SPECIAL'
       : liveHappyHourRules.length > 0
@@ -680,7 +682,7 @@ function matchesLiveFilter(row: LiveNowRow, filter: LiveNowFilter) {
   if (filter === 'happy_hour') return row.liveHappyHourRules.length > 0;
   if (filter === 'food_deals_now') return row.liveSpecialRules.length > 0 || row.liveHappyHourRules.length > 0;
   if (filter === 'lunch_specials') {
-    return row.liveSpecialRules.some((rule) => rule.schedule_type === 'lunch_special');
+    return getLunchSpecialEligibleRules(row.liveSpecialRules).length > 0;
   }
   if (filter === 'kid_friendly_now') return Boolean(row.liveKidRule);
   if (filter === 'dog_friendly_now') return Boolean(row.liveDogRule);
@@ -747,8 +749,8 @@ function getFilterHeading(filter: LiveNowFilter) {
 
 function getFilterSectionKind(filter: LiveNowFilter): SectionKind {
   if (filter === 'happy_hour') return 'happy_hour';
-  if (filter === 'food_deals_now') return 'happy_hour';
-  if (filter === 'lunch_specials') return 'happy_hour';
+  if (filter === 'food_deals_now') return 'specials';
+  if (filter === 'lunch_specials') return 'specials';
   if (filter === 'events') return 'events';
   if (filter === 'trivia') return 'events';
   if (filter === 'live_music') return 'events';
@@ -781,6 +783,10 @@ function groupRowsByTime(rows: LiveNowRow[], kind: SectionKind) {
 function getGroupMinutes(row: LiveNowRow, kind: SectionKind) {
   if (kind === 'happy_hour' && row.liveHappyHourRules.length > 0) {
     return Math.min(...row.liveHappyHourRules.map((rule) => clockToMinutes(rule.start_time)));
+  }
+
+  if (kind === 'specials' && row.liveSpecialRules.length > 0) {
+    return Math.min(...row.liveSpecialRules.map((rule) => clockToMinutes(rule.start_time)));
   }
 
   if (kind === 'events' && row.liveEventRules.length > 0) {

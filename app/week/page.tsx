@@ -12,6 +12,7 @@ import {
   getCompactSpecialLine,
   getCompactVenueRuleSignal,
   getDayOfWeekForOffset,
+  getLunchSpecialEligibleRules,
   getPublishedDealRules,
   getDisplayHappyHourItems,
   getPublishedEventRules,
@@ -39,7 +40,7 @@ type WeekFilter =
   | 'karaoke';
 
 type TimeFilter = 'any' | 'afternoon' | 'evening' | 'late_night';
-type SectionKind = 'happy_hour' | 'events' | 'mixed';
+type SectionKind = 'happy_hour' | 'specials' | 'events' | 'mixed';
 type WeekRow = ReturnType<typeof buildWeekRow>;
 type DayOption = {
   offset: number;
@@ -116,7 +117,7 @@ export default function WeekPage() {
           id: 'week-specials',
           title: selectedDay.isToday ? 'Specials today' : `Specials ${selectedDay.fullDate}`,
           description: `Daily and lunch specials lined up for ${selectedDay.fullDate.toLowerCase()}.`,
-          kind: 'mixed' as SectionKind,
+          kind: 'specials' as SectionKind,
           rows: rows.filter((row) => row.daySpecialRules.length > 0),
         },
         {
@@ -603,6 +604,10 @@ export default function WeekPage() {
                                   <TopBadge className="border-amber-400/30 bg-amber-500/15 text-amber-100">
                                     {row.urgencyLabel}
                                   </TopBadge>
+                                ) : row.daySpecialRules.length > 0 ? (
+                                  <TopBadge className="border-orange-400/30 bg-orange-500/15 text-orange-100">
+                                    {selectedDay.isToday ? 'Special' : row.dayBadgeLabel}
+                                  </TopBadge>
                                 ) : row.dayHappyHourRules.length > 0 ? (
                                   <TopBadge className="border-pink-400/30 bg-pink-500/15 text-pink-100">
                                     {selectedDay.isToday ? 'Today' : row.dayBadgeLabel}
@@ -700,7 +705,7 @@ function buildWeekRow(venue: Venue, selectedDay: DayOption) {
     ...dayEventRules.map((rule) => clockToMinutes(rule.start_time)),
   ];
   const primaryStartMinutes = startTimes.length > 0 ? Math.min(...startTimes) : 18 * 60;
-  const hasLunchSpecials = daySpecialRules.some((rule) => rule.schedule_type === 'lunch_special');
+  const hasLunchSpecials = getLunchSpecialEligibleRules(daySpecialRules).length > 0;
 
   const dayLower = selectedDay.label.toLowerCase();
   const badges = [
@@ -722,7 +727,7 @@ function buildWeekRow(venue: Venue, selectedDay: DayOption) {
 
   const dayLabel = selectedDay.label;
   const cardEyebrow = daySpecialRules.length > 0
-    ? daySpecialRules.some((rule) => rule.schedule_type === 'lunch_special')
+    ? hasLunchSpecials
       ? '\u2600 LUNCH'
       : '\u{1F525} SPECIAL'
     : dayHappyHourRules.length > 0
@@ -839,8 +844,8 @@ function getFilterHeading(filter: WeekFilter, selectedDay: DayOption) {
 
 function getFilterSectionKind(filter: WeekFilter): SectionKind {
   if (filter === 'happy_hour') return 'happy_hour';
-  if (filter === 'specials') return 'happy_hour';
-  if (filter === 'lunch_specials') return 'happy_hour';
+  if (filter === 'specials') return 'specials';
+  if (filter === 'lunch_specials') return 'specials';
   if (filter === 'events') return 'events';
   if (filter === 'trivia') return 'events';
   if (filter === 'live_music') return 'events';
@@ -874,6 +879,10 @@ function groupRowsByTime(rows: WeekRow[], kind: SectionKind) {
 function getGroupMinutes(row: WeekRow, kind: SectionKind) {
   if (kind === 'happy_hour' && row.dayHappyHourRules.length > 0) {
     return Math.min(...row.dayHappyHourRules.map((rule) => clockToMinutes(rule.start_time)));
+  }
+
+  if (kind === 'specials' && row.daySpecialRules.length > 0) {
+    return Math.min(...row.daySpecialRules.map((rule) => clockToMinutes(rule.start_time)));
   }
 
   if (kind === 'events' && row.dayEventRules.length > 0) {

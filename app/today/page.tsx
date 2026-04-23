@@ -10,6 +10,7 @@ import {
   HAPPY_HOUR_CATEGORIES,
   getCompactSpecialLine,
   getCompactVenueRuleSignal,
+  getLunchSpecialEligibleRules,
   getPublishedDealRules,
   getDisplayHappyHourItems,
   getPublishedEventRules,
@@ -38,7 +39,7 @@ type TodayFilter =
   | 'karaoke';
 
 type TimeFilter = 'any' | 'lunch' | 'afternoon' | 'evening' | 'late_night';
-type SectionKind = 'happy_hour' | 'events' | 'mixed';
+type SectionKind = 'happy_hour' | 'specials' | 'events' | 'mixed';
 type TodayRow = ReturnType<typeof buildTodayRow>;
 
 const TODAY_FILTERS: Array<{ value: TodayFilter; label: string }> = [
@@ -102,7 +103,7 @@ export default function TodayPage() {
           id: 'specials-today',
           title: 'Specials today',
           description: 'Daily and lunch specials worth planning around.',
-          kind: 'mixed' as SectionKind,
+          kind: 'specials' as SectionKind,
           rows: rows.filter((row) => row.todaySpecialRules.length > 0),
         },
         {
@@ -558,6 +559,10 @@ export default function TodayPage() {
                                   <TopBadge className="border-amber-400/35 bg-amber-500/18 text-amber-50 shadow-[0_0_20px_rgba(245,158,11,0.14)]">
                                     {row.urgencyLabel}
                                   </TopBadge>
+                                ) : row.todaySpecialRules.length > 0 ? (
+                                  <TopBadge className="border-orange-400/35 bg-orange-500/18 text-orange-50 shadow-[0_0_20px_rgba(249,115,22,0.16)]">
+                                    Special
+                                  </TopBadge>
                                 ) : row.todayHappyHourRules.length > 0 ? (
                                   <TopBadge className="border-pink-400/35 bg-pink-500/18 text-pink-50 shadow-[0_0_20px_rgba(236,72,153,0.16)]">
                                     Today
@@ -618,7 +623,7 @@ function buildTodayRow(venue: Venue) {
     ...todayEventRules.map((rule) => clockToMinutes(rule.start_time)),
   ];
   const primaryStartMinutes = startTimes.length > 0 ? Math.min(...startTimes) : 18 * 60;
-  const hasLunchSpecials = todaySpecialRules.some((rule) => rule.schedule_type === 'lunch_special');
+  const hasLunchSpecials = getLunchSpecialEligibleRules(todaySpecialRules).length > 0;
 
   const badges = [
     todayEventTypes.includes('trivia') ? 'Trivia tonight' : null,
@@ -639,7 +644,7 @@ function buildTodayRow(venue: Venue) {
 
   const cardEyebrow =
     todaySpecialRules.length > 0
-      ? todaySpecialRules.some((rule) => rule.schedule_type === 'lunch_special')
+      ? hasLunchSpecials
         ? '\u2600 LUNCH'
         : '\u{1F525} SPECIAL'
       : todayHappyHourRules.length > 0
@@ -769,8 +774,8 @@ function getFilterHeading(filter: TodayFilter) {
 
 function getFilterSectionKind(filter: TodayFilter): SectionKind {
   if (filter === 'happy_hour') return 'happy_hour';
-  if (filter === 'daily_specials') return 'happy_hour';
-  if (filter === 'lunch_specials') return 'happy_hour';
+  if (filter === 'daily_specials') return 'specials';
+  if (filter === 'lunch_specials') return 'specials';
   if (filter === 'kid_friendly_now') return 'mixed';
   if (filter === 'dog_friendly_now') return 'mixed';
   if (filter === 'events') return 'events';
@@ -806,6 +811,10 @@ function groupRowsByTime(rows: TodayRow[], kind: SectionKind) {
 function getGroupMinutes(row: TodayRow, kind: SectionKind) {
   if (kind === 'happy_hour' && row.todayHappyHourRules.length > 0) {
     return Math.min(...row.todayHappyHourRules.map((rule) => clockToMinutes(rule.start_time)));
+  }
+
+  if (kind === 'specials' && row.todaySpecialRules.length > 0) {
+    return Math.min(...row.todaySpecialRules.map((rule) => clockToMinutes(rule.start_time)));
   }
 
   if (kind === 'events' && row.todayEventRules.length > 0) {
