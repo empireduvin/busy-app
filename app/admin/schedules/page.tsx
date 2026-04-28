@@ -1972,24 +1972,30 @@ export default function AdminMasterPage() {
   function populateSharedScheduleFormFromRows(
     targetScheduleType: ScheduleType,
     rows: ExistingSchedulePreviewRow[],
-    targetVenueRuleKind?: VenueRuleKind
+    targetVenueRuleKind?: VenueRuleKind,
+    options?: { preserveSelectedDays?: boolean }
   ) {
     const sortedRows = sortExistingPreviewRows(rows);
     const uniqueDays = Array.from(
       new Set(sortedRows.map((row) => row.day_of_week))
     ) as DayOfWeek[];
+    const uniqueTimeBlocks = Array.from(
+      new Map(
+        sortedRows.map((row) => [
+          `${row.start_time}-${row.end_time}`,
+          { start_time: row.start_time, end_time: row.end_time },
+        ])
+      ).values()
+    );
     const firstRow = sortedRows[0];
     const mergedDetailJson = normalizeScheduleRuleDetailJson(
       sortedRows.find((row) => row.detail_json)?.detail_json ?? null
     );
 
-    setSelectedDays(uniqueDays);
-    setTimeBlocks(
-      sortedRows.map((row) => ({
-        start_time: row.start_time,
-        end_time: row.end_time,
-      }))
-    );
+    if (!options?.preserveSelectedDays) {
+      setSelectedDays(uniqueDays);
+    }
+    setTimeBlocks(uniqueTimeBlocks);
     setTitle(firstRow?.title ?? '');
     setDescription(firstRow?.description ?? '');
     setDealText(firstRow?.deal_text ?? '');
@@ -2225,7 +2231,9 @@ export default function AdminMasterPage() {
       return;
     }
 
-    populateSharedScheduleFormFromRows(scheduleType, scopedRows, venueRuleKind);
+    populateSharedScheduleFormFromRows(scheduleType, scopedRows, venueRuleKind, {
+      preserveSelectedDays: true,
+    });
   }, [loadedScheduleRowsSnapshot, scheduleType, selectedDays, venueRuleKind]);
 
 
