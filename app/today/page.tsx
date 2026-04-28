@@ -79,7 +79,7 @@ export default function TodayPage() {
         .map((venue) => buildTodayRow(venue))
         .filter((row) => row.isRelevantToday)
         .filter((row) => matchesTodayFilter(row, activeFilter))
-        .filter((row) => matchesTimeFilter(row.primaryStartMinutes, timeFilter))
+        .filter((row) => matchesTimeFilter(row, timeFilter))
         .filter((row) => matchesSearchText(row, searchTerm))
         .sort(
           (a, b) =>
@@ -718,13 +718,35 @@ function matchesTodayFilter(row: TodayRow, filter: TodayFilter) {
   return true;
 }
 
-function matchesTimeFilter(minutes: number, filter: TimeFilter) {
+function timeRangeOverlapsFilter(startTime: string, endTime: string, filter: TimeFilter) {
   if (filter === 'any') return true;
-  if (filter === 'lunch') return minutes >= 12 * 60 && minutes < 15 * 60;
-  if (filter === 'afternoon') return minutes >= 15 * 60 && minutes < 17 * 60;
-  if (filter === 'evening') return minutes >= 17 * 60 && minutes < 20 * 60;
-  if (filter === 'late_night') return minutes >= 20 * 60 || minutes < 4 * 60;
-  return true;
+  const start = clockToMinutes(startTime);
+  let end = clockToMinutes(endTime);
+  if (end <= start) end += 24 * 60;
+
+  const windows: Record<Exclude<TimeFilter, 'any'>, [number, number]> = {
+    lunch: [12 * 60, 15 * 60],
+    afternoon: [15 * 60, 17 * 60],
+    evening: [17 * 60, 20 * 60],
+    late_night: [20 * 60, 4 * 60],
+  };
+
+  const [windowStart, windowEndRaw] = windows[filter];
+  const windowEnd =
+    windowEndRaw <= windowStart ? windowEndRaw + 24 * 60 : windowEndRaw;
+
+  return (
+    (start < windowEnd && end > windowStart) ||
+    (start + 24 * 60 < windowEnd && end + 24 * 60 > windowStart) ||
+    (start < windowEnd + 24 * 60 && end > windowStart + 24 * 60)
+  );
+}
+
+function matchesTimeFilter(row: TodayRow, filter: TimeFilter) {
+  if (filter === 'any') return true;
+  return [...row.todaySpecialRules, ...row.todayHappyHourRules, ...row.todayEventRules].some((rule) =>
+    timeRangeOverlapsFilter(rule.start_time, rule.end_time, filter)
+  );
 }
 
 function matchesSearchText(row: TodayRow, searchTerm: string) {

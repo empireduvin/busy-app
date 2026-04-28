@@ -40,6 +40,7 @@ type Props = {
     field: 'title' | 'dealText' | 'specialPrice' | 'description' | 'notes',
     value: string
   ) => void;
+  onUseHoursTemplate?: (itemId: string, sourceType: 'opening' | 'kitchen') => void;
 };
 
 export default function DealScheduleItemsEditor({
@@ -54,6 +55,7 @@ export default function DealScheduleItemsEditor({
   onRemoveTimeBlock,
   onUpdateTimeBlock,
   onUpdateField,
+  onUseHoursTemplate,
 }: Props) {
   const isPortal = variant === 'portal';
 
@@ -147,6 +149,30 @@ export default function DealScheduleItemsEditor({
                 );
               })}
             </div>
+
+            {onUseHoursTemplate ? (
+              <div className="mt-3 rounded-xl border border-white/10 bg-black/5 p-3">
+                <div className={`text-xs font-medium ${helperTextClassName}`}>
+                  Copy existing venue hours into this item for the selected day set.
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onUseHoursTemplate(item.id, 'opening')}
+                    className={ghostButtonClassName}
+                  >
+                    Use opening hours
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onUseHoursTemplate(item.id, 'kitchen')}
+                    className={ghostButtonClassName}
+                  >
+                    Use kitchen hours
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-4">
               <div className="mb-3 flex items-center justify-between gap-3">

@@ -13,6 +13,7 @@ import {
   type HappyHourDetailJson,
   type HappyHourPrice,
   type ScheduleRuleDetailJson,
+  type VenueRuleAvailabilityMode,
   getHappyHourItemPrices,
   normalizeHappyHourDetailCategory,
   normalizeHappyHourDetailJson,
@@ -296,6 +297,11 @@ type VenueDaySummary = {
   }>;
   venueRules: string[];
 };
+
+const ALL_DAY_TIME_BLOCK = {
+  start_time: '00:00',
+  end_time: '23:59',
+} as const;
 
 const CORE_SINGLE_VENUE_TYPES: ScheduleType[] = ['opening', 'kitchen', 'happy_hour', 'bottle_shop'];
 
@@ -638,6 +644,58 @@ function getExistingScheduleRowsForEdit(
     const detailJson = normalizeScheduleRuleDetailJson(row.detail_json);
     return (detailJson?.rule_kind ?? 'kid') === targetKind;
   });
+}
+
+function buildHoursFromExistingPreviewRows(rows: ExistingSchedulePreviewRow[]): OpeningHours | null {
+  const output: OpeningHours = {};
+
+  DAY_OPTIONS.forEach((day) => {
+    const matching = rows
+      .filter((row) => row.day_of_week === day.value)
+      .map((row) => ({
+        open: row.start_time.slice(0, 5),
+        close: row.end_time.slice(0, 5),
+      }));
+
+    if (matching.length) {
+      output[day.value] = matching;
+    }
+  });
+
+  return Object.keys(output).length ? output : null;
+}
+
+function getExistingHours(
+  venue: Venue | null | undefined,
+  currentScheduleType: ScheduleType
+) {
+  const rows = getExistingSchedulePreviewRows(venue, currentScheduleType);
+  return rows.length ? buildHoursFromExistingPreviewRows(rows) : null;
+}
+
+function isAllDayTimeBlock(startTime: string, endTime: string) {
+  return startTime.slice(0, 5) === ALL_DAY_TIME_BLOCK.start_time &&
+    endTime.slice(0, 5) === ALL_DAY_TIME_BLOCK.end_time;
+}
+
+function inferVenueRuleAvailabilityMode(
+  rows: ExistingSchedulePreviewRow[]
+): VenueRuleAvailabilityMode {
+  const normalizedDetail = normalizeScheduleRuleDetailJson(
+    rows.find((row) => row.detail_json)?.detail_json ?? null
+  );
+
+  if (
+    normalizedDetail?.availability_mode === 'always' ||
+    normalizedDetail?.availability_mode === 'restricted'
+  ) {
+    return normalizedDetail.availability_mode;
+  }
+
+  if (!rows.length) return 'always';
+  return rows.every((row) => isAllDayTimeBlock(row.start_time, row.end_time))
+    ? 'always'
+    : 'restricted';
 }
 
 function formatPeriodList(periods: OpeningPeriod[] = []): string | null {
@@ -1380,6 +1438,8 @@ export default function AdminMasterPage() {
     ExistingSchedulePreviewRow[]
   >([]);
   const [venueRuleKind, setVenueRuleKind] = useState<VenueRuleKind>('kid');
+  const [venueRuleAvailabilityMode, setVenueRuleAvailabilityMode] =
+    useState<VenueRuleAvailabilityMode>('always');
   const [happyHourForm, setHappyHourForm] = useState<HappyHourFormState>(blankHappyHourForm());
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [clearingSchedule, setClearingSchedule] = useState(false);
@@ -1850,6 +1910,96 @@ export default function AdminMasterPage() {
     setSelectedDays([]);
   }
 
+  function applyHoursTemplate(sourceType: 'opening' | 'kitchen') {
+    const sourceVenue =
+      focusedOverviewVenue ??
+      singleSelectedVenue ??
+      selectedVenuesForSummary[0] ??
+      null;
+
+    if (!selectedDays.length) {
+      setScheduleErrorMessage('Select at least one day before using existing hours.');
+      return;
+    }
+
+    const periodsByDay = getExistingHours(sourceVenue, sourceType);
+    const matchingPeriods = selectedDays.flatMap((day) => periodsByDay?.[day] ?? []);
+
+    if (!matchingPeriods.length) {
+      setScheduleErrorMessage(
+        `No ${sourceType === 'opening' ? 'opening' : 'kitchen'} hours were found for the selected day${selectedDays.length === 1 ? '' : 's'}.`
+      );
+      return;
+    }
+
+    const uniqueBlocks = Array.from(
+      new Map(
+        matchingPeriods.map((period) => [
+          `${period.open.slice(0, 5)}-${period.close.slice(0, 5)}`,
+          {
+            start_time: period.open.slice(0, 5),
+            end_time: period.close.slice(0, 5),
+          },
+        ])
+      ).values()
+    );
+
+    setTimeBlocks(uniqueBlocks);
+    setScheduleErrorMessage(null);
+    setScheduleMessage(
+      `Loaded ${sourceType === 'opening' ? 'opening' : 'kitchen'} hours for ${formatActivityDays(selectedDays)}. Review and save when ready.`
+    );
+  }
+
+  function applyDealItemHoursTemplate(
+    itemId: string,
+    sourceType: 'opening' | 'kitchen'
+  ) {
+    const sourceVenue =
+      focusedOverviewVenue ??
+      singleSelectedVenue ??
+      selectedVenuesForSummary[0] ??
+      null;
+    const item = dealItems.find((candidate) => candidate.id === itemId);
+
+    if (!item || !item.selectedDays.length) {
+      setScheduleErrorMessage('Select at least one day on the special item before using existing hours.');
+      return;
+    }
+
+    const periodsByDay = getExistingHours(sourceVenue, sourceType);
+    const matchingPeriods = item.selectedDays.flatMap((day) => periodsByDay?.[day] ?? []);
+
+    if (!matchingPeriods.length) {
+      setScheduleErrorMessage(
+        `No ${sourceType === 'opening' ? 'opening' : 'kitchen'} hours were found for this item's selected day${item.selectedDays.length === 1 ? '' : 's'}.`
+      );
+      return;
+    }
+
+    const nextBlocks = Array.from(
+      new Map(
+        matchingPeriods.map((period) => [
+          `${period.open.slice(0, 5)}-${period.close.slice(0, 5)}`,
+          {
+            start_time: period.open.slice(0, 5),
+            end_time: period.close.slice(0, 5),
+          },
+        ])
+      ).values()
+    );
+
+    setDealItems((current) =>
+      current.map((candidate) =>
+        candidate.id === itemId ? { ...candidate, timeBlocks: nextBlocks } : candidate
+      )
+    );
+    setScheduleErrorMessage(null);
+    setScheduleMessage(
+      `Loaded ${sourceType === 'opening' ? 'opening' : 'kitchen'} hours into special item ${dealItems.findIndex((candidate) => candidate.id === itemId) + 1}.`
+    );
+  }
+
   function updateTimeBlock(
     index: number,
     field: keyof TimeBlock,
@@ -2019,6 +2169,7 @@ export default function AdminMasterPage() {
       setVenueRuleKind(
         targetVenueRuleKind ?? (mergedDetailJson?.rule_kind === 'dog' ? 'dog' : 'kid')
       );
+      setVenueRuleAvailabilityMode(inferVenueRuleAvailabilityMode(sortedRows));
     }
   }
 
@@ -2047,7 +2198,10 @@ export default function AdminMasterPage() {
     );
   }
 
-  function resetScheduleForm() {
+  function resetScheduleForm(options?: {
+    preserveVenueRuleKind?: boolean;
+    preserveVenueRuleAvailabilityMode?: boolean;
+  }) {
     setSelectedDays([]);
     setTimeBlocks([{ start_time: '', end_time: '' }]);
     setSaveMode('append');
@@ -2058,7 +2212,10 @@ export default function AdminMasterPage() {
     setNotes('');
     setDealItems([createBlankDealItem()]);
     setLoadedScheduleRowsSnapshot([]);
-    setVenueRuleKind('kid');
+    setVenueRuleKind(options?.preserveVenueRuleKind ? venueRuleKind : 'kid');
+    setVenueRuleAvailabilityMode(
+      options?.preserveVenueRuleAvailabilityMode ? venueRuleAvailabilityMode : 'always'
+    );
     setHappyHourForm(blankHappyHourForm());
   }
 
@@ -2173,7 +2330,7 @@ export default function AdminMasterPage() {
       setDealText('');
       setSpecialPrice('');
       setNotes('');
-      setVenueRuleKind('kid');
+      setVenueRuleAvailabilityMode('always');
       if (targetScheduleType === 'happy_hour') {
         setHappyHourForm(blankHappyHourForm());
       }
@@ -2864,14 +3021,15 @@ export default function AdminMasterPage() {
       try {
         await adminAuthedFetch('/api/admin/schedules', {
           method: 'POST',
-          body: JSON.stringify({
-            action: 'save',
-            rows,
-            venueIds: selectedVenueIds,
-            scheduleType,
-            saveMode,
-            selectedDays: selectedDealDays,
-          }),
+        body: JSON.stringify({
+          action: 'save',
+          rows,
+          venueIds: selectedVenueIds,
+          scheduleType,
+          saveMode,
+          selectedDays: selectedDealDays,
+          venueRuleKind: scheduleType === 'venue_rule' ? venueRuleKind : null,
+        }),
         });
         await loadAdminBootstrap();
         setScheduleMessage(
@@ -2922,7 +3080,12 @@ export default function AdminMasterPage() {
         end_time: block.end_time.trim(),
       }))
       .filter((block) => block.start_time && block.end_time);
-    if (!cleanedTimeBlocks.length) {
+    const isAlwaysAllowedVenueRule =
+      scheduleType === 'venue_rule' && venueRuleAvailabilityMode === 'always';
+    const effectiveTimeBlocks = isAlwaysAllowedVenueRule
+      ? [{ ...ALL_DAY_TIME_BLOCK }]
+      : cleanedTimeBlocks;
+    if (!effectiveTimeBlocks.length) {
       setScheduleErrorMessage('Please add at least one valid time block.');
       appendActivityLog({
         area: 'schedules',
@@ -2933,7 +3096,7 @@ export default function AdminMasterPage() {
       });
       return;
     }
-    for (const block of cleanedTimeBlocks) {
+    for (const block of effectiveTimeBlocks) {
       if (block.start_time === block.end_time) {
         setScheduleErrorMessage('Start and end time cannot be the same.');
         appendActivityLog({
@@ -2980,7 +3143,12 @@ export default function AdminMasterPage() {
     const happyHourDetailJson =
       scheduleType === 'happy_hour' ? buildHappyHourDetailJson(happyHourForm) : null;
     const venueRuleDetailJson =
-      scheduleType === 'venue_rule' ? normalizeScheduleRuleDetailJson({ rule_kind: venueRuleKind }) : null;
+      scheduleType === 'venue_rule'
+        ? normalizeScheduleRuleDetailJson({
+            rule_kind: venueRuleKind,
+            availability_mode: venueRuleAvailabilityMode,
+          })
+        : null;
     const specialDetailJson =
       scheduleType === 'daily_special' || scheduleType === 'lunch_special'
         ? normalizeScheduleRuleDetailJson({ special_price: structuredSpecialPrice })
@@ -2991,7 +3159,7 @@ export default function AdminMasterPage() {
     try {
       const rows = selectedVenueIds.flatMap((venueId) =>
         selectedDays.flatMap((day) =>
-          cleanedTimeBlocks.map((block, index) => ({
+          effectiveTimeBlocks.map((block, index) => ({
             venue_id: venueId,
             schedule_type: scheduleType,
             day_of_week: day,
@@ -3023,6 +3191,7 @@ export default function AdminMasterPage() {
           scheduleType,
           saveMode,
           selectedDays,
+          venueRuleKind: scheduleType === 'venue_rule' ? venueRuleKind : null,
         }),
       });
       await loadAdminBootstrap();
@@ -3039,7 +3208,7 @@ export default function AdminMasterPage() {
           venueIds: selectedVenueIds,
           venues,
           selectedDays,
-          cleanedTimeBlocks,
+          cleanedTimeBlocks: effectiveTimeBlocks,
           saveMode,
           rowsAffected: rows.length,
           title,
@@ -3055,7 +3224,10 @@ export default function AdminMasterPage() {
           happyHourDetailJson,
         }),
       });
-      resetScheduleForm();
+      resetScheduleForm({
+        preserveVenueRuleKind: scheduleType === 'venue_rule',
+        preserveVenueRuleAvailabilityMode: scheduleType === 'venue_rule',
+      });
     } catch (error: unknown) {
       const message = getAdminFriendlyErrorMessage(error, 'Failed to save schedule.');
       setScheduleErrorMessage(message);
@@ -3071,7 +3243,7 @@ export default function AdminMasterPage() {
             venueIds: selectedVenueIds,
             venues,
             selectedDays,
-            cleanedTimeBlocks,
+            cleanedTimeBlocks: effectiveTimeBlocks,
             saveMode,
             title,
             description,
@@ -3298,6 +3470,7 @@ export default function AdminMasterPage() {
           venueIds: selectedVenueIds,
           scheduleType,
           selectedDays,
+          venueRuleKind: scheduleType === 'venue_rule' ? venueRuleKind : null,
         }),
       });
       await loadAdminBootstrap();
@@ -3367,6 +3540,7 @@ export default function AdminMasterPage() {
           action: 'delete-all',
           venueIds: selectedVenueIds,
           scheduleType,
+          venueRuleKind: scheduleType === 'venue_rule' ? venueRuleKind : null,
         }),
       });
       await loadAdminBootstrap();
@@ -4408,7 +4582,10 @@ export default function AdminMasterPage() {
                             {getDayLabel(row.day_of_week)}
                           </div>
                           <div className="mt-1 font-medium">
-                            {row.start_time}-{row.end_time}
+                            {isVenueRuleScheduleType(scheduleType) &&
+                            isAllDayTimeBlock(row.start_time, row.end_time)
+                              ? 'Always allowed'
+                              : `${row.start_time}-${row.end_time}`}
                           </div>
                           {summary ? (
                             <div className="mt-1 text-xs text-neutral-600">{summary}</div>
@@ -4421,6 +4598,33 @@ export default function AdminMasterPage() {
               </div>
               {!isDealScheduleType(scheduleType) ? (
               <>
+              {isVenueRuleScheduleType(scheduleType) ? (
+                <div className="mt-3.5 rounded-2xl border border-neutral-200 bg-neutral-50 p-3.5 sm:mt-4">
+                  <div className="text-sm font-semibold">Rule availability</div>
+                  <div className="mt-1 text-xs text-neutral-600">
+                    Always allowed needs days only. Restricted hours adds specific day and time coverage.
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(['always', 'restricted'] as const).map((mode) => {
+                      const active = venueRuleAvailabilityMode === mode;
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setVenueRuleAvailabilityMode(mode)}
+                          className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
+                            active
+                              ? 'border-orange-400 bg-orange-500 text-black shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
+                              : 'admin-ghost-button'
+                          }`}
+                        >
+                          {mode === 'always' ? 'Always allowed' : 'Restricted hours'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
               <div className="mt-3.5 sm:mt-4">
                 <div className="mb-2 flex flex-wrap gap-2">
                   <button
@@ -4474,6 +4678,35 @@ export default function AdminMasterPage() {
                   })}
                 </div>
               </div>
+              {(scheduleType === 'happy_hour' ||
+                isEventScheduleType(scheduleType) ||
+                (isVenueRuleScheduleType(scheduleType) &&
+                  venueRuleAvailabilityMode === 'restricted')) ? (
+                <div className="mt-3.5 rounded-2xl border border-neutral-200 bg-neutral-50 p-3 sm:mt-4">
+                  <div className="text-sm font-semibold">Use existing venue hours</div>
+                  <div className="mt-1 text-xs text-neutral-600">
+                    Copy opening or kitchen hours for the selected days, then adjust before saving.
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => applyHoursTemplate('opening')}
+                      className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                    >
+                      Use opening hours
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyHoursTemplate('kitchen')}
+                      className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                    >
+                      Use kitchen hours
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {(!isVenueRuleScheduleType(scheduleType) ||
+                venueRuleAvailabilityMode === 'restricted') ? (
               <div className="mt-3.5 sm:mt-4">
                 <div className="mb-2 flex items-center justify-between">
                   <label className="block text-sm font-medium">Time Blocks</label>
@@ -4526,6 +4759,7 @@ export default function AdminMasterPage() {
                   ))}
                 </div>
               </div>
+              ) : null}
               </>
               ) : null}
               {isEventScheduleType(scheduleType) && (
@@ -4574,9 +4808,13 @@ export default function AdminMasterPage() {
                     value={dealText}
                     onChange={(e) => setDealText(e.target.value)}
                     placeholder={
-                      venueRuleKind === 'kid'
-                        ? 'e.g. Kids until 8pm'
-                        : 'e.g. Dogs front bar only'
+                      venueRuleAvailabilityMode === 'always'
+                        ? venueRuleKind === 'kid'
+                          ? 'e.g. Kids welcome'
+                          : 'e.g. Dogs welcome in the beer garden'
+                        : venueRuleKind === 'kid'
+                          ? 'e.g. Kids until 8pm'
+                          : 'e.g. Dogs front bar only'
                     }
                     className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                   />
@@ -4607,6 +4845,7 @@ export default function AdminMasterPage() {
                   onRemoveTimeBlock={removeDealItemTimeBlock}
                   onUpdateTimeBlock={updateDealItemTimeBlock}
                   onUpdateField={updateDealItemField}
+                  onUseHoursTemplate={applyDealItemHoursTemplate}
                 />
               )}
               {(!isDealScheduleType(scheduleType) && (isEventScheduleType(scheduleType) || scheduleType === 'happy_hour')) && (
@@ -4698,7 +4937,7 @@ export default function AdminMasterPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={resetScheduleForm}
+                    onClick={() => resetScheduleForm()}
                     disabled={savingSchedule || clearingSchedule}
                     className="admin-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold"
                   >

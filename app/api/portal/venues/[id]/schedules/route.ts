@@ -7,6 +7,7 @@ import {
   isValidScheduleType,
   type DayOfWeek,
   type ScheduleType,
+  type VenueRuleKind,
 } from '@/lib/schedule-rules';
 
 type OpeningHours = Partial<Record<DayOfWeek, Array<{ open: string; close: string }>>>;
@@ -36,6 +37,11 @@ function normalizeSelectedDays(value: unknown) {
   return selectedDays
     .map((day) => String(day ?? '').trim().toLowerCase())
     .filter(isValidDayOfWeek);
+}
+
+function normalizeVenueRuleKind(value: unknown): VenueRuleKind | null {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return normalized === 'kid' || normalized === 'dog' ? normalized : null;
 }
 
 function sanitizeScheduleRows(
@@ -186,6 +192,7 @@ export async function POST(
       const scheduleType = rawScheduleType as ScheduleType;
       const saveMode = body?.saveMode === 'replace' ? 'replace' : 'append';
       const selectedDays = normalizeSelectedDays(body?.selectedDays);
+      const venueRuleKind = normalizeVenueRuleKind(body?.venueRuleKind);
 
       if (!isValidScheduleType(rawScheduleType)) {
         return NextResponse.json(
@@ -204,12 +211,18 @@ export async function POST(
       }
 
       if (saveMode === 'replace') {
-        const { error: deleteError } = await supabase
+        let deleteQuery = supabase
           .from('venue_schedule_rules')
           .delete()
           .eq('venue_id', id)
           .eq('schedule_type', scheduleType)
           .in('day_of_week', selectedDays);
+
+        if (scheduleType === 'venue_rule' && venueRuleKind) {
+          deleteQuery = deleteQuery.contains('detail_json', { rule_kind: venueRuleKind });
+        }
+
+        const { error: deleteError } = await deleteQuery;
 
         if (deleteError) throw new Error(deleteError.message);
       }
@@ -225,6 +238,7 @@ export async function POST(
       const rawScheduleType = String(body?.scheduleType ?? '').trim();
       const scheduleType = rawScheduleType as ScheduleType;
       const selectedDays = normalizeSelectedDays(body?.selectedDays);
+      const venueRuleKind = normalizeVenueRuleKind(body?.venueRuleKind);
 
       if (!isValidScheduleType(rawScheduleType)) {
         return NextResponse.json(
@@ -240,12 +254,18 @@ export async function POST(
         );
       }
 
-      const { error } = await supabase
+      let deleteQuery = supabase
         .from('venue_schedule_rules')
         .delete()
         .eq('venue_id', id)
         .eq('schedule_type', scheduleType)
         .in('day_of_week', selectedDays);
+
+      if (scheduleType === 'venue_rule' && venueRuleKind) {
+        deleteQuery = deleteQuery.contains('detail_json', { rule_kind: venueRuleKind });
+      }
+
+      const { error } = await deleteQuery;
 
       if (error) throw new Error(error.message);
 
@@ -256,6 +276,7 @@ export async function POST(
     if (action === 'delete-all') {
       const rawScheduleType = String(body?.scheduleType ?? '').trim();
       const scheduleType = rawScheduleType as ScheduleType;
+      const venueRuleKind = normalizeVenueRuleKind(body?.venueRuleKind);
 
       if (!isValidScheduleType(rawScheduleType)) {
         return NextResponse.json(
@@ -264,11 +285,17 @@ export async function POST(
         );
       }
 
-      const { error } = await supabase
+      let deleteQuery = supabase
         .from('venue_schedule_rules')
         .delete()
         .eq('venue_id', id)
         .eq('schedule_type', scheduleType);
+
+      if (scheduleType === 'venue_rule' && venueRuleKind) {
+        deleteQuery = deleteQuery.contains('detail_json', { rule_kind: venueRuleKind });
+      }
+
+      const { error } = await deleteQuery;
 
       if (error) throw new Error(error.message);
 

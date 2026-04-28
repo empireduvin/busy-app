@@ -25,6 +25,7 @@ import {
   type HappyHourDetailJson,
   type HappyHourPrice,
   type ScheduleRuleDetailJson,
+  type VenueRuleAvailabilityMode,
   getHappyHourItemPrices,
   normalizeHappyHourDetailCategory,
   normalizeHappyHourDetailJson,
@@ -40,6 +41,10 @@ type SaveMode = 'append' | 'replace';
 type OpeningPeriod = { open: string; close: string };
 type OpeningHours = Partial<Record<DayOfWeek, OpeningPeriod[]>>;
 type TimeBlock = { start_time: string; end_time: string };
+const ALL_DAY_TIME_BLOCK = {
+  start_time: '00:00',
+  end_time: '23:59',
+} as const;
 type AccessRow = { role: string | null };
 type VenueScheduleRule = {
   id: string;
@@ -449,6 +454,31 @@ function sortPortalExistingPreviewRows(rows: PortalExistingSchedulePreviewRow[])
   });
 }
 
+function isAllDayTimeBlock(startTime: string, endTime: string) {
+  return startTime.slice(0, 5) === ALL_DAY_TIME_BLOCK.start_time &&
+    endTime.slice(0, 5) === ALL_DAY_TIME_BLOCK.end_time;
+}
+
+function inferVenueRuleAvailabilityMode(
+  rows: PortalExistingSchedulePreviewRow[]
+): VenueRuleAvailabilityMode {
+  const normalizedDetail = normalizeScheduleRuleDetailJson(
+    rows.find((row) => row.detail_json)?.detail_json ?? null
+  );
+
+  if (
+    normalizedDetail?.availability_mode === 'always' ||
+    normalizedDetail?.availability_mode === 'restricted'
+  ) {
+    return normalizedDetail.availability_mode;
+  }
+
+  if (!rows.length) return 'always';
+  return rows.every((row) => isAllDayTimeBlock(row.start_time, row.end_time))
+    ? 'always'
+    : 'restricted';
+}
+
 function getPortalExistingScheduleRowsForEdit(
   venue: PortalVenueDetail | null,
   scheduleType: PortalScheduleType,
@@ -618,6 +648,8 @@ export default function PortalVenueDetailPage() {
     PortalExistingSchedulePreviewRow[]
   >([]);
   const [venueRuleKind, setVenueRuleKind] = useState<VenueRuleKind>('kid');
+  const [venueRuleAvailabilityMode, setVenueRuleAvailabilityMode] =
+    useState<VenueRuleAvailabilityMode>('always');
   const [happyHourForm, setHappyHourForm] = useState<HappyHourFormState>(blankHappyHourForm());
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [clearingSchedule, setClearingSchedule] = useState(false);
@@ -873,6 +905,82 @@ export default function PortalVenueDetailPage() {
     setSelectedDays([]);
   }
 
+  function applyHoursTemplate(sourceType: 'opening' | 'kitchen') {
+    if (!selectedDays.length) {
+      setScheduleError('Select at least one day before using existing hours.');
+      return;
+    }
+
+    const periodsByDay = getExistingHours(venue, sourceType);
+    const matchingPeriods = selectedDays.flatMap((day) => periodsByDay?.[day] ?? []);
+
+    if (!matchingPeriods.length) {
+      setScheduleError(
+        `No ${sourceType === 'opening' ? 'opening' : 'kitchen'} hours were found for the selected day${selectedDays.length === 1 ? '' : 's'}.`
+      );
+      return;
+    }
+
+    const nextBlocks = Array.from(
+      new Map(
+        matchingPeriods.map((period) => [
+          `${period.open.slice(0, 5)}-${period.close.slice(0, 5)}`,
+          {
+            start_time: period.open.slice(0, 5),
+            end_time: period.close.slice(0, 5),
+          },
+        ])
+      ).values()
+    );
+
+    setTimeBlocks(nextBlocks);
+    setScheduleError(null);
+    setScheduleMessage(
+      `Loaded ${sourceType === 'opening' ? 'opening' : 'kitchen'} hours for ${selectedDays.length} selected day${selectedDays.length === 1 ? '' : 's'}.`
+    );
+  }
+
+  function applyDealItemHoursTemplate(itemId: string, sourceType: 'opening' | 'kitchen') {
+    const item = dealItems.find((candidate) => candidate.id === itemId);
+
+    if (!item || !item.selectedDays.length) {
+      setScheduleError('Select at least one day on the special item before using existing hours.');
+      return;
+    }
+
+    const periodsByDay = getExistingHours(venue, sourceType);
+    const matchingPeriods = item.selectedDays.flatMap((day) => periodsByDay?.[day] ?? []);
+
+    if (!matchingPeriods.length) {
+      setScheduleError(
+        `No ${sourceType === 'opening' ? 'opening' : 'kitchen'} hours were found for this item's selected day${item.selectedDays.length === 1 ? '' : 's'}.`
+      );
+      return;
+    }
+
+    const nextBlocks = Array.from(
+      new Map(
+        matchingPeriods.map((period) => [
+          `${period.open.slice(0, 5)}-${period.close.slice(0, 5)}`,
+          {
+            start_time: period.open.slice(0, 5),
+            end_time: period.close.slice(0, 5),
+          },
+        ])
+      ).values()
+    );
+
+    setDealItems((current) =>
+      current.map((candidate) =>
+        candidate.id === itemId ? { ...candidate, timeBlocks: nextBlocks } : candidate
+      )
+    );
+    setScheduleError(null);
+    setScheduleMessage(
+      `Loaded ${sourceType === 'opening' ? 'opening' : 'kitchen'} hours into special item ${dealItems.findIndex((candidate) => candidate.id === itemId) + 1}.`
+    );
+  }
+
   function updateTimeBlock(index: number, field: keyof TimeBlock, value: string) {
     setTimeBlocks((current) => current.map((block, blockIndex) => (blockIndex === index ? { ...block, [field]: value } : block)));
   }
@@ -1031,6 +1139,7 @@ export default function PortalVenueDetailPage() {
       setVenueRuleKind(
         targetVenueRuleKind ?? (mergedDetailJson?.rule_kind === 'dog' ? 'dog' : 'kid')
       );
+      setVenueRuleAvailabilityMode(inferVenueRuleAvailabilityMode(sortedRows));
     }
   }
 
@@ -1059,7 +1168,10 @@ export default function PortalVenueDetailPage() {
     );
   }
 
-  function resetScheduleForm() {
+  function resetScheduleForm(options?: {
+    preserveVenueRuleKind?: boolean;
+    preserveVenueRuleAvailabilityMode?: boolean;
+  }) {
     setSelectedDays([]);
     setTimeBlocks([{ start_time: '', end_time: '' }]);
     setSaveMode('append');
@@ -1070,7 +1182,10 @@ export default function PortalVenueDetailPage() {
     setNotes('');
     setDealItems([createBlankDealItem()]);
     setLoadedScheduleRowsSnapshot([]);
-    setVenueRuleKind('kid');
+    setVenueRuleKind(options?.preserveVenueRuleKind ? venueRuleKind : 'kid');
+    setVenueRuleAvailabilityMode(
+      options?.preserveVenueRuleAvailabilityMode ? venueRuleAvailabilityMode : 'always'
+    );
     setHappyHourForm(blankHappyHourForm());
     setScheduleMessage(null);
     setScheduleError(null);
@@ -1191,12 +1306,12 @@ export default function PortalVenueDetailPage() {
     );
     setTitle('');
     setDescription('');
-    setDealText('');
+   setDealText('');
     setSpecialPrice('');
     setNotes('');
     setDealItems([createBlankDealItem()]);
     setLoadedScheduleRowsSnapshot([]);
-    setVenueRuleKind('kid');
+    setVenueRuleAvailabilityMode('always');
     setHappyHourForm(blankHappyHourForm());
     setSaveMode(periods.length ? 'replace' : 'append');
     setScheduleMessage(
@@ -1434,6 +1549,7 @@ export default function PortalVenueDetailPage() {
             scheduleType,
             saveMode,
             selectedDays: selectedDealDays,
+            venueRuleKind: scheduleType === 'venue_rule' ? venueRuleKind : null,
           }),
         });
         setScheduleMessage(`Saved ${getScheduleTypeLabel(scheduleType).toLowerCase()}.`);
@@ -1457,11 +1573,16 @@ export default function PortalVenueDetailPage() {
     const cleanedTimeBlocks = timeBlocks
       .map((block) => ({ start_time: block.start_time.trim(), end_time: block.end_time.trim() }))
       .filter((block) => block.start_time && block.end_time);
-    if (!cleanedTimeBlocks.length) {
+    const isAlwaysAllowedVenueRule =
+      scheduleType === 'venue_rule' && venueRuleAvailabilityMode === 'always';
+    const effectiveTimeBlocks = isAlwaysAllowedVenueRule
+      ? [{ ...ALL_DAY_TIME_BLOCK }]
+      : cleanedTimeBlocks;
+    if (!effectiveTimeBlocks.length) {
       setScheduleError('Please add at least one valid time block.');
       return;
     }
-    if (cleanedTimeBlocks.some((block) => block.start_time === block.end_time)) {
+    if (effectiveTimeBlocks.some((block) => block.start_time === block.end_time)) {
       setScheduleError('Start and end time cannot be the same.');
       return;
     }
@@ -1479,7 +1600,12 @@ export default function PortalVenueDetailPage() {
     const happyHourDetailJson =
       scheduleType === 'happy_hour' ? buildHappyHourDetailJson(happyHourForm) : null;
     const venueRuleDetailJson =
-      scheduleType === 'venue_rule' ? normalizeScheduleRuleDetailJson({ rule_kind: venueRuleKind }) : null;
+      scheduleType === 'venue_rule'
+        ? normalizeScheduleRuleDetailJson({
+            rule_kind: venueRuleKind,
+            availability_mode: venueRuleAvailabilityMode,
+          })
+        : null;
     const specialDetailJson =
       scheduleType === 'daily_special' || scheduleType === 'lunch_special'
         ? normalizeScheduleRuleDetailJson({ special_price: structuredSpecialPrice })
@@ -1487,7 +1613,7 @@ export default function PortalVenueDetailPage() {
     const generatedHappyHourSummary =
       scheduleType === 'happy_hour' ? buildHappyHourDealSummary(happyHourForm) : null;
     const rows = selectedDays.flatMap((day) =>
-      cleanedTimeBlocks.map((block, index) => ({
+      effectiveTimeBlocks.map((block, index) => ({
         venue_id: venueId,
         schedule_type: scheduleType,
         day_of_week: day,
@@ -1513,14 +1639,24 @@ export default function PortalVenueDetailPage() {
     try {
       await portalAuthedFetch(`/api/portal/venues/${venueId}/schedules`, {
         method: 'POST',
-        body: JSON.stringify({ action: 'save', rows, scheduleType, saveMode, selectedDays }),
+        body: JSON.stringify({
+          action: 'save',
+          rows,
+          scheduleType,
+          saveMode,
+          selectedDays,
+          venueRuleKind: scheduleType === 'venue_rule' ? venueRuleKind : null,
+        }),
       });
       setScheduleMessage(`Saved ${getScheduleTypeLabel(scheduleType).toLowerCase()}.`);
       appendActivity(
         'Saved schedule',
-        `${getScheduleTypePickerLabel(scheduleType, venueRuleKind)} for ${selectedDays.length} day${selectedDays.length === 1 ? '' : 's'} with ${cleanedTimeBlocks.length} block${cleanedTimeBlocks.length === 1 ? '' : 's'}.`
+        `${getScheduleTypePickerLabel(scheduleType, venueRuleKind)} for ${selectedDays.length} day${selectedDays.length === 1 ? '' : 's'} with ${effectiveTimeBlocks.length} block${effectiveTimeBlocks.length === 1 ? '' : 's'}.`
       );
-      resetScheduleForm();
+      resetScheduleForm({
+        preserveVenueRuleKind: scheduleType === 'venue_rule',
+        preserveVenueRuleAvailabilityMode: scheduleType === 'venue_rule',
+      });
       await loadVenue(true);
     } catch (error) {
       setScheduleError(error instanceof Error ? error.message : 'Failed to save schedule.');
@@ -1541,7 +1677,12 @@ export default function PortalVenueDetailPage() {
     try {
       await portalAuthedFetch(`/api/portal/venues/${venueId}/schedules`, {
         method: 'POST',
-        body: JSON.stringify({ action: 'delete-selected-days', scheduleType, selectedDays }),
+        body: JSON.stringify({
+          action: 'delete-selected-days',
+          scheduleType,
+          selectedDays,
+          venueRuleKind: scheduleType === 'venue_rule' ? venueRuleKind : null,
+        }),
       });
       setScheduleMessage(`Deleted selected ${getScheduleTypeLabel(scheduleType).toLowerCase()}.`);
       appendActivity(
@@ -1565,7 +1706,11 @@ export default function PortalVenueDetailPage() {
     try {
       await portalAuthedFetch(`/api/portal/venues/${venueId}/schedules`, {
         method: 'POST',
-        body: JSON.stringify({ action: 'delete-all', scheduleType }),
+        body: JSON.stringify({
+          action: 'delete-all',
+          scheduleType,
+          venueRuleKind: scheduleType === 'venue_rule' ? venueRuleKind : null,
+        }),
       });
       setScheduleMessage(`Deleted all ${getScheduleTypeLabel(scheduleType).toLowerCase()}.`);
       appendActivity(
@@ -2096,7 +2241,10 @@ export default function PortalVenueDetailPage() {
                                 {DAY_OPTIONS.find((option) => option.value === row.day_of_week)?.label ?? row.day_of_week}
                               </div>
                               <div className="mt-1 font-medium text-white">
-                                {row.start_time}-{row.end_time}
+                                {isVenueRuleScheduleType(scheduleType) &&
+                                isAllDayTimeBlock(row.start_time, row.end_time)
+                                  ? 'Always allowed'
+                                  : `${row.start_time}-${row.end_time}`}
                               </div>
                               {summary ? (
                                 <div className="mt-1 text-xs text-white/62">{summary}</div>
@@ -2110,6 +2258,33 @@ export default function PortalVenueDetailPage() {
 
                   {!isDealScheduleType(scheduleType) ? (
                   <>
+                  {isVenueRuleScheduleType(scheduleType) ? (
+                    <div className="portal-surface-subtle mt-4 rounded-2xl border p-4 sm:mt-5">
+                      <div className="text-sm font-semibold text-white">Rule availability</div>
+                      <div className="mt-1 text-xs text-white/62">
+                        Always allowed needs days only. Restricted hours adds specific day and time coverage.
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(['always', 'restricted'] as const).map((mode) => {
+                          const active = venueRuleAvailabilityMode === mode;
+                          return (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setVenueRuleAvailabilityMode(mode)}
+                              className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
+                                active
+                                  ? 'border-orange-400 bg-orange-500 text-black shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
+                                  : 'portal-ghost-button'
+                              }`}
+                            >
+                              {mode === 'always' ? 'Always allowed' : 'Restricted hours'}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="mt-4 flex flex-wrap gap-2 sm:mt-5">
                     <button type="button" onClick={() => setDaysPreset('weekdays')} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">Mon-Fri</button>
                     <button type="button" onClick={() => setDaysPreset('weekend')} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">Weekend</button>
@@ -2123,6 +2298,21 @@ export default function PortalVenueDetailPage() {
                       return <button key={day.value} type="button" onClick={() => toggleDay(day.value)} className={`min-h-[42px] rounded-xl border px-3 py-2 text-sm font-semibold ${active ? 'border-orange-400 bg-orange-500 text-black shadow-[0_0_0_2px_rgba(251,146,60,0.22)]' : 'portal-ghost-button'}`} aria-pressed={active}>{active ? `Selected ${day.label}` : day.label}</button>;
                     })}
                   </div>
+                  {(scheduleType === 'happy_hour' ||
+                    isEventScheduleType(scheduleType) ||
+                    (isVenueRuleScheduleType(scheduleType) &&
+                      venueRuleAvailabilityMode === 'restricted')) ? (
+                    <div className="portal-surface-subtle mt-4 rounded-2xl border p-4 sm:mt-5">
+                      <div className="text-sm font-semibold text-white">Use existing venue hours</div>
+                      <div className="mt-1 text-xs text-white/62">
+                        Copy opening or kitchen hours for the selected days, then adjust before saving.
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" onClick={() => applyHoursTemplate('opening')} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">Use opening hours</button>
+                        <button type="button" onClick={() => applyHoursTemplate('kitchen')} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">Use kitchen hours</button>
+                      </div>
+                    </div>
+                  ) : null}
                   </>
                   ) : null}
 
@@ -2191,7 +2381,9 @@ export default function PortalVenueDetailPage() {
                     </div>
                   </div>
 
-                  {!isDealScheduleType(scheduleType) ? (
+                  {!isDealScheduleType(scheduleType) &&
+                  (!isVenueRuleScheduleType(scheduleType) ||
+                    venueRuleAvailabilityMode === 'restricted') ? (
                   <div className="mt-5 sm:mt-6">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
@@ -2223,7 +2415,7 @@ export default function PortalVenueDetailPage() {
                     </div>
                   ) : null}
                   {isVenueRuleScheduleType(scheduleType) ? (
-                    <div className="mt-4"><label className="mb-1 block text-sm font-medium text-white/82">Public summary</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder={venueRuleKind === 'kid' ? 'e.g. Kids until 8pm' : 'e.g. Dogs front bar only'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                    <div className="mt-4"><label className="mb-1 block text-sm font-medium text-white/82">Public summary</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder={venueRuleAvailabilityMode === 'always' ? venueRuleKind === 'kid' ? 'e.g. Kids welcome' : 'e.g. Dogs welcome in the beer garden' : venueRuleKind === 'kid' ? 'e.g. Kids until 8pm' : 'e.g. Dogs front bar only'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
                   ) : null}
                   {scheduleType === 'happy_hour' ? (
                     <div className="mt-4"><label className="mb-1 block text-sm font-medium text-white/82">Deal text / summary</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder="e.g. $7 schooners / $15 burgers" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
@@ -2241,6 +2433,7 @@ export default function PortalVenueDetailPage() {
                       onRemoveTimeBlock={removeDealItemTimeBlock}
                       onUpdateTimeBlock={updateDealItemTimeBlock}
                       onUpdateField={updateDealItemField}
+                      onUseHoursTemplate={applyDealItemHoursTemplate}
                     />
                   ) : null}
                   {(!isDealScheduleType(scheduleType) && (isEventScheduleType(scheduleType) || scheduleType === 'happy_hour')) ? (
@@ -2363,7 +2556,7 @@ export default function PortalVenueDetailPage() {
                     <div className="mb-2 text-xs uppercase tracking-[0.16em] text-white/45 sm:hidden">Save schedule</div>
                     <div className="flex flex-wrap gap-2.5">
                       <button type="button" onClick={handleSaveSchedule} disabled={savingSchedule || clearingSchedule} className="portal-primary-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{savingSchedule ? 'Saving...' : 'Save entry'}</button>
-                      <button type="button" onClick={resetScheduleForm} disabled={savingSchedule || clearingSchedule} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">Clear form</button>
+                      <button type="button" onClick={() => resetScheduleForm()} disabled={savingSchedule || clearingSchedule} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">Clear form</button>
                       <button type="button" onClick={backToPortalOverview} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold">Back to overview</button>
                       <button type="button" onClick={handleDeleteSelectedDays} disabled={savingSchedule || clearingSchedule} className="portal-danger-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{clearingSchedule ? 'Working...' : 'Delete selected days'}</button>
                       <button type="button" onClick={handleDeleteAllForType} disabled={savingSchedule || clearingSchedule} className="portal-danger-button rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">Delete all {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}</button>

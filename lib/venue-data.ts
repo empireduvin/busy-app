@@ -23,9 +23,11 @@ export type HappyHourDetailJson = {
 };
 
 export type VenueRuleKind = 'kid' | 'dog';
+export type VenueRuleAvailabilityMode = 'always' | 'restricted';
 
 export type ScheduleRuleDetailJson = HappyHourDetailJson & {
   rule_kind?: VenueRuleKind | null;
+  availability_mode?: VenueRuleAvailabilityMode | null;
   special_price?: number | null;
 };
 
@@ -102,6 +104,10 @@ export function normalizeScheduleRuleDetailJson(
 
   if (value.rule_kind === 'kid' || value.rule_kind === 'dog') {
     normalized.rule_kind = value.rule_kind;
+  }
+
+  if (value.availability_mode === 'always' || value.availability_mode === 'restricted') {
+    normalized.availability_mode = value.availability_mode;
   }
 
   if (typeof value.special_price === 'number' && Number.isFinite(value.special_price)) {

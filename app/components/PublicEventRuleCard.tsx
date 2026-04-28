@@ -30,7 +30,18 @@ export default function PublicEventRuleCard({
   discoverySummary?: boolean;
 }) {
   const label = EVENT_LABELS[rule.schedule_type as keyof typeof EVENT_LABELS] ?? rule.schedule_type;
-  const extra = rule.title?.trim() || rule.deal_text?.trim() || rule.description?.trim() || rule.notes?.trim() || '';
+  const eventTextParts = [
+    rule.title?.trim() || null,
+    rule.deal_text?.trim() || null,
+    rule.description?.trim() || null,
+    rule.notes?.trim() || null,
+  ].filter((value): value is string => Boolean(value));
+  const extra = eventTextParts.find(
+    (value, index) =>
+      eventTextParts.findIndex(
+        (candidate) => candidate.trim().toLowerCase() === value.trim().toLowerCase()
+      ) === index
+  ) ?? '';
 
   return (
     <div

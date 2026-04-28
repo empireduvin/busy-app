@@ -2487,12 +2487,12 @@ function HappyHourRuleCard({
                   >
                     {isFoodCategory ? (
                       <div className="space-y-1">
-                        <div className="space-y-2">
-                          <div className="text-sm font-medium leading-5 text-white break-words">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 text-sm font-medium leading-5 text-white break-words">
                             {item.title}
                           </div>
                           {item.price != null ? (
-                            <div className="inline-flex max-w-full rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-amber-200">
+                            <div className="mt-0.5 inline-flex shrink-0 max-w-full rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-amber-200">
                               {formatHappyHourAmount(item.price)}
                             </div>
                           ) : null}
