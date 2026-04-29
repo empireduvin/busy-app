@@ -4,13 +4,15 @@ import GoogleMap from '@/app/components/GoogleMap';
 import PublicVenueCard from '@/app/components/PublicVenueCard';
 import SaveVenueButton from '@/app/components/SaveVenueButton';
 import { usePublicVenueCollections } from '@/app/components/usePublicVenueCollections';
-import { formatTimeForUi, isOpenNow } from '@/lib/opening-hours';
+import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
+import { formatTimeForUi, isOpenNow, type WeeklyHours } from '@/lib/opening-hours';
 import { getVenueProductGuardrails } from '@/lib/venue-product-guardrails';
 import {
   HAPPY_HOUR_CATEGORIES,
   buildHoursJsonFromRules,
   getCompactSpecialLine,
   getCompactVenueRuleSignal,
+  getEffectiveScheduleHours,
   getLunchSpecialEligibleRules,
   getPublishedDealRules,
   getDisplayHappyHourItems,
@@ -23,39 +25,46 @@ import {
   type VenueScheduleRule,
 } from '@/lib/public-venue-discovery';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 type LiveNowFilter =
   | 'all'
   | 'happy_hour'
   | 'food_deals_now'
-  | 'lunch_specials'
   | 'kid_friendly_now'
   | 'dog_friendly_now'
+  | 'byo'
   | 'events'
   | 'trivia'
   | 'live_music'
-  | 'comedy'
-  | 'ends_soon';
+  | 'sport'
+  | 'ends_soon'
+  | 'starts_soon'
+  | 'open_late';
 
 type TimeFilter = 'any' | 'afternoon' | 'evening' | 'late_night';
-type SectionKind = 'happy_hour' | 'specials' | 'events' | 'mixed';
 type LiveNowRow = ReturnType<typeof buildLiveNowRow>;
 
-const LIVE_NOW_FILTERS: Array<{ value: LiveNowFilter; label: string }> = [
+const PRIMARY_LIVE_NOW_FILTERS: Array<{ value: LiveNowFilter; label: string }> = [
   { value: 'all', label: 'All live' },
   { value: 'happy_hour', label: 'Happy hour now' },
-  { value: 'food_deals_now', label: 'Food deals now' },
-  { value: 'lunch_specials', label: 'Lunch specials' },
-  { value: 'kid_friendly_now', label: 'Kid friendly now' },
-  { value: 'dog_friendly_now', label: 'Dog friendly now' },
-  { value: 'events', label: 'Live events' },
-  { value: 'trivia', label: 'Trivia live' },
+  { value: 'events', label: 'Events now' },
+  { value: 'trivia', label: 'Trivia now' },
   { value: 'live_music', label: 'Live music now' },
-  { value: 'comedy', label: 'Comedy live' },
+  { value: 'sport', label: 'Sport now' },
   { value: 'ends_soon', label: 'Ending soon' },
+  { value: 'starts_soon', label: 'Starting soon' },
+  { value: 'open_late', label: 'Open late' },
 ];
+
+const SECONDARY_LIVE_NOW_FILTERS: Array<{ value: LiveNowFilter; label: string }> = [
+  { value: 'food_deals_now', label: 'Food specials now' },
+  { value: 'dog_friendly_now', label: 'Dog friendly' },
+  { value: 'kid_friendly_now', label: 'Kid friendly' },
+  { value: 'byo', label: 'BYO' },
+];
+
+const LIVE_NOW_FILTERS = [...PRIMARY_LIVE_NOW_FILTERS, ...SECONDARY_LIVE_NOW_FILTERS];
 
 const TIME_FILTERS: Array<{ value: TimeFilter; label: string }> = [
   { value: 'any', label: 'Any live time' },
@@ -82,38 +91,23 @@ export default function LiveNowPage() {
       .filter((row) => matchesSearchText(row, searchTerm))
       .sort(
         (a, b) =>
-          a.primaryStartMinutes - b.primaryStartMinutes ||
+          a.reasonPriority - b.reasonPriority ||
           b.urgencyScore - a.urgencyScore ||
+          a.primaryStartMinutes - b.primaryStartMinutes ||
           (a.venue.name ?? '').localeCompare(b.venue.name ?? '')
       );
   }, [activeFilter, liveVenues, searchTerm, timeFilter]);
 
   const sections = useMemo(() => {
     if (activeFilter === 'all') {
-      return [
-        {
-          id: 'happy-hour-live',
-          title: 'Happy hour live',
-          description: 'Deals already running right now.',
-          kind: 'happy_hour' as SectionKind,
-          rows: liveRows.filter((row) => row.liveHappyHourRules.length > 0),
-        },
-        {
-          id: 'events-live',
-          title: 'Events live',
-          description: 'Trivia, music, comedy, and live sessions already underway.',
-          kind: 'events' as SectionKind,
-          rows: liveRows.filter((row) => row.liveEventRules.length > 0),
-        },
-      ].filter((section) => section.rows.length > 0);
+      return buildLiveSections(liveRows);
     }
 
     return [
       {
         id: 'live-matches',
         title: getFilterHeading(activeFilter),
-        description: 'Filtered picks happening now.',
-        kind: getFilterSectionKind(activeFilter),
+        description: getFilterDescription(activeFilter),
         rows: liveRows,
       },
     ];
@@ -153,22 +147,28 @@ export default function LiveNowPage() {
   const headlineStats = useMemo(
     () => [
       {
-        label: 'Happy hour live',
-        value: liveRows.filter((row) => row.liveHappyHourRules.length > 0).length,
-        sectionId: activeFilter === 'all' ? 'happy-hour-live' : 'live-matches',
-        emptyLabel: 'No live deals',
+        label: 'Live now',
+        value: liveRows.length,
+        sectionId: 'live-matches',
+        emptyLabel: 'Live now',
       },
       {
-        label: 'Events live',
+        label: 'Happy hours now',
+        value: liveRows.filter((row) => row.liveHappyHourRules.length > 0).length,
+        sectionId: activeFilter === 'all' ? 'happy-hour-live' : 'live-matches',
+        emptyLabel: 'Happy hours now',
+      },
+      {
+        label: 'Events now',
         value: liveRows.filter((row) => row.liveEventRules.length > 0).length,
         sectionId: activeFilter === 'all' ? 'events-live' : 'live-matches',
-        emptyLabel: 'Nothing live',
+        emptyLabel: 'Events now',
       },
       {
         label: 'Ending soon',
         value: liveRows.filter((row) => row.endsSoon).length,
-        sectionId: 'live-matches',
-        emptyLabel: 'Nothing urgent',
+        sectionId: activeFilter === 'all' ? 'ending-soon' : 'live-matches',
+        emptyLabel: 'Ending soon',
       },
     ],
     [activeFilter, liveRows]
@@ -245,7 +245,7 @@ export default function LiveNowPage() {
               </Link>
             </div>
           </div>
-          <div className="mt-1.5 grid grid-cols-3 gap-1 sm:mt-2 sm:max-w-[420px] sm:gap-2">
+          <div className="mt-1.5 grid grid-cols-2 gap-1 sm:mt-2 sm:max-w-[520px] sm:grid-cols-4 sm:gap-2">
             {headlineStats.map((stat) =>
               stat.value > 0 ? (
                 <a
@@ -280,7 +280,7 @@ export default function LiveNowPage() {
                 Filters
               </div>
               <p className="mt-1 hidden text-[12px] leading-5 text-white/62 sm:block sm:text-sm">
-                Start with happy hour now, live events, or the time window that suits.
+                Start with happy hour, events, sport, or time-sensitive windows.
               </p>
             </div>
             <button
@@ -383,7 +383,7 @@ export default function LiveNowPage() {
           </div>
 
           <div className="hidden sm:flex sm:flex-wrap sm:gap-1.5">
-            {LIVE_NOW_FILTERS.map((filter) => {
+            {PRIMARY_LIVE_NOW_FILTERS.map((filter) => {
               const active = filter.value === activeFilter;
               return (
                 <button
@@ -395,6 +395,27 @@ export default function LiveNowPage() {
                     active
                       ? 'border-orange-400/40 bg-orange-500/14 text-orange-50'
                       : 'border-white/7 bg-black/18 text-white/60 hover:bg-white/8 hover:text-white',
+                  ].join(' ')}
+                >
+                  {filter.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-1.5 hidden sm:flex sm:flex-wrap sm:gap-1.5">
+            {SECONDARY_LIVE_NOW_FILTERS.map((filter) => {
+              const active = filter.value === activeFilter;
+              return (
+                <button
+                  key={filter.value}
+                  type="button"
+                  onClick={() => setActiveFilter(filter.value)}
+                  className={[
+                    'min-w-0 rounded-full border px-2.5 py-1 text-[11px] transition sm:px-3 sm:text-xs',
+                    active
+                      ? 'border-white/16 bg-white/[0.08] text-white'
+                      : 'border-white/7 bg-black/14 text-white/50 hover:bg-white/8 hover:text-white',
                   ].join(' ')}
                 >
                   {filter.label}
@@ -442,7 +463,7 @@ export default function LiveNowPage() {
                 </div>
                 <h2 className="mt-1 text-xl font-semibold text-white">What&apos;s live now</h2>
                 <div className="mt-1 text-sm text-white/62">
-                  Live happy hours and events only for the current filter set.
+                  Time-relevant venues for the current filter set.
                 </div>
               </div>
               <div className="text-xs uppercase tracking-[0.18em] text-white/35">
@@ -525,47 +546,41 @@ export default function LiveNowPage() {
                   </div>
 
                   <div className="mt-3.5 space-y-4 sm:mt-4 sm:space-y-5">
-                    {groupRowsByTime(section.rows, section.kind).map((group) => (
-                      <div key={`${section.id}-${group.label}`} className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <div className="rounded-full border border-orange-400/15 bg-orange-500/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-100 sm:border-orange-400/20 sm:bg-orange-500/10 sm:px-3 sm:text-xs sm:tracking-[0.18em]">
-                            {group.label}
-                          </div>
-                          <div className="h-px flex-1 bg-white/10" />
-                        </div>
-                        <div className="grid gap-3">
-                          {group.rows.map((row) => (
-                            <PublicVenueCard
-                              key={`${section.id}-${row.venue.id}`}
-                              venue={row.venue}
-                              eyebrow={row.cardEyebrow}
-                              compact
-                              tone="live"
-                              heroBadge={
-                                row.endsSoon ? (
-                                  <TopBadge className="border-red-400/35 bg-red-500/18 text-red-50 shadow-[0_0_20px_rgba(239,68,68,0.16)]">
-                                    Ends Soon
-                                  </TopBadge>
-                                ) : row.liveHappyHourRules.length > 0 ? (
-                                  <TopBadge className="border-pink-400/35 bg-pink-500/18 text-pink-50 shadow-[0_0_20px_rgba(236,72,153,0.16)]">
-                                    Live
-                                  </TopBadge>
-                                ) : (
-                                  <TopBadge className="border-orange-400/35 bg-orange-500/18 text-orange-50 shadow-[0_0_20px_rgba(249,115,22,0.16)]">
-                                    Now
-                                  </TopBadge>
-                                )
-                              }
-                              summary={buildReasonToCare(row.liveSpecialRules, row.liveHappyHourRules, row.liveEventRules)}
-                              details={buildSecondaryLine(row.liveSpecialRules, row.liveHappyHourRules, row.timeHighlights, row.endsSoon, row.liveKidRule, row.liveDogRule)}
-                              secondaryFooterAction={
-                                <SaveVenueButton venueId={row.venue.id} variant="card" />
-                              }
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                    <div className="grid gap-3">
+                      {section.rows.map((row) => (
+                        <PublicVenueCard
+                          key={`${section.id}-${row.venue.id}`}
+                          venue={row.venue}
+                          eyebrow={row.cardEyebrow}
+                          compact
+                          tone="live"
+                          heroBadge={
+                            row.endsSoon ? (
+                              <TopBadge className="border-red-400/35 bg-red-500/18 text-red-50 shadow-[0_0_20px_rgba(239,68,68,0.16)]">
+                                Ends Soon
+                              </TopBadge>
+                            ) : row.startsSoon ? (
+                              <TopBadge className="border-amber-400/35 bg-amber-500/18 text-amber-50 shadow-[0_0_20px_rgba(245,158,11,0.16)]">
+                                {buildStartsSoonBadge(row)}
+                              </TopBadge>
+                            ) : row.liveHappyHourRules.length > 0 ? (
+                              <TopBadge className="border-pink-400/35 bg-pink-500/18 text-pink-50 shadow-[0_0_20px_rgba(236,72,153,0.16)]">
+                                Now
+                              </TopBadge>
+                            ) : (
+                              <TopBadge className="border-orange-400/35 bg-orange-500/18 text-orange-50 shadow-[0_0_20px_rgba(249,115,22,0.16)]">
+                                Now
+                              </TopBadge>
+                            )
+                          }
+                          summary={buildReasonToCare(row)}
+                          details={buildSecondaryLine(row)}
+                          secondaryFooterAction={
+                            <SaveVenueButton venueId={row.venue.id} variant="card" />
+                          }
+                        />
+                      ))}
+                    </div>
                   </div>
                 </div>
               </section>
@@ -579,16 +594,25 @@ export default function LiveNowPage() {
 
 function buildLiveNowRow(venue: Venue) {
   const timezone = venue.timezone || 'Australia/Sydney';
-  const liveSpecialRules = getTodayRulesForType(getPublishedDealRules(venue), timezone).filter(
-    (rule) => isOpenNow(buildHoursJsonFromRules([rule]), timezone)
-  );
-  const liveHappyHourRules = getTodayRulesForType(
+  const todaySpecialRules = getTodayRulesForType(getPublishedDealRules(venue), timezone);
+  const todayHappyHourRules = getTodayRulesForType(
     getPublishedRulesByType(venue, 'happy_hour'),
     timezone
-  ).filter((rule) => isOpenNow(buildHoursJsonFromRules([rule]), timezone));
-  const liveEventRules = getTodayRulesForType(getPublishedEventRules(venue), timezone).filter(
+  );
+  const todayEventRules = getTodayRulesForType(getPublishedEventRules(venue), timezone);
+  const liveSpecialRules = todaySpecialRules.filter(
     (rule) => isOpenNow(buildHoursJsonFromRules([rule]), timezone)
   );
+  const liveHappyHourRules = todayHappyHourRules.filter((rule) =>
+    isOpenNow(buildHoursJsonFromRules([rule]), timezone)
+  );
+  const liveEventRules = todayEventRules.filter(
+    (rule) => isOpenNow(buildHoursJsonFromRules([rule]), timezone)
+  );
+  const upcomingRules = [...todayHappyHourRules, ...todayEventRules, ...todaySpecialRules]
+    .filter((rule) => !isOpenNow(buildHoursJsonFromRules([rule]), timezone))
+    .filter((rule) => minutesUntil(clockToMinutes(rule.start_time), timezone) <= 30)
+    .sort((a, b) => clockToMinutes(a.start_time) - clockToMinutes(b.start_time));
   const liveKidRule =
     getTodayRulesForType(getPublishedVenueRulesByKind(venue, 'kid'), timezone).find((rule) =>
       isOpenNow(buildHoursJsonFromRules([rule]), timezone)
@@ -597,16 +621,30 @@ function buildLiveNowRow(venue: Venue) {
     getTodayRulesForType(getPublishedVenueRulesByKind(venue, 'dog'), timezone).find((rule) =>
       isOpenNow(buildHoursJsonFromRules([rule]), timezone)
     ) ?? null;
+  const openingHours = convertGoogleOpeningHours(venue.opening_hours);
+  const primaryHours =
+    openingHours ??
+    getEffectiveScheduleHours(venue, 'bottle_shop') ??
+    getEffectiveScheduleHours(venue, 'kitchen') ??
+    null;
+  const openLate = hasOpenLateSignal(venue, primaryHours, [
+    ...liveSpecialRules,
+    ...liveHappyHourRules,
+    ...liveEventRules,
+    ...upcomingRules,
+  ]);
   const isLiveNow =
-    liveSpecialRules.length > 0 ||
     liveHappyHourRules.length > 0 ||
     liveEventRules.length > 0 ||
-    Boolean(liveKidRule || liveDogRule);
+    liveSpecialRules.length > 0 ||
+    upcomingRules.length > 0 ||
+    openLate;
 
   const startTimes = [
     ...liveSpecialRules.map((rule) => clockToMinutes(rule.start_time)),
     ...liveHappyHourRules.map((rule) => clockToMinutes(rule.start_time)),
     ...liveEventRules.map((rule) => clockToMinutes(rule.start_time)),
+    ...upcomingRules.map((rule) => clockToMinutes(rule.start_time)),
   ];
   const endTimes = [
     ...liveSpecialRules.map((rule) => clockToMinutes(rule.end_time)),
@@ -618,28 +656,33 @@ function buildLiveNowRow(venue: Venue) {
     startTimes.length > 0 ? Math.min(...startTimes) : getCurrentTimeMinutes(timezone);
   const soonestEnd = endTimes.length > 0 ? Math.min(...endTimes) : null;
   const endsSoon = soonestEnd !== null && minutesUntil(soonestEnd, timezone) <= 30;
+  const startsSoon = upcomingRules.length > 0;
 
   const liveEventTypes = liveEventRules.map((rule) => rule.schedule_type);
   const hasLunchSpecials = getLunchSpecialEligibleRules(liveSpecialRules).length > 0;
-  const badges = [
-    liveEventTypes.includes('trivia') ? 'Trivia now' : null,
-    liveEventTypes.includes('live_music') ? 'Live music now' : null,
-    liveEventTypes.includes('comedy') ? 'Comedy now' : null,
-    liveEventTypes.includes('karaoke') ? 'Karaoke now' : null,
-  ].filter(Boolean) as string[];
 
+  const reasonPriority = getLiveReasonPriority({
+    liveHappyHourRules,
+    liveEventRules,
+    liveEventTypes,
+    endsSoon,
+    startsSoon,
+    liveSpecialRules,
+    openLate,
+  });
   const urgencyScore =
-    liveEventRules.length * 50 +
-    liveHappyHourRules.length * 40 +
-    liveSpecialRules.length * 45 +
-    (endsSoon ? 15 : 0);
+    liveHappyHourRules.length * 60 +
+    liveEventRules.length * 55 +
+    (liveEventTypes.includes('trivia') ? 12 : 0) +
+    (liveEventTypes.includes('live_music') ? 12 : 0) +
+    (liveEventTypes.includes('sport') ? 12 : 0) +
+    (endsSoon ? 20 : 0) +
+    (startsSoon ? 12 : 0) +
+    (openLate ? 6 : 0) +
+    liveSpecialRules.length * 18;
 
   const cardEyebrow =
-    liveSpecialRules.length > 0
-      ? hasLunchSpecials
-        ? '\u2600 LUNCH'
-        : '\u{1F525} SPECIAL'
-      : liveHappyHourRules.length > 0
+    liveHappyHourRules.length > 0
       ? '\u{1F37B} HAPPY HOUR'
       : liveEventRules.some((rule) => rule.schedule_type === 'trivia')
         ? '\u2753 TRIVIA'
@@ -647,16 +690,25 @@ function buildLiveNowRow(venue: Venue) {
           ? '\u{1F3B5} LIVE MUSIC'
           : liveEventRules.some((rule) => rule.schedule_type === 'sport')
             ? '\u26BD SPORT'
-            : '\u{1F525} LIVE NOW';
+            : startsSoon
+              ? '\u23F1 STARTING SOON'
+              : liveSpecialRules.length > 0
+                ? hasLunchSpecials
+                  ? '\u2600 FOOD SPECIAL'
+                  : '\u{1F525} SPECIAL'
+                : openLate
+                  ? '\u{1F319} OPEN LATE'
+                  : '\u{1F525} LIVE NOW';
 
   const timeHighlights = [
+    ...liveHappyHourRules.slice(0, 2).map((rule) => buildRangeLabel(rule, 'Happy hour')),
+    ...liveEventRules.slice(0, 2).map((rule) => buildRangeLabel(rule, eventRuleLabel(rule))),
+    ...upcomingRules.slice(0, 2).map((rule) => buildRangeLabel(rule, eventRuleLabel(rule))),
     ...liveSpecialRules
       .slice(0, 2)
       .map((rule) =>
-        buildRangeLabel(rule, rule.schedule_type === 'lunch_special' ? 'Lunch' : 'Special')
+        buildRangeLabel(rule, rule.schedule_type === 'lunch_special' ? 'Food special' : 'Special')
       ),
-    ...liveHappyHourRules.slice(0, 2).map((rule) => buildRangeLabel(rule, 'Happy hour')),
-    ...liveEventRules.slice(0, 2).map((rule) => buildRangeLabel(rule, eventRuleLabel(rule))),
   ];
 
   return {
@@ -665,13 +717,16 @@ function buildLiveNowRow(venue: Venue) {
     liveHappyHourRules,
     liveEventRules,
     liveEventTypes,
+    upcomingRules,
     liveKidRule,
     liveDogRule,
     isLiveNow,
     endsSoon,
+    startsSoon,
+    openLate,
     primaryStartMinutes,
+    reasonPriority,
     urgencyScore,
-    badges,
     cardEyebrow,
     timeHighlights,
   };
@@ -680,17 +735,17 @@ function buildLiveNowRow(venue: Venue) {
 function matchesLiveFilter(row: LiveNowRow, filter: LiveNowFilter) {
   if (filter === 'all') return true;
   if (filter === 'happy_hour') return row.liveHappyHourRules.length > 0;
-  if (filter === 'food_deals_now') return row.liveSpecialRules.length > 0 || row.liveHappyHourRules.length > 0;
-  if (filter === 'lunch_specials') {
-    return getLunchSpecialEligibleRules(row.liveSpecialRules).length > 0;
-  }
+  if (filter === 'food_deals_now') return row.liveSpecialRules.length > 0;
   if (filter === 'kid_friendly_now') return Boolean(row.liveKidRule);
   if (filter === 'dog_friendly_now') return Boolean(row.liveDogRule);
+  if (filter === 'byo') return row.venue.byo_allowed === true;
   if (filter === 'events') return row.liveEventRules.length > 0;
   if (filter === 'trivia') return row.liveEventTypes.includes('trivia');
   if (filter === 'live_music') return row.liveEventTypes.includes('live_music');
-  if (filter === 'comedy') return row.liveEventTypes.includes('comedy');
+  if (filter === 'sport') return row.liveEventTypes.includes('sport');
   if (filter === 'ends_soon') return row.endsSoon;
+  if (filter === 'starts_soon') return row.startsSoon;
+  if (filter === 'open_late') return row.openLate;
   return true;
 }
 
@@ -719,9 +774,9 @@ function timeRangeOverlapsFilter(startTime: string, endTime: string, filter: Tim
 
 function matchesTimeFilter(row: LiveNowRow, filter: TimeFilter) {
   if (filter === 'any') return true;
-  return [...row.liveSpecialRules, ...row.liveHappyHourRules, ...row.liveEventRules].some((rule) =>
+  return [...row.liveSpecialRules, ...row.liveHappyHourRules, ...row.liveEventRules, ...row.upcomingRules].some((rule) =>
     timeRangeOverlapsFilter(rule.start_time, rule.end_time, filter)
-  );
+  ) || (filter === 'late_night' && row.openLate);
 }
 
 function matchesSearchText(row: LiveNowRow, searchTerm: string) {
@@ -745,6 +800,118 @@ function matchesSearchText(row: LiveNowRow, searchTerm: string) {
   return searchSource.includes(normalized);
 }
 
+function buildLiveSections(rows: LiveNowRow[]) {
+  const seen = new Set<string>();
+
+  const take = (predicate: (row: LiveNowRow) => boolean) => {
+    const matching = rows.filter((row) => predicate(row) && !seen.has(row.venue.id));
+    matching.forEach((row) => seen.add(row.venue.id));
+    return matching;
+  };
+
+  return [
+    {
+      id: 'happy-hour-live',
+      title: 'Happy hour now',
+      description: 'Drink-led deals already running right now.',
+      rows: take((row) => row.liveHappyHourRules.length > 0),
+    },
+    {
+      id: 'events-live',
+      title: 'Events now',
+      description: 'Trivia, music, sport, comedy, and social reasons already underway.',
+      rows: take((row) => row.liveEventRules.length > 0),
+    },
+    {
+      id: 'starting-soon',
+      title: 'Starting soon',
+      description: 'Worth moving for in the next 30 minutes.',
+      rows: take((row) => row.startsSoon),
+    },
+    {
+      id: 'ending-soon',
+      title: 'Ending soon',
+      description: 'Last-call windows for live deals and events.',
+      rows: take((row) => row.endsSoon),
+    },
+    {
+      id: 'open-late',
+      title: 'Open late',
+      description: 'Venues or live items carrying into the evening.',
+      rows: take((row) => row.openLate),
+    },
+    {
+      id: 'food-specials-now',
+      title: 'Food specials now',
+      description: 'Active food specials, kept behind drinks and social moments.',
+      rows: take((row) => row.liveSpecialRules.length > 0),
+    },
+  ].filter((section) => section.rows.length > 0);
+}
+
+function getLiveReasonPriority({
+  liveHappyHourRules,
+  liveEventRules,
+  liveEventTypes,
+  endsSoon,
+  startsSoon,
+  liveSpecialRules,
+  openLate,
+}: {
+  liveHappyHourRules: VenueScheduleRule[];
+  liveEventRules: VenueScheduleRule[];
+  liveEventTypes: string[];
+  endsSoon: boolean;
+  startsSoon: boolean;
+  liveSpecialRules: VenueScheduleRule[];
+  openLate: boolean;
+}) {
+  if (liveHappyHourRules.length > 0) return 1;
+  if (liveEventRules.length > 0) return 2;
+  if (
+    liveEventTypes.includes('sport') ||
+    liveEventTypes.includes('live_music') ||
+    liveEventTypes.includes('trivia')
+  ) {
+    return 3;
+  }
+  if (endsSoon) return 4;
+  if (startsSoon) return 5;
+  if (liveSpecialRules.length > 0) return 6;
+  if (openLate) return 7;
+  return 8;
+}
+
+function hasOpenLateSignal(
+  venue: Venue,
+  hours: WeeklyHours | null,
+  candidateRules: VenueScheduleRule[]
+) {
+  const timezone = venue.timezone || 'Australia/Sydney';
+  const hasLateRule = candidateRules.some((rule) =>
+    timeRangeOverlapsFilter(rule.start_time, rule.end_time, 'late_night')
+  );
+
+  if (hasLateRule) return true;
+  if (!hours || !isOpenNow(hours, timezone, venue.is_temporarily_closed ?? false)) return false;
+
+  const todayKey = getTodayDayKey(timezone);
+  return (hours[todayKey] ?? []).some((period) => {
+    const open = clockToMinutes(period.open);
+    const close = clockToMinutes(period.close);
+    return close <= open || close > 20 * 60;
+  });
+}
+
+function getTodayDayKey(timezone: string): keyof WeeklyHours {
+  return new Intl.DateTimeFormat('en-AU', {
+    weekday: 'long',
+    timeZone: timezone,
+  })
+    .format(new Date())
+    .toLowerCase() as keyof WeeklyHours;
+}
+
 function collectRuleSearchParts(rule: VenueScheduleRule) {
   return [
     rule.title,
@@ -756,66 +923,29 @@ function collectRuleSearchParts(rule: VenueScheduleRule) {
 }
 
 function getFilterHeading(filter: LiveNowFilter) {
-  if (filter === 'happy_hour') return 'Happy hour live';
-  if (filter === 'food_deals_now') return 'Food deals now';
-  if (filter === 'lunch_specials') return 'Lunch specials now';
-  if (filter === 'kid_friendly_now') return 'Kid friendly now';
-  if (filter === 'dog_friendly_now') return 'Dog friendly now';
-  if (filter === 'events') return 'Events live';
-  if (filter === 'trivia') return 'Trivia live';
+  if (filter === 'happy_hour') return 'Happy hour now';
+  if (filter === 'food_deals_now') return 'Food specials now';
+  if (filter === 'kid_friendly_now') return 'Kid friendly';
+  if (filter === 'dog_friendly_now') return 'Dog friendly';
+  if (filter === 'byo') return 'BYO';
+  if (filter === 'events') return 'Events now';
+  if (filter === 'trivia') return 'Trivia now';
   if (filter === 'live_music') return 'Live music now';
-  if (filter === 'comedy') return 'Comedy live';
+  if (filter === 'sport') return 'Sport now';
   if (filter === 'ends_soon') return 'Ending soon';
+  if (filter === 'starts_soon') return 'Starting soon';
+  if (filter === 'open_late') return 'Open late';
   return 'Live now';
 }
 
-function getFilterSectionKind(filter: LiveNowFilter): SectionKind {
-  if (filter === 'happy_hour') return 'happy_hour';
-  if (filter === 'food_deals_now') return 'specials';
-  if (filter === 'lunch_specials') return 'specials';
-  if (filter === 'events') return 'events';
-  if (filter === 'trivia') return 'events';
-  if (filter === 'live_music') return 'events';
-  if (filter === 'comedy') return 'events';
-  return 'mixed';
-}
-
-function groupRowsByTime(rows: LiveNowRow[], kind: SectionKind) {
-  const groups = new Map<number, LiveNowRow[]>();
-
-  rows.forEach((row) => {
-    const minutes = getGroupMinutes(row, kind);
-    const current = groups.get(minutes) ?? [];
-    current.push(row);
-    groups.set(minutes, current);
-  });
-
-  return Array.from(groups.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([minutes, groupedRows]) => ({
-      label: formatTimeHeading(minutes),
-      rows: groupedRows.sort(
-        (a, b) =>
-          a.primaryStartMinutes - b.primaryStartMinutes ||
-          (a.venue.name ?? '').localeCompare(b.venue.name ?? '')
-      ),
-    }));
-}
-
-function getGroupMinutes(row: LiveNowRow, kind: SectionKind) {
-  if (kind === 'happy_hour' && row.liveHappyHourRules.length > 0) {
-    return Math.min(...row.liveHappyHourRules.map((rule) => clockToMinutes(rule.start_time)));
+function getFilterDescription(filter: LiveNowFilter) {
+  if (filter === 'food_deals_now') return 'Active food specials that are strong enough to influence a venue choice.';
+  if (filter === 'dog_friendly_now' || filter === 'kid_friendly_now' || filter === 'byo') {
+    return 'Secondary venue attributes layered onto the live-now list.';
   }
-
-  if (kind === 'specials' && row.liveSpecialRules.length > 0) {
-    return Math.min(...row.liveSpecialRules.map((rule) => clockToMinutes(rule.start_time)));
-  }
-
-  if (kind === 'events' && row.liveEventRules.length > 0) {
-    return Math.min(...row.liveEventRules.map((rule) => clockToMinutes(rule.start_time)));
-  }
-
-  return row.primaryStartMinutes;
+  if (filter === 'starts_soon') return 'Things starting in the next 30 minutes.';
+  if (filter === 'open_late') return 'Venues or live items carrying into the evening.';
+  return 'Filtered picks happening now.';
 }
 
 function buildRangeLabel(rule: VenueScheduleRule, prefix: string) {
@@ -860,13 +990,6 @@ function minutesUntil(targetMinutes: number, timezone: string) {
     : targetMinutes + 1440 - nowMinutes;
 }
 
-function formatTimeHeading(minutes: number) {
-  const normalized = ((minutes % 1440) + 1440) % 1440;
-  const hour = String(Math.floor(normalized / 60)).padStart(2, '0');
-  const minute = String(normalized % 60).padStart(2, '0');
-  return formatTimeForUi(`${hour}:${minute}`);
-}
-
 function TopBadge({
   children,
   className,
@@ -883,33 +1006,30 @@ function TopBadge({
   );
 }
 
-function CardTimingPill({ children }: { children: ReactNode }) {
-  return (
-    <span className="inline-flex min-h-[22px] items-center rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-0.75 text-[9px] font-semibold uppercase tracking-[0.14em] text-white/82">
-      {children}
-    </span>
-  );
-}
+function buildReasonToCare(row: LiveNowRow) {
+  const firstHappyHourRule = row.liveHappyHourRules[0];
+  const firstEvent = row.liveEventRules[0];
+  const firstUpcoming = row.upcomingRules[0];
+  const firstSpecialRule = row.liveSpecialRules[0];
 
-function buildReasonToCare(
-  specialRules: VenueScheduleRule[],
-  happyHourRules: VenueScheduleRule[],
-  eventRules: VenueScheduleRule[]
-) {
-  const firstSpecialRule = specialRules[0];
-  const firstHappyHourRule = happyHourRules[0];
-  const firstEvent = eventRules[0];
-
-  if (firstSpecialRule) {
-    return getCompactSpecialLine(firstSpecialRule);
-  }
-
-  if (happyHourRules.length > 0) {
+  if (row.liveHappyHourRules.length > 0) {
     return getHappyHourOfferLine(firstHappyHourRule) ?? 'Happy hour live now';
   }
 
   if (firstEvent) {
     return getEventHeroLine(firstEvent);
+  }
+
+  if (firstUpcoming) {
+    return `${eventRuleLabel(firstUpcoming)} from ${formatTimeForUi(firstUpcoming.start_time.slice(0, 5))}`;
+  }
+
+  if (firstSpecialRule) {
+    return getCompactSpecialLine(firstSpecialRule);
+  }
+
+  if (row.openLate) {
+    return 'Open late tonight';
   }
 
   return 'Something is happening now';
@@ -919,36 +1039,30 @@ function buildCompactTimeLabel(startTime: string, endTime: string) {
   return `${formatTimeForUi(startTime.slice(0, 5))}-${formatTimeForUi(endTime.slice(0, 5))}`;
 }
 
-function buildSecondaryLine(
-  specialRules: VenueScheduleRule[],
-  happyHourRules: VenueScheduleRule[],
-  timeHighlights: string[],
-  endsSoon: boolean,
-  liveKidRule?: VenueScheduleRule | null,
-  liveDogRule?: VenueScheduleRule | null
-) {
-  const firstTiming = timeHighlights[0]?.replace(
-    /^(Happy hour|Lunch|Special|Trivia|Live music|Comedy|Karaoke|DJ|Event|Sport)\s+/i,
+function buildSecondaryLine(row: LiveNowRow) {
+  const primaryReason = normalizeDisplayText(buildReasonToCare(row));
+  const firstTiming = row.timeHighlights[0]?.replace(
+    /^(Happy hour|Food special|Special|Trivia|Live music|Comedy|Karaoke|DJ|Event|Sport)\s+/i,
     ''
   );
-  const categorySummary = happyHourRules.length > 0 ? buildHappyHourCategorySummary(happyHourRules) : null;
-  const specialSummary = specialRules[0] ? getCompactSpecialLine(specialRules[0]) : null;
-  const supportiveSignals = [liveKidRule, liveDogRule]
+  const categorySummary = row.liveHappyHourRules.length > 0 ? buildHappyHourCategorySummary(row.liveHappyHourRules) : null;
+  const specialSummary = row.liveSpecialRules[0] ? getCompactSpecialLine(row.liveSpecialRules[0]) : null;
+  const supportiveSignals = [row.liveKidRule, row.liveDogRule]
     .map((rule) => (rule ? getCompactVenueRuleSignal(rule) : null))
     .filter(Boolean)
     .slice(0, 2)
     .join(' | ');
+  const parts = [
+    categorySummary,
+    specialSummary,
+    supportiveSignals,
+    firstTiming,
+    row.endsSoon ? 'Ends soon' : null,
+    row.startsSoon ? 'Starts soon' : null,
+    row.openLate ? 'Open late' : null,
+  ].filter((part): part is string => Boolean(part && normalizeDisplayText(part) !== primaryReason));
 
-  if (specialSummary && supportiveSignals) return `${specialSummary} | ${supportiveSignals}${endsSoon ? ' | Ends soon' : ''}`;
-  if (specialSummary && firstTiming) return `${specialSummary} | ${firstTiming}${endsSoon ? ' | Ends soon' : ''}`;
-  if (categorySummary && firstTiming) return `${categorySummary} | ${firstTiming}${endsSoon ? ' | Ends soon' : ''}`;
-  if (supportiveSignals && firstTiming) return `${supportiveSignals} | ${firstTiming}${endsSoon ? ' | Ends soon' : ''}`;
-  if (supportiveSignals) return endsSoon ? `${supportiveSignals} | Ends soon` : supportiveSignals;
-  if (specialSummary) return endsSoon ? `${specialSummary} | Ends soon` : specialSummary;
-  if (categorySummary) return endsSoon ? `${categorySummary} | Ends soon` : categorySummary;
-  if (endsSoon && firstTiming) return `${firstTiming} | Ends soon`;
-  if (endsSoon) return 'Ends soon';
-  return firstTiming ?? 'Happening now';
+  return dedupeDisplayParts(parts).slice(0, 3).join(' | ') || 'Happening now';
 }
 
 function getHappyHourOfferLine(rule: VenueScheduleRule | undefined) {
@@ -981,6 +1095,28 @@ function getEventHeroLine(rule: VenueScheduleRule) {
   const timing = buildCompactTimeLabel(rule.start_time, rule.end_time);
   if (text.toLowerCase().includes('now')) return text;
   return `${text} ${timing ? `from ${formatTimeForUi(rule.start_time.slice(0, 5))}` : ''}`.trim();
+}
+
+function buildStartsSoonBadge(row: LiveNowRow) {
+  const firstUpcoming = row.upcomingRules[0];
+  return firstUpcoming ? `Starts ${formatTimeForUi(firstUpcoming.start_time.slice(0, 5))}` : 'Starts Soon';
+}
+
+function normalizeDisplayText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function dedupeDisplayParts(parts: string[]) {
+  const seen = new Set<string>();
+  return parts.filter((part) => {
+    const normalized = normalizeDisplayText(part);
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
 }
 
 function buildHappyHourCategorySummary(rules: VenueScheduleRule[]) {
