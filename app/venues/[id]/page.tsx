@@ -5,6 +5,7 @@ import PublicEventRuleCard from '@/app/components/PublicEventRuleCard';
 import PublicHappyHourRuleCard from '@/app/components/PublicHappyHourRuleCard';
 import SaveVenueButton from '@/app/components/SaveVenueButton';
 import TodayHoursSummary from '@/app/components/TodayHoursSummary';
+import VenueIntentButtons, { VenueIntentBadge } from '@/app/components/VenueIntentButtons';
 import WeeklyTimelineChart from '@/app/components/WeeklyTimelineChart';
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import {
@@ -511,6 +512,12 @@ export default function PublicVenueDetailPage() {
               <div className="mt-2.5 flex flex-wrap gap-1.5 text-[11px] sm:mt-4 sm:gap-2 sm:text-sm">
                 {venue.suburb ? <MetaChip>{venue.suburb.toUpperCase()}</MetaChip> : null}
                 {venueTypeLabel ? <MetaChip>{venueTypeLabel.toUpperCase()}</MetaChip> : null}
+              </div>
+              <div className="mt-3 rounded-[1.15rem] border border-white/10 bg-black/18 p-3">
+                <VenueIntentBadge venueId={venue.id} />
+                <div className="mt-2">
+                  <VenueIntentButtons venueId={venue.id} variant="detail" />
+                </div>
               </div>
 
               <section className="mt-3 rounded-[1.3rem] border border-white/10 bg-white/[0.04] p-3 sm:mt-4 sm:rounded-[1.5rem] sm:p-4">

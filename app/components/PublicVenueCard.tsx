@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { VenueIntentBadge } from '@/app/components/VenueIntentButtons';
 import {
   buildPublicVenueHref,
   getVenueTypeLabel,
@@ -124,6 +125,7 @@ export default function PublicVenueCard({
           <h2 className="mt-1 line-clamp-2 text-[20px] font-semibold leading-[1.02] tracking-tight text-white sm:mt-1.5 sm:text-[24px]">
             {venue.name || 'Untitled venue'}
           </h2>
+          <VenueIntentBadge venueId={venue.id} />
 
           {summary ? <div className="mt-0.5 min-w-0 text-[13px] font-medium leading-4.5 text-white/94 sm:text-[14px]">{summary}</div> : null}
 
@@ -192,6 +194,7 @@ export default function PublicVenueCard({
             >
               {venue.name || 'Untitled venue'}
             </h2>
+            <VenueIntentBadge venueId={venue.id} />
             <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px] text-white/58 sm:mt-2 sm:gap-2 sm:text-xs sm:text-white/72">
               {venue.suburb ? <MetaPill>{venue.suburb.toUpperCase()}</MetaPill> : null}
               {venueTypeLabel ? <MetaPill>{venueTypeLabel.toUpperCase()}</MetaPill> : null}
