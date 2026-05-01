@@ -62,6 +62,12 @@ export default function PublicUserControls() {
               >
                 Log in
               </Link>
+              <Link
+                href="/install"
+                className="mt-1 block rounded-xl px-3 py-2 text-sm text-white/70 hover:bg-white/[0.06] hover:text-white"
+              >
+                Add to phone
+              </Link>
             </div>
           ) : null}
         </div>
@@ -82,6 +88,12 @@ export default function PublicUserControls() {
             className="inline-flex min-h-[38px] items-center justify-center rounded-full border border-white/8 bg-white/[0.015] px-3 text-sm font-medium text-white/68 transition hover:border-white/12 hover:bg-white/[0.05] hover:text-white"
           >
             Log in
+          </Link>
+          <Link
+            href="/install"
+            className="inline-flex min-h-[38px] items-center justify-center rounded-full border border-white/7 bg-white/[0.015] px-3 text-sm font-medium text-white/56 transition hover:border-white/12 hover:bg-white/[0.05] hover:text-white"
+          >
+            Install
           </Link>
         </div>
       </>
@@ -114,6 +126,12 @@ export default function PublicUserControls() {
             >
               {signingOut ? 'Signing out...' : 'Sign out'}
             </button>
+            <Link
+              href="/install"
+              className="mt-1 block rounded-xl px-3 py-2 text-sm text-white/70 hover:bg-white/[0.06] hover:text-white"
+            >
+              Add to phone
+            </Link>
           </div>
         ) : null}
       </div>
@@ -137,6 +155,12 @@ export default function PublicUserControls() {
         >
           {signingOut ? 'Signing out...' : 'Sign out'}
         </button>
+        <Link
+          href="/install"
+          className="inline-flex min-h-[38px] items-center justify-center rounded-full border border-white/7 bg-white/[0.015] px-3 text-sm font-medium text-white/56 transition hover:border-white/12 hover:bg-white/[0.05] hover:text-white"
+        >
+          Install
+        </Link>
       </div>
     </>
   );

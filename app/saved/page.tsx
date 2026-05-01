@@ -2,6 +2,7 @@
 
 import PublicVenueCard from '@/app/components/PublicVenueCard';
 import SaveVenueButton from '@/app/components/SaveVenueButton';
+import InstallAppPrompt from '@/app/components/InstallAppPrompt';
 import { usePublicUser } from '@/app/components/PublicUserProvider';
 import { usePublicVenueCollections } from '@/app/components/usePublicVenueCollections';
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
@@ -137,6 +138,10 @@ export default function SavedVenuesPage() {
             </div>
           </div>
         </section>
+
+        <div className="mt-3.5 sm:mt-5">
+          <InstallAppPrompt />
+        </div>
 
         <section className="mt-3.5 rounded-[1.4rem] border border-white/7 bg-white/[0.025] p-3 sm:mt-5 sm:rounded-3xl sm:border-white/10 sm:bg-white/5 sm:p-4">
           <div className="grid gap-2 md:grid-cols-[minmax(220px,1.2fr)_auto] md:items-center md:gap-3">

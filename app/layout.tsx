@@ -1,11 +1,35 @@
 import "./globals.css";
 import Link from "next/link";
+import type { Metadata, Viewport } from "next";
 import FirstRoundLogo from "./components/FirstRoundLogo";
 import PublicHeaderShell from "./components/PublicHeaderShell";
 import PublicNavLinks from "./components/PublicNavLinks";
 import { PublicUserProvider } from "./components/PublicUserProvider";
 import PublicUserControls from "./components/PublicUserControls";
 import PublicVenueInterestStrip from "./components/PublicVenueInterestStrip";
+
+export const metadata: Metadata = {
+  title: "First Round",
+  description: "Find what's live now at pubs, bars, specials and events near you",
+  applicationName: "First Round",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "First Round",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#ff6f24",
+};
 
 export default function RootLayout({
   children,
