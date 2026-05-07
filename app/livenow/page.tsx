@@ -38,7 +38,6 @@ type LiveNowFilter =
   | 'trivia'
   | 'live_music'
   | 'sport'
-  | 'ends_soon'
   | 'starts_soon'
   | 'open_late';
 
@@ -52,7 +51,6 @@ const PRIMARY_LIVE_NOW_FILTERS: Array<{ value: LiveNowFilter; label: string }> =
   { value: 'trivia', label: 'Trivia now' },
   { value: 'live_music', label: 'Live music now' },
   { value: 'sport', label: 'Sport now' },
-  { value: 'ends_soon', label: 'Ending soon' },
   { value: 'starts_soon', label: 'Starting soon' },
   { value: 'open_late', label: 'Open late' },
 ];
@@ -165,10 +163,10 @@ export default function LiveNowPage() {
         emptyLabel: 'Events now',
       },
       {
-        label: 'Ending soon',
-        value: liveRows.filter((row) => row.endsSoon).length,
-        sectionId: activeFilter === 'all' ? 'ending-soon' : 'live-matches',
-        emptyLabel: 'Ending soon',
+        label: 'Open late',
+        value: liveRows.filter((row) => row.openLate).length,
+        sectionId: activeFilter === 'all' ? 'open-late' : 'live-matches',
+        emptyLabel: 'Open late',
       },
     ],
     [activeFilter, liveRows]
@@ -637,8 +635,7 @@ function buildLiveNowRow(venue: Venue) {
     liveHappyHourRules.length > 0 ||
     liveEventRules.length > 0 ||
     liveSpecialRules.length > 0 ||
-    upcomingRules.length > 0 ||
-    openLate;
+    upcomingRules.length > 0;
 
   const startTimes = [
     ...liveSpecialRules.map((rule) => clockToMinutes(rule.start_time)),
@@ -743,7 +740,6 @@ function matchesLiveFilter(row: LiveNowRow, filter: LiveNowFilter) {
   if (filter === 'trivia') return row.liveEventTypes.includes('trivia');
   if (filter === 'live_music') return row.liveEventTypes.includes('live_music');
   if (filter === 'sport') return row.liveEventTypes.includes('sport');
-  if (filter === 'ends_soon') return row.endsSoon;
   if (filter === 'starts_soon') return row.startsSoon;
   if (filter === 'open_late') return row.openLate;
   return true;
@@ -829,15 +825,9 @@ function buildLiveSections(rows: LiveNowRow[]) {
       rows: take((row) => row.startsSoon),
     },
     {
-      id: 'ending-soon',
-      title: 'Ending soon',
-      description: 'Last-call windows for live deals and events.',
-      rows: take((row) => row.endsSoon),
-    },
-    {
       id: 'open-late',
       title: 'Open late',
-      description: 'Venues or live items carrying into the evening.',
+      description: 'Live reasons that carry into the evening.',
       rows: take((row) => row.openLate),
     },
     {
@@ -875,8 +865,8 @@ function getLiveReasonPriority({
   ) {
     return 3;
   }
-  if (endsSoon) return 4;
-  if (startsSoon) return 5;
+  if (startsSoon) return 4;
+  if (endsSoon) return 5;
   if (liveSpecialRules.length > 0) return 6;
   if (openLate) return 7;
   return 8;
@@ -932,7 +922,6 @@ function getFilterHeading(filter: LiveNowFilter) {
   if (filter === 'trivia') return 'Trivia now';
   if (filter === 'live_music') return 'Live music now';
   if (filter === 'sport') return 'Sport now';
-  if (filter === 'ends_soon') return 'Ending soon';
   if (filter === 'starts_soon') return 'Starting soon';
   if (filter === 'open_late') return 'Open late';
   return 'Live now';
