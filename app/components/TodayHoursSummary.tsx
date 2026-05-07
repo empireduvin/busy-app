@@ -73,7 +73,7 @@ function getSegments(
 
   return periods
     .map((period) => {
-      let start = timeToMinutes(period.open);
+      const start = timeToMinutes(period.open);
       let end = timeToMinutes(period.close);
 
       if (end <= start) {
