@@ -1346,25 +1346,6 @@ export default function PortalVenueDetailPage() {
   }
 
   useEffect(() => {
-    if (!isDealScheduleType(scheduleType)) return;
-    if (!selectedDays.length) {
-      setDealItems([]);
-      return;
-    }
-
-    const scopedRows = loadedScheduleRowsSnapshot.filter((row) =>
-      selectedDays.includes(row.day_of_week)
-    );
-
-    if (!loadedScheduleRowsSnapshot.length || !scopedRows.length) {
-      setDealItems([]);
-      return;
-    }
-
-    populateDealItemsFromRows(scopedRows);
-  }, [loadedScheduleRowsSnapshot, scheduleType, selectedDays]);
-
-  useEffect(() => {
     if (isDealScheduleType(scheduleType)) return;
     if (!loadedScheduleRowsSnapshot.length) return;
 
@@ -1582,7 +1563,7 @@ export default function PortalVenueDetailPage() {
           'Saved schedule',
           `${getScheduleTypePickerLabel(scheduleType, venueRuleKind)} for ${selectedDealDays.length} day${selectedDealDays.length === 1 ? '' : 's'} across ${activeDealItems.length} item${activeDealItems.length === 1 ? '' : 's'}.`
         );
-        resetScheduleForm();
+        setSelectedDays(selectedDealDays);
         await loadVenue(true);
       } catch (error) {
         setScheduleError(error instanceof Error ? error.message : 'Failed to save schedule.');
@@ -1771,6 +1752,24 @@ export default function PortalVenueDetailPage() {
       ),
     [venue, scheduleType, selectedDays, venueRuleKind]
   );
+  useEffect(() => {
+    if (!isDealScheduleType(scheduleType)) return;
+    if (!selectedDays.length) {
+      setDealItems([]);
+      setLoadedScheduleRowsSnapshot([]);
+      return;
+    }
+
+    const scopedRows = sortPortalExistingPreviewRows(currentEditRows);
+    setLoadedScheduleRowsSnapshot(scopedRows);
+
+    if (!scopedRows.length) {
+      setDealItems([]);
+      return;
+    }
+
+    populateDealItemsFromRows(scopedRows);
+  }, [currentEditRows, scheduleType, selectedDays]);
   const effectiveSelectedDays = isDealScheduleType(scheduleType)
     ? selectedDays
     : selectedDays;

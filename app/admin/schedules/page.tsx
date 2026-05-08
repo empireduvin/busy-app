@@ -2367,25 +2367,6 @@ export default function AdminMasterPage() {
   }
 
   useEffect(() => {
-    if (!isDealScheduleType(scheduleType)) return;
-    if (!selectedDays.length) {
-      setDealItems([]);
-      return;
-    }
-
-    const scopedRows = loadedScheduleRowsSnapshot.filter((row) =>
-      selectedDays.includes(row.day_of_week)
-    );
-
-    if (!loadedScheduleRowsSnapshot.length || !scopedRows.length) {
-      setDealItems([]);
-      return;
-    }
-
-    populateDealItemsFromRows(scopedRows);
-  }, [loadedScheduleRowsSnapshot, scheduleType, selectedDays]);
-
-  useEffect(() => {
     if (isDealScheduleType(scheduleType)) return;
     if (!loadedScheduleRowsSnapshot.length) return;
 
@@ -3051,6 +3032,7 @@ export default function AdminMasterPage() {
         }),
         });
         await loadAdminBootstrap();
+        setSelectedDays(selectedDealDays);
         setScheduleMessage(
           `Saved ${rows.length} schedule row${rows.length === 1 ? '' : 's'}.`
         );
@@ -3066,7 +3048,6 @@ export default function AdminMasterPage() {
             `Rows affected: ${rows.length}`,
           ].join(' | '),
         });
-        resetScheduleForm();
       } catch (error: unknown) {
         const message = getAdminFriendlyErrorMessage(error, 'Failed to save schedule.');
         setScheduleErrorMessage(message);
@@ -3783,6 +3764,24 @@ export default function AdminMasterPage() {
       ).filter((row) => selectedDays.length === 0 || selectedDays.includes(row.day_of_week)),
     [focusedOverviewVenue, scheduleType, selectedDays, venueRuleKind]
   );
+  useEffect(() => {
+    if (!isDealScheduleType(scheduleType)) return;
+    if (!selectedDays.length) {
+      setDealItems([]);
+      setLoadedScheduleRowsSnapshot([]);
+      return;
+    }
+
+    const scopedRows = sortExistingPreviewRows(focusedExistingEditRows);
+    setLoadedScheduleRowsSnapshot(scopedRows);
+
+    if (!scopedRows.length) {
+      setDealItems([]);
+      return;
+    }
+
+    populateDealItemsFromRows(scopedRows);
+  }, [focusedExistingEditRows, scheduleType, selectedDays]);
 
   return (
     <div className="admin-shell min-h-screen bg-neutral-100 text-neutral-950">
