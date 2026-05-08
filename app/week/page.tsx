@@ -19,6 +19,7 @@ import {
   getPublishedRulesByType,
   getPublishedVenueRulesByKind,
   getRulesForDay,
+  getScheduleRuleDisplayParts,
   hasText,
   type Venue,
   type VenueScheduleRule,
@@ -1038,15 +1039,11 @@ function getHappyHourOfferLine(rule: VenueScheduleRule | undefined) {
     return categories.slice(0, 2).join(' + ');
   }
 
-  return rule.deal_text?.trim() || rule.description?.trim() || null;
+  return getScheduleRuleDisplayParts(rule)[0] ?? null;
 }
 
 function getEventHeroLine(rule: VenueScheduleRule) {
-  const text =
-    rule.deal_text?.trim() ||
-    rule.title?.trim() ||
-    rule.description?.trim() ||
-    eventRuleLabel(rule);
+  const text = getScheduleRuleDisplayParts(rule)[0] ?? eventRuleLabel(rule);
   if (text.toLowerCase().includes('from ') || text.toLowerCase().includes('now')) return text;
   return `${text} from ${formatTimeForUi(rule.start_time.slice(0, 5))}`;
 }

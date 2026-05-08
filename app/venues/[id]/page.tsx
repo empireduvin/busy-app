@@ -26,6 +26,8 @@ import {
   getPublishedEventRules,
   getPublishedRulesByType,
   getPublishedVenueRulesByKind,
+  getScheduleRuleDisplayParts,
+  getScheduleRuleSecondaryLine,
   getTodayRulesForType,
   getVenueTypeLabel,
   isLiveInnerWestSuburb,
@@ -114,10 +116,8 @@ function getHappyHourCategorySummary(rule: VenueScheduleRule) {
 function getHappyHourReason(rule: VenueScheduleRule) {
   return (
     getHappyHourCategorySummaryClean(rule) ||
-    rule.deal_text?.trim() ||
-    rule.description?.trim() ||
+    getScheduleRuleDisplayParts(rule)[0] ||
     (typeof rule.detail_json?.notes === 'string' ? rule.detail_json.notes.trim() : '') ||
-    rule.notes?.trim() ||
     'Happy Hour'
   );
 }
@@ -713,7 +713,14 @@ export default function PublicVenueDetailPage() {
                       key={rule.id}
                       label={rule.schedule_type === 'lunch_special' ? 'Lunch special' : 'Daily special'}
                       title={getCompactSpecialLine(rule)}
-                      detail={getRuleTimingSummary(rule, detail.timezone)}
+                      detail={
+                        [
+                          getScheduleRuleSecondaryLine(rule),
+                          getRuleTimingSummary(rule, detail.timezone),
+                        ]
+                          .filter(Boolean)
+                          .join(' | ')
+                      }
                     />
                   ))}
                 </div>
@@ -918,7 +925,14 @@ export default function PublicVenueDetailPage() {
                         key={rule.id}
                         label={rule.schedule_type === 'lunch_special' ? 'Lunch special' : 'Daily special'}
                         title={getCompactSpecialLine(rule)}
-                        detail={`${formatTimeForUi(rule.start_time.slice(0, 5))} - ${formatTimeForUi(rule.end_time.slice(0, 5))}`}
+                        detail={
+                          [
+                            getScheduleRuleSecondaryLine(rule),
+                            `${formatTimeForUi(rule.start_time.slice(0, 5))} - ${formatTimeForUi(rule.end_time.slice(0, 5))}`,
+                          ]
+                            .filter(Boolean)
+                            .join(' | ')
+                        }
                       />
                     ))}
                     {dayHappyHourRules.map((rule) => (

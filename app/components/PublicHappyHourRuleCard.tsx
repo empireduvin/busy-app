@@ -3,6 +3,7 @@
 import {
   formatHappyHourPrice,
   getDisplayHappyHourItems,
+  getScheduleRuleDisplayParts,
   HAPPY_HOUR_CATEGORIES,
   hasText,
   type VenueScheduleRule,
@@ -23,7 +24,13 @@ export default function PublicHappyHourRuleCard({
   );
   const hasStructuredItems = categoriesWithItems.length > 0;
   const summaryCategories = categoriesWithItems.map((category) => category.label);
-  const hasFallbackSummary = hasText(rule.deal_text) || hasText(rule.description) || hasText(rule.detail_json?.notes);
+  const fallbackParts = getScheduleRuleDisplayParts({
+    title: rule.title,
+    deal_text: rule.deal_text,
+    description: rule.description,
+    notes: rule.notes ?? rule.detail_json?.notes ?? null,
+  });
+  const hasFallbackSummary = fallbackParts.length > 0;
   const summaryLabel = summaryCategories.length > 0 ? summaryCategories : hasFallbackSummary ? ['Specials'] : [];
 
   return (
@@ -144,13 +151,15 @@ export default function PublicHappyHourRuleCard({
         </div>
       ) : null}
 
-      {!discoverySummary && !hasStructuredItems && (rule.deal_text?.trim() || rule.description?.trim()) ? (
+      {!discoverySummary && !hasStructuredItems && fallbackParts.length > 0 ? (
         <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-[13px] text-white/85 sm:text-sm">
-          {rule.deal_text?.trim() || rule.description?.trim()}
+          {fallbackParts.slice(0, 2).join(' | ')}
         </div>
       ) : null}
 
-      {!discoverySummary && hasText(rule.detail_json?.notes) ? (
+      {!discoverySummary &&
+      hasText(rule.detail_json?.notes) &&
+      fallbackParts.every((part) => part !== rule.detail_json?.notes?.trim()) ? (
         <div className="mt-3 text-[11px] leading-4 text-white/60">{rule.detail_json?.notes}</div>
       ) : null}
     </div>

@@ -2,7 +2,11 @@
 
 import { formatTimeForUi } from '@/lib/opening-hours';
 import { type ScheduleType } from '@/lib/schedule-rules';
-import { hasText, type VenueScheduleRule } from '@/lib/public-venue-discovery';
+import {
+  getScheduleRuleDisplayParts,
+  hasText,
+  type VenueScheduleRule,
+} from '@/lib/public-venue-discovery';
 
 const EVENT_LABELS: Record<
   Exclude<
@@ -30,18 +34,9 @@ export default function PublicEventRuleCard({
   discoverySummary?: boolean;
 }) {
   const label = EVENT_LABELS[rule.schedule_type as keyof typeof EVENT_LABELS] ?? rule.schedule_type;
-  const eventTextParts = [
-    rule.title?.trim() || null,
-    rule.deal_text?.trim() || null,
-    rule.description?.trim() || null,
-    rule.notes?.trim() || null,
-  ].filter((value): value is string => Boolean(value));
-  const extra = eventTextParts.find(
-    (value, index) =>
-      eventTextParts.findIndex(
-        (candidate) => candidate.trim().toLowerCase() === value.trim().toLowerCase()
-      ) === index
-  ) ?? '';
+  const eventTextParts = getScheduleRuleDisplayParts(rule);
+  const primaryText = eventTextParts[0] ?? '';
+  const secondaryText = eventTextParts[1] ?? '';
 
   return (
     <div
@@ -73,14 +68,20 @@ export default function PublicEventRuleCard({
         </div>
       </div>
 
-      {hasText(extra) ? (
+      {hasText(primaryText) ? (
         <div
           className={[
             'mt-2',
             discoverySummary ? 'text-[12px] text-white/76 sm:text-[13px]' : 'text-[13px] text-white/84 sm:text-sm',
           ].join(' ')}
         >
-          {extra}
+          {primaryText}
+        </div>
+      ) : null}
+
+      {hasText(secondaryText) ? (
+        <div className="mt-1 text-[11px] leading-4 text-white/58 sm:text-xs">
+          {secondaryText}
         </div>
       ) : null}
     </div>

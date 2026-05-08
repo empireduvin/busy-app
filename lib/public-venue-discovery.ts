@@ -568,6 +568,53 @@ function textAlreadyHasPrice(text: string) {
   return /\$\s*\d/.test(text);
 }
 
+export function normalizeScheduleDisplayText(value: string | null | undefined) {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/\$\s*/g, '$')
+    .replace(/[^a-z0-9$]+/g, ' ')
+    .trim();
+}
+
+export function isDistinctScheduleDisplayText(
+  candidate: string | null | undefined,
+  existing: Array<string | null | undefined>
+) {
+  const normalizedCandidate = normalizeScheduleDisplayText(candidate);
+  if (!normalizedCandidate) return false;
+
+  return !existing.some((value) => {
+    const normalizedExisting = normalizeScheduleDisplayText(value);
+    return (
+      normalizedExisting === normalizedCandidate ||
+      normalizedExisting.includes(normalizedCandidate) ||
+      normalizedCandidate.includes(normalizedExisting)
+    );
+  });
+}
+
+export function getScheduleRuleDisplayParts(
+  rule: Pick<VenueScheduleRule, 'title' | 'deal_text' | 'description' | 'notes'>
+) {
+  const parts: string[] = [];
+  [rule.title, rule.deal_text, rule.description, rule.notes].forEach((value) => {
+    const trimmed = value?.trim();
+    if (trimmed && isDistinctScheduleDisplayText(trimmed, parts)) {
+      parts.push(trimmed);
+    }
+  });
+  return parts;
+}
+
+export function getScheduleRuleSecondaryLine(
+  rule: Pick<VenueScheduleRule, 'title' | 'deal_text' | 'description' | 'notes'>,
+  limit = 2
+) {
+  const secondaryParts = getScheduleRuleDisplayParts(rule).slice(1, limit + 1);
+  return secondaryParts.length ? secondaryParts.join(' | ') : null;
+}
+
 function prefixSignalWithEmoji(kind: VenueRuleKind | null, text: string | null) {
   if (!kind || !text) return text;
   const trimmed = text.trim();
@@ -592,14 +639,11 @@ export function getCompactVenueRuleSignal(
 export function getCompactSpecialLine(
   rule: Pick<
     VenueScheduleRule,
-    'deal_text' | 'description' | 'title' | 'schedule_type' | 'detail_json'
+    'deal_text' | 'description' | 'title' | 'notes' | 'schedule_type' | 'detail_json'
   >
 ) {
   const specialPrice = getSpecialPrice(rule);
-  const dealText = rule.deal_text?.trim() || null;
-  const title = rule.title?.trim() || null;
-  const description = rule.description?.trim() || null;
-  const primaryText = dealText || title || description;
+  const [primaryText] = getScheduleRuleDisplayParts(rule);
 
   if (primaryText && (specialPrice == null || textAlreadyHasPrice(primaryText))) {
     return primaryText;
@@ -607,16 +651,8 @@ export function getCompactSpecialLine(
 
   if (specialPrice != null) {
     const priceLabel = formatMoneyCompact(specialPrice);
-    if (rule.schedule_type === 'lunch_special') {
-      if (dealText && !textAlreadyHasPrice(dealText)) return `${dealText} ${priceLabel}`;
-      if (title && !textAlreadyHasPrice(title)) return `${title} ${priceLabel}`;
-      if (description && !textAlreadyHasPrice(description)) return `${description} ${priceLabel}`;
-      return `Lunch special ${priceLabel}`;
-    }
-
-    if (dealText && !textAlreadyHasPrice(dealText)) return `${dealText} ${priceLabel}`;
-    if (title && !textAlreadyHasPrice(title)) return `${title} ${priceLabel}`;
-    if (description && !textAlreadyHasPrice(description)) return `${description} ${priceLabel}`;
+    if (primaryText && !textAlreadyHasPrice(primaryText)) return `${primaryText} ${priceLabel}`;
+    if (rule.schedule_type === 'lunch_special') return `Lunch special ${priceLabel}`;
     return `Daily special ${priceLabel}`;
   }
 

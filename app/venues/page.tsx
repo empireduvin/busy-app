@@ -12,6 +12,8 @@ import {
   getLunchSpecialEligibleRules,
   getPublishedDealRules,
   getPublishedVenueRulesByKind,
+  getScheduleRuleDisplayParts,
+  getScheduleRuleSecondaryLine,
   splitVenuesByLaunchArea,
 } from '@/lib/public-venue-discovery';
 import { buildPublicVenueHref } from '@/lib/public-venue-discovery';
@@ -2530,9 +2532,9 @@ function HappyHourRuleCard({
         })}
       </div>
 
-      {!hasStructuredItems && (rule.deal_text?.trim() || rule.description?.trim()) ? (
+      {!hasStructuredItems && getScheduleRuleDisplayParts(rule).length > 0 ? (
         <div className="mt-2.5 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/80">
-          {rule.deal_text?.trim() || rule.description?.trim()}
+          {getScheduleRuleDisplayParts(rule).slice(0, 2).join(' | ')}
         </div>
       ) : null}
 
@@ -2555,9 +2557,7 @@ function SpecialRuleCard({
   highlightLive: boolean;
 }) {
   const label = rule.schedule_type === 'lunch_special' ? 'Lunch Special' : 'Daily Special';
-  const detail = [rule.description?.trim(), rule.notes?.trim()]
-    .filter((value): value is string => Boolean(value))
-    .join(' | ');
+  const detail = getScheduleRuleSecondaryLine(rule);
 
   return (
     <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3">
@@ -2612,8 +2612,8 @@ function EventRuleCard({
   rule: VenueScheduleRule;
   dayLabel?: string;
 }) {
-  const displayTitle = getMeaningfulEventTitle(rule);
-  const summary = formatEventRuleSummary(rule);
+  const displayTitle = getMeaningfulEventTitle(rule) ?? getScheduleRuleDisplayParts(rule)[0] ?? null;
+  const summary = formatEventRuleSummary(rule, displayTitle);
 
   return (
     <div className="rounded-xl border border-violet-400/20 bg-violet-500/10 p-3">
@@ -2694,15 +2694,16 @@ function getMeaningfulEventTitle(rule: VenueScheduleRule): string | null {
     : trimmed;
 }
 
-function formatEventRuleSummary(rule: VenueScheduleRule): string | null {
-  const parts = [
-    getMeaningfulEventTitle(rule),
-    rule.deal_text?.trim() || null,
-    rule.description?.trim() || null,
-  ].filter((value): value is string => Boolean(value));
+function formatEventRuleSummary(
+  rule: VenueScheduleRule,
+  primaryText?: string | null
+): string | null {
+  const parts = getScheduleRuleDisplayParts(rule).filter((value) =>
+    primaryText ? normalizeComparisonText(value) !== normalizeComparisonText(primaryText) : true
+  );
 
   if (parts.length > 0) return parts.join(' | ');
-  return rule.notes?.trim() || null;
+  return null;
 }
 
 function getVenueRuleBadge(rule: VenueScheduleRule): string | null {

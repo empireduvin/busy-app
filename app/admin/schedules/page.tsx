@@ -789,8 +789,8 @@ function buildVenueDaySummaries(venue: Venue): VenueDaySummary[] {
         const label = getScheduleTypeLabel(rule.schedule_type);
         const time = `${rule.start_time?.slice(0, 5) ?? ''}-${rule.end_time?.slice(0, 5) ?? ''}`;
         const text =
-          rule.deal_text?.trim() ||
           rule.title?.trim() ||
+          rule.deal_text?.trim() ||
           rule.description?.trim() ||
           rule.notes?.trim() ||
           '';
@@ -3027,6 +3027,7 @@ export default function AdminMasterPage() {
           venueIds: selectedVenueIds,
           scheduleType,
           saveMode,
+          replaceExistingRows: saveMode === 'replace' || loadedScheduleRowsSnapshot.length > 0,
           selectedDays: selectedDealDays,
           venueRuleKind: scheduleType === 'venue_rule' ? venueRuleKind : null,
         }),
@@ -3190,6 +3191,7 @@ export default function AdminMasterPage() {
           venueIds: selectedVenueIds,
           scheduleType,
           saveMode,
+          replaceExistingRows: saveMode === 'replace' || loadedScheduleRowsSnapshot.length > 0,
           selectedDays,
           venueRuleKind: scheduleType === 'venue_rule' ? venueRuleKind : null,
         }),
@@ -4383,6 +4385,58 @@ export default function AdminMasterPage() {
                             summary.events[0]?.summary ?? null,
                             summary.venueRules[0] ?? null,
                           ].filter((line): line is string => Boolean(line));
+                          const dayEditActions = focusedOverviewVenue
+                            ? [
+                                summary.opening
+                                  ? {
+                                      label: 'Edit hours',
+                                      type: 'opening' as ScheduleType,
+                                    }
+                                  : null,
+                                summary.kitchen
+                                  ? {
+                                      label: 'Edit kitchen',
+                                      type: 'kitchen' as ScheduleType,
+                                    }
+                                  : null,
+                                summary.happyHour || summary.happyHourDetails.length > 0
+                                  ? {
+                                      label: 'Edit happy hour',
+                                      type: 'happy_hour' as ScheduleType,
+                                    }
+                                  : null,
+                                summary.bottleShop
+                                  ? {
+                                      label: 'Edit bottle shop',
+                                      type: 'bottle_shop' as ScheduleType,
+                                    }
+                                  : null,
+                                getExistingSchedulePreviewRows(focusedOverviewVenue, 'daily_special').some(
+                                  (row) => row.day_of_week === summary.day
+                                )
+                                  ? {
+                                      label: 'Edit daily specials',
+                                      type: 'daily_special' as ScheduleType,
+                                    }
+                                  : null,
+                                getExistingSchedulePreviewRows(focusedOverviewVenue, 'lunch_special').some(
+                                  (row) => row.day_of_week === summary.day
+                                )
+                                  ? {
+                                      label: 'Edit lunch specials',
+                                      type: 'lunch_special' as ScheduleType,
+                                    }
+                                  : null,
+                                ...summary.events.map((event) => ({
+                                  label: `Edit ${getScheduleTypeLabel(event.scheduleType).toLowerCase()}`,
+                                  type: event.scheduleType,
+                                })),
+                              ].filter(
+                                (
+                                  action
+                                ): action is { label: string; type: ScheduleType } => Boolean(action)
+                              )
+                            : [];
 
                           return (
                             <div key={summary.day} className="rounded-2xl border border-black/5 bg-white p-3">
@@ -4402,6 +4456,28 @@ export default function AdminMasterPage() {
                                   </div>
                                 )}
                               </div>
+                              {dayEditActions.length > 0 ? (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {dayEditActions.map((action, actionIndex) => (
+                                    <button
+                                      key={`${summary.day}-${action.type}-${actionIndex}`}
+                                      type="button"
+                                      onClick={() =>
+                                        focusedOverviewVenue
+                                          ? handleEditVenueDayForType(
+                                              focusedOverviewVenue,
+                                              summary.day,
+                                              action.type
+                                            )
+                                          : undefined
+                                      }
+                                      className="admin-ghost-button rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+                                    >
+                                      {action.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
                             </div>
                           );
                         })}

@@ -568,8 +568,8 @@ function buildPortalVenueDaySummaries(venue: PortalVenueDetail): PortalVenueDayS
         const label = getScheduleTypeLabel(rule.schedule_type as PortalScheduleType);
         const time = `${rule.start_time.slice(0, 5)}-${rule.end_time.slice(0, 5)}`;
         const text =
-          rule.deal_text?.trim() ||
           rule.title?.trim() ||
+          rule.deal_text?.trim() ||
           rule.description?.trim() ||
           rule.notes?.trim() ||
           '';
@@ -1276,24 +1276,36 @@ export default function PortalVenueDetailPage() {
     setScheduleError(null);
   }
 
-  function loadDayIntoForm(day: DayOfWeek) {
-    const rules = getPortalExistingScheduleRowsForEdit(venue, scheduleType, venueRuleKind).filter(
+  function loadDayIntoForm(
+    day: DayOfWeek,
+    targetScheduleType: PortalScheduleType = scheduleType,
+    targetVenueRuleKind: VenueRuleKind = venueRuleKind
+  ) {
+    const rules = getPortalExistingScheduleRowsForEdit(
+      venue,
+      targetScheduleType,
+      targetVenueRuleKind
+    ).filter(
       (rule) => rule.day_of_week === day
     );
-    const periods = getExistingHours(venue, scheduleType)?.[day] ?? [];
+    const periods = getExistingHours(venue, targetScheduleType)?.[day] ?? [];
     setPortalEditTarget('schedule');
     setPortalMode('edit');
+    setScheduleType(targetScheduleType);
+    if (targetScheduleType === 'venue_rule') {
+      setVenueRuleKind(targetVenueRuleKind);
+    }
     setSelectedDays([day]);
     if (rules.length > 0) {
       setLoadedScheduleRowsSnapshot(sortPortalExistingPreviewRows(rules));
-      if (isDealScheduleType(scheduleType)) {
+      if (isDealScheduleType(targetScheduleType)) {
         populateDealItemsFromRows(rules);
       } else {
-        populateSharedScheduleFormFromRows(scheduleType, rules, venueRuleKind);
+        populateSharedScheduleFormFromRows(targetScheduleType, rules, targetVenueRuleKind);
       }
       setSaveMode('append');
       setScheduleMessage(
-        `Loaded ${getScheduleTypePickerLabel(scheduleType, venueRuleKind)} for ${DAY_OPTIONS.find((option) => option.value === day)?.label}.`
+        `Loaded ${getScheduleTypePickerLabel(targetScheduleType, targetVenueRuleKind)} for ${DAY_OPTIONS.find((option) => option.value === day)?.label}.`
       );
       setScheduleError(null);
       return;
@@ -1316,8 +1328,8 @@ export default function PortalVenueDetailPage() {
     setSaveMode(periods.length ? 'replace' : 'append');
     setScheduleMessage(
       periods.length
-        ? `Loaded ${getScheduleTypeLabel(scheduleType).toLowerCase()} for ${DAY_OPTIONS.find((option) => option.value === day)?.label}.`
-        : `No saved ${getScheduleTypeLabel(scheduleType).toLowerCase()} found for ${DAY_OPTIONS.find((option) => option.value === day)?.label}.`
+        ? `Loaded ${getScheduleTypeLabel(targetScheduleType).toLowerCase()} for ${DAY_OPTIONS.find((option) => option.value === day)?.label}.`
+        : `No saved ${getScheduleTypeLabel(targetScheduleType).toLowerCase()} found for ${DAY_OPTIONS.find((option) => option.value === day)?.label}.`
     );
     setScheduleError(null);
   }
@@ -1548,6 +1560,7 @@ export default function PortalVenueDetailPage() {
             rows,
             scheduleType,
             saveMode,
+            replaceExistingRows: saveMode === 'replace' || loadedScheduleRowsSnapshot.length > 0,
             selectedDays: selectedDealDays,
             venueRuleKind: scheduleType === 'venue_rule' ? venueRuleKind : null,
           }),
@@ -1644,6 +1657,7 @@ export default function PortalVenueDetailPage() {
           rows,
           scheduleType,
           saveMode,
+          replaceExistingRows: saveMode === 'replace' || loadedScheduleRowsSnapshot.length > 0,
           selectedDays,
           venueRuleKind: scheduleType === 'venue_rule' ? venueRuleKind : null,
         }),
@@ -2058,6 +2072,52 @@ export default function PortalVenueDetailPage() {
                       summary.events[0] ?? null,
                       summary.venueRules[0] ?? null,
                     ].filter((line): line is string => Boolean(line));
+                    const dayEditActions = [
+                      summary.opening !== 'None'
+                        ? { label: 'Edit hours', type: 'opening' as PortalScheduleType }
+                        : null,
+                      summary.kitchen !== 'None'
+                        ? { label: 'Edit kitchen', type: 'kitchen' as PortalScheduleType }
+                        : null,
+                      summary.happyHour !== 'None'
+                        ? { label: 'Edit happy hour', type: 'happy_hour' as PortalScheduleType }
+                        : null,
+                      summary.bottleShop !== 'None'
+                        ? { label: 'Edit bottle shop', type: 'bottle_shop' as PortalScheduleType }
+                        : null,
+                      getPortalExistingScheduleRowsForEdit(venue, 'daily_special').some(
+                        (row) => row.day_of_week === summary.day
+                      )
+                        ? { label: 'Edit daily specials', type: 'daily_special' as PortalScheduleType }
+                        : null,
+                      getPortalExistingScheduleRowsForEdit(venue, 'lunch_special').some(
+                        (row) => row.day_of_week === summary.day
+                      )
+                        ? { label: 'Edit lunch specials', type: 'lunch_special' as PortalScheduleType }
+                        : null,
+                      ...summary.events.map((line) => {
+                        const type = line.startsWith('Trivia:')
+                          ? 'trivia'
+                          : line.startsWith('Live Music:')
+                            ? 'live_music'
+                            : line.startsWith('Sport')
+                              ? 'sport'
+                              : line.startsWith('Comedy:')
+                                ? 'comedy'
+                                : line.startsWith('Karaoke:')
+                                  ? 'karaoke'
+                                  : line.startsWith('DJ:')
+                                    ? 'dj'
+                                    : 'special_event';
+                        return {
+                          label: `Edit ${getScheduleTypeLabel(type as PortalScheduleType).toLowerCase()}`,
+                          type: type as PortalScheduleType,
+                        };
+                      }),
+                    ].filter(
+                      (action): action is { label: string; type: PortalScheduleType } =>
+                        Boolean(action)
+                    );
 
                     return (
                       <div key={summary.day} className="portal-surface-subtle rounded-2xl border p-4">
@@ -2077,6 +2137,20 @@ export default function PortalVenueDetailPage() {
                             </div>
                           )}
                         </div>
+                        {dayEditActions.length > 0 ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {dayEditActions.map((action, actionIndex) => (
+                              <button
+                                key={`${summary.day}-${action.type}-${actionIndex}`}
+                                type="button"
+                                onClick={() => loadDayIntoForm(summary.day, action.type)}
+                                className="portal-ghost-button rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+                              >
+                                {action.label}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })}

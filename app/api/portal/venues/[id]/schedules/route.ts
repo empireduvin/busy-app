@@ -191,6 +191,7 @@ export async function POST(
       const rawScheduleType = String(body?.scheduleType ?? '').trim();
       const scheduleType = rawScheduleType as ScheduleType;
       const saveMode = body?.saveMode === 'replace' ? 'replace' : 'append';
+      const replaceExistingRows = saveMode === 'replace' || body?.replaceExistingRows === true;
       const selectedDays = normalizeSelectedDays(body?.selectedDays);
       const venueRuleKind = normalizeVenueRuleKind(body?.venueRuleKind);
 
@@ -203,14 +204,14 @@ export async function POST(
 
       const rows = sanitizeScheduleRows(body?.rows, id, scheduleType);
 
-      if (saveMode === 'replace' && !selectedDays.length) {
+      if (replaceExistingRows && !selectedDays.length) {
         return NextResponse.json(
           { ok: false, error: 'Choose at least one day to overwrite.' },
           { status: 400 }
         );
       }
 
-      if (saveMode === 'replace') {
+      if (replaceExistingRows) {
         let deleteQuery = supabase
           .from('venue_schedule_rules')
           .delete()
