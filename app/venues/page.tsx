@@ -3,7 +3,6 @@
 import SaveVenueButton from '@/app/components/SaveVenueButton';
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import { isBottleShopVenueType } from '@/lib/venue-type-rules';
-import { getVenueProductGuardrails } from '@/lib/venue-product-guardrails';
 import {
   getCompactSpecialLine,
   getSpecialPrice,
@@ -228,6 +227,24 @@ function normalizeBooleanFlag(value: unknown) {
   }
   if (typeof value === 'number') return value !== 0;
   return false;
+}
+
+function compareVenuesByName(a: Venue, b: Venue) {
+  const aName = (a.name ?? '').trim();
+  const bName = (b.name ?? '').trim();
+
+  if (aName && !bName) return -1;
+  if (!aName && bName) return 1;
+
+  const nameDiff = aName.localeCompare(bName, undefined, { sensitivity: 'base' });
+  if (nameDiff !== 0) return nameDiff;
+
+  const suburbDiff = (a.suburb ?? '').localeCompare(b.suburb ?? '', undefined, {
+    sensitivity: 'base',
+  });
+  if (suburbDiff !== 0) return suburbDiff;
+
+  return a.id.localeCompare(b.id);
 }
 
 function hasValidCoords(lat: number | null, lng: number | null) {
@@ -1102,35 +1119,30 @@ function VenuesPageContent() {
     });
 
     result.sort((a, b) => {
-      if (sortBy === 'NAME') {
-        const aGuardrails = getVenueProductGuardrails(a);
-        const bGuardrails = getVenueProductGuardrails(b);
-        const fitDiff =
-          Number(bGuardrails.coreDiscoveryEligible) - Number(aGuardrails.coreDiscoveryEligible);
-        if (fitDiff !== 0) return fitDiff;
-
-        const publishDiff =
-          Number(bGuardrails.isPublishReady) - Number(aGuardrails.isPublishReady);
-        if (publishDiff !== 0) return publishDiff;
-      }
-
       if (sortBy === 'RATING_DESC') {
-        return (b.google_rating ?? -1) - (a.google_rating ?? -1);
+        const ratingDiff = (b.google_rating ?? -1) - (a.google_rating ?? -1);
+        return ratingDiff || compareVenuesByName(a, b);
       }
 
       if (sortBy === 'REVIEWS_DESC') {
-        return (b.google_user_rating_count ?? -1) - (a.google_user_rating_count ?? -1);
+        const reviewDiff =
+          (b.google_user_rating_count ?? -1) - (a.google_user_rating_count ?? -1);
+        return reviewDiff || compareVenuesByName(a, b);
       }
 
       if (sortBy === 'PRICE_ASC') {
-        return (getPriceRank(a.price_level) ?? 999) - (getPriceRank(b.price_level) ?? 999);
+        const priceDiff =
+          (getPriceRank(a.price_level) ?? 999) - (getPriceRank(b.price_level) ?? 999);
+        return priceDiff || compareVenuesByName(a, b);
       }
 
       if (sortBy === 'PRICE_DESC') {
-        return (getPriceRank(b.price_level) ?? -1) - (getPriceRank(a.price_level) ?? -1);
+        const priceDiff =
+          (getPriceRank(b.price_level) ?? -1) - (getPriceRank(a.price_level) ?? -1);
+        return priceDiff || compareVenuesByName(a, b);
       }
 
-      return (a.name ?? '').localeCompare(b.name ?? '');
+      return compareVenuesByName(a, b);
     });
 
     return result;
