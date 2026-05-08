@@ -1345,31 +1345,15 @@ export default function PortalVenueDetailPage() {
     setScheduleError(null);
   }
 
-  useEffect(() => {
-    if (isDealScheduleType(scheduleType)) return;
-    if (!loadedScheduleRowsSnapshot.length) return;
-
-    const scopedRows = loadedScheduleRowsSnapshot.filter((row) =>
-      selectedDays.includes(row.day_of_week)
-    );
-
-    if (!selectedDays.length || !scopedRows.length) {
-      setTimeBlocks([{ start_time: '', end_time: '' }]);
-      setTitle('');
-      setDescription('');
-      setDealText('');
-      setSpecialPrice('');
-      setNotes('');
-      if (scheduleType === 'happy_hour') {
-        setHappyHourForm(blankHappyHourForm());
-      }
-      return;
-    }
-
-    populateSharedScheduleFormFromRows(scheduleType, scopedRows, venueRuleKind, {
-      preserveSelectedDays: true,
-    });
-  }, [loadedScheduleRowsSnapshot, scheduleType, selectedDays, venueRuleKind]);
+  function openPortalScheduleEditor() {
+    resetScheduleForm();
+    setScheduleType('opening');
+    setVenueRuleKind('kid');
+    setPortalEditTarget('schedule');
+    setPortalMode('edit');
+    setScheduleMessage('Opened the schedule editor. Choose a type and selected days to edit.');
+    setScheduleError(null);
+  }
 
   function openPortalVenueEditor() {
     setVenueSaveMessage(null);
@@ -1660,10 +1644,6 @@ export default function PortalVenueDetailPage() {
         'Saved schedule',
         `${getScheduleTypePickerLabel(scheduleType, venueRuleKind)} for ${selectedDays.length} day${selectedDays.length === 1 ? '' : 's'} with ${effectiveTimeBlocks.length} block${effectiveTimeBlocks.length === 1 ? '' : 's'}.`
       );
-      resetScheduleForm({
-        preserveVenueRuleKind: scheduleType === 'venue_rule',
-        preserveVenueRuleAvailabilityMode: scheduleType === 'venue_rule',
-      });
       await loadVenue(true);
     } catch (error) {
       setScheduleError(error instanceof Error ? error.message : 'Failed to save schedule.');
@@ -1770,6 +1750,42 @@ export default function PortalVenueDetailPage() {
 
     populateDealItemsFromRows(scopedRows);
   }, [currentEditRows, scheduleType, selectedDays]);
+  useEffect(() => {
+    if (isDealScheduleType(scheduleType)) return;
+    if (!selectedDays.length) {
+      setLoadedScheduleRowsSnapshot([]);
+      setTimeBlocks([{ start_time: '', end_time: '' }]);
+      setTitle('');
+      setDescription('');
+      setDealText('');
+      setSpecialPrice('');
+      setNotes('');
+      if (scheduleType === 'happy_hour') {
+        setHappyHourForm(blankHappyHourForm());
+      }
+      return;
+    }
+
+    const scopedRows = sortPortalExistingPreviewRows(currentEditRows);
+    setLoadedScheduleRowsSnapshot(scopedRows);
+
+    if (!scopedRows.length) {
+      setTimeBlocks([{ start_time: '', end_time: '' }]);
+      setTitle('');
+      setDescription('');
+      setDealText('');
+      setSpecialPrice('');
+      setNotes('');
+      if (scheduleType === 'happy_hour') {
+        setHappyHourForm(blankHappyHourForm());
+      }
+      return;
+    }
+
+    populateSharedScheduleFormFromRows(scheduleType, scopedRows, venueRuleKind, {
+      preserveSelectedDays: true,
+    });
+  }, [currentEditRows, scheduleType, selectedDays, venueRuleKind]);
   const effectiveSelectedDays = isDealScheduleType(scheduleType)
     ? selectedDays
     : selectedDays;
@@ -2027,10 +2043,7 @@ export default function PortalVenueDetailPage() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => handleScheduleTypeSelection('opening')} className="portal-primary-button rounded-xl border px-4 py-2 text-sm font-semibold">Edit hours</button>
-                  <button type="button" onClick={() => handleScheduleTypeSelection('daily_special')} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold">Edit deals</button>
-                  <button type="button" onClick={() => handleScheduleTypeSelection('trivia')} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold">Edit events</button>
-                  <button type="button" onClick={() => handleScheduleTypeSelection('venue_rule', 'kid')} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold">Edit venue rules</button>
+                  <button type="button" onClick={openPortalScheduleEditor} className="portal-primary-button rounded-xl border px-4 py-2 text-sm font-semibold">Edit schedule</button>
                   <button type="button" onClick={openPortalVenueEditor} className="portal-ghost-button rounded-xl border px-4 py-2 text-sm font-semibold">Edit venue details</button>
                 </div>
               </div>

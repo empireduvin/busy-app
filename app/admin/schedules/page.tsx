@@ -2366,33 +2366,6 @@ export default function AdminMasterPage() {
     );
   }
 
-  useEffect(() => {
-    if (isDealScheduleType(scheduleType)) return;
-    if (!loadedScheduleRowsSnapshot.length) return;
-
-    const scopedRows = loadedScheduleRowsSnapshot.filter((row) =>
-      selectedDays.includes(row.day_of_week)
-    );
-
-    if (!selectedDays.length || !scopedRows.length) {
-      setTimeBlocks([{ start_time: '', end_time: '' }]);
-      setTitle('');
-      setDescription('');
-      setDealText('');
-      setSpecialPrice('');
-      setNotes('');
-      if (scheduleType === 'happy_hour') {
-        setHappyHourForm(blankHappyHourForm());
-      }
-      return;
-    }
-
-    populateSharedScheduleFormFromRows(scheduleType, scopedRows, venueRuleKind, {
-      preserveSelectedDays: true,
-    });
-  }, [loadedScheduleRowsSnapshot, scheduleType, selectedDays, venueRuleKind]);
-
-
   function updateVenueForm<K extends keyof VenueFormState>(
     field: K,
     value: VenueFormState[K]
@@ -2584,6 +2557,17 @@ export default function AdminMasterPage() {
     setScheduleMessage(
       `Loaded ${venue.name ?? 'venue'} into the weekly editor. Review existing details below and amend directly.`
     );
+  }
+
+  function openScheduleEditor() {
+    resetScheduleForm();
+    setScheduleType('opening');
+    setVenueRuleKind('kid');
+    setTab('schedules');
+    setScheduleWorkspaceArmed(true);
+    setAdminMode('edit');
+    setScheduleErrorMessage(null);
+    setScheduleMessage('Opened the schedule editor. Choose a type and selected days to edit.');
   }
 
   async function handleGoogleSearch() {
@@ -3225,10 +3209,6 @@ export default function AdminMasterPage() {
           happyHourDetailJson,
         }),
       });
-      resetScheduleForm({
-        preserveVenueRuleKind: scheduleType === 'venue_rule',
-        preserveVenueRuleAvailabilityMode: scheduleType === 'venue_rule',
-      });
     } catch (error: unknown) {
       const message = getAdminFriendlyErrorMessage(error, 'Failed to save schedule.');
       setScheduleErrorMessage(message);
@@ -3782,6 +3762,42 @@ export default function AdminMasterPage() {
 
     populateDealItemsFromRows(scopedRows);
   }, [focusedExistingEditRows, scheduleType, selectedDays]);
+  useEffect(() => {
+    if (isDealScheduleType(scheduleType)) return;
+    if (!selectedDays.length) {
+      setLoadedScheduleRowsSnapshot([]);
+      setTimeBlocks([{ start_time: '', end_time: '' }]);
+      setTitle('');
+      setDescription('');
+      setDealText('');
+      setSpecialPrice('');
+      setNotes('');
+      if (scheduleType === 'happy_hour') {
+        setHappyHourForm(blankHappyHourForm());
+      }
+      return;
+    }
+
+    const scopedRows = sortExistingPreviewRows(focusedExistingEditRows);
+    setLoadedScheduleRowsSnapshot(scopedRows);
+
+    if (!scopedRows.length) {
+      setTimeBlocks([{ start_time: '', end_time: '' }]);
+      setTitle('');
+      setDescription('');
+      setDealText('');
+      setSpecialPrice('');
+      setNotes('');
+      if (scheduleType === 'happy_hour') {
+        setHappyHourForm(blankHappyHourForm());
+      }
+      return;
+    }
+
+    populateSharedScheduleFormFromRows(scheduleType, scopedRows, venueRuleKind, {
+      preserveSelectedDays: true,
+    });
+  }, [focusedExistingEditRows, scheduleType, selectedDays, venueRuleKind]);
 
   return (
     <div className="admin-shell min-h-screen bg-neutral-100 text-neutral-950">
@@ -4177,31 +4193,10 @@ export default function AdminMasterPage() {
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={() => handleScheduleTypeSelection('opening')}
+                        onClick={openScheduleEditor}
                         className="admin-primary-button rounded-xl border px-3 py-2 text-sm font-semibold"
                       >
-                        Edit hours
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleScheduleTypeSelection('daily_special')}
-                        className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
-                      >
-                        Edit deals
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleScheduleTypeSelection('trivia')}
-                        className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
-                      >
-                        Edit events
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleScheduleTypeSelection('venue_rule', 'kid')}
-                        className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
-                      >
-                        Edit venue rules
+                        Edit schedule
                       </button>
                       {focusedOverviewVenue ? (
                         <button
@@ -4523,18 +4518,10 @@ export default function AdminMasterPage() {
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        setAdminMode('edit');
-                        setScheduleErrorMessage(null);
-                        setScheduleMessage(
-                          selectedCount === 1
-                            ? `Loaded ${selectedVenuesForSummary[0]?.name ?? 'the selected venue'} into focused edit mode.`
-                            : `Loaded ${selectedVenueSummary.toLowerCase()} into focused edit mode.`
-                        );
-                      }}
+                      onClick={openScheduleEditor}
                       className="admin-primary-button rounded-xl border px-3 py-2 text-sm font-semibold"
                     >
-                      Start editing
+                      Edit schedule
                     </button>
                     {singleSelectedVenue ? (
                       <button
