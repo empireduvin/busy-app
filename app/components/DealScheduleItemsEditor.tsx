@@ -20,6 +20,9 @@ type Props = {
   items: DealScheduleItemDraft[];
   scheduleType: 'daily_special' | 'lunch_special';
   variant: 'admin' | 'portal';
+  selectedDays?: DayOfWeek[];
+  emptyStateMessage?: string;
+  emptyActionLabel?: string;
   onAddItem: () => void;
   onRemoveItem: (itemId: string) => void;
   onToggleDay: (itemId: string, day: DayOfWeek) => void;
@@ -47,6 +50,9 @@ export default function DealScheduleItemsEditor({
   items,
   scheduleType,
   variant,
+  selectedDays,
+  emptyStateMessage,
+  emptyActionLabel,
   onAddItem,
   onRemoveItem,
   onToggleDay,
@@ -92,15 +98,28 @@ export default function DealScheduleItemsEditor({
             {scheduleType === 'daily_special' ? 'Daily special items' : 'Lunch special items'}
           </div>
           <div className={`mt-1 text-xs ${helperTextClassName}`}>
-            One item block equals one special. Add a fresh block for each separate offer.
+            Editing selected days only. One item block equals one special.
           </div>
         </div>
         <button type="button" onClick={onAddItem} className={ghostButtonClassName}>
-          Add special item
+          {emptyActionLabel ?? 'Add special item'}
         </button>
       </div>
 
       <div className="mt-4 space-y-4">
+        {items.length === 0 ? (
+          <div className={isPortal
+            ? 'portal-surface rounded-2xl border border-dashed p-4 text-sm text-white/68'
+            : 'rounded-2xl border border-dashed border-orange-300 bg-white/65 p-4 text-sm text-neutral-700'}
+          >
+            <div className={itemLabelClassName}>
+              {emptyStateMessage ?? 'No specials for selected days yet.'}
+            </div>
+            <button type="button" onClick={onAddItem} className={`mt-3 ${ghostButtonClassName}`}>
+              {emptyActionLabel ?? 'Add special item'}
+            </button>
+          </div>
+        ) : null}
         {items.map((item, itemIndex) => (
           <div key={item.id} className={itemClassName}>
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -118,37 +137,50 @@ export default function DealScheduleItemsEditor({
               ) : null}
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button type="button" onClick={() => onSetDaysPreset(item.id, 'weekdays')} className={ghostButtonClassName}>
-                Mon-Fri
-              </button>
-              <button type="button" onClick={() => onSetDaysPreset(item.id, 'weekend')} className={ghostButtonClassName}>
-                Weekend
-              </button>
-              <button type="button" onClick={() => onSetDaysPreset(item.id, 'all')} className={ghostButtonClassName}>
-                All days
-              </button>
-              <button type="button" onClick={() => onSetDaysPreset(item.id, 'clear')} className={ghostButtonClassName}>
-                Clear days
-              </button>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              {DAY_OPTIONS.map((day) => {
-                const active = item.selectedDays.includes(day.value);
-                return (
-                  <button
-                    key={`${item.id}-${day.value}`}
-                    type="button"
-                    onClick={() => onToggleDay(item.id, day.value)}
-                    className={`${dayButtonBase} ${active ? selectedDayClassName : unselectedDayClassName}`}
-                    aria-pressed={active}
-                  >
-                    {active ? `Selected ${day.label}` : day.label}
+            {selectedDays ? (
+              <div className={`mt-3 rounded-xl border px-3 py-2 text-xs ${isPortal ? 'border-white/10 bg-black/20 text-white/62' : 'border-orange-200 bg-orange-50 text-neutral-700'}`}>
+                Applies to:{' '}
+                {selectedDays.length
+                  ? selectedDays
+                      .map((day) => DAY_OPTIONS.find((option) => option.value === day)?.label ?? day)
+                      .join(', ')
+                  : 'no days selected'}
+              </div>
+            ) : (
+              <>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => onSetDaysPreset(item.id, 'weekdays')} className={ghostButtonClassName}>
+                    Mon-Fri
                   </button>
-                );
-              })}
-            </div>
+                  <button type="button" onClick={() => onSetDaysPreset(item.id, 'weekend')} className={ghostButtonClassName}>
+                    Weekend
+                  </button>
+                  <button type="button" onClick={() => onSetDaysPreset(item.id, 'all')} className={ghostButtonClassName}>
+                    All days
+                  </button>
+                  <button type="button" onClick={() => onSetDaysPreset(item.id, 'clear')} className={ghostButtonClassName}>
+                    Clear days
+                  </button>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {DAY_OPTIONS.map((day) => {
+                    const active = item.selectedDays.includes(day.value);
+                    return (
+                      <button
+                        key={`${item.id}-${day.value}`}
+                        type="button"
+                        onClick={() => onToggleDay(item.id, day.value)}
+                        className={`${dayButtonBase} ${active ? selectedDayClassName : unselectedDayClassName}`}
+                        aria-pressed={active}
+                      >
+                        {active ? `Selected ${day.label}` : day.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
 
             {onUseHoursTemplate ? (
               <div className="mt-3 rounded-xl border border-white/10 bg-black/5 p-3">

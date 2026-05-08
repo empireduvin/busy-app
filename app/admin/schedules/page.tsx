@@ -2067,12 +2067,19 @@ export default function AdminMasterPage() {
   }
 
   function addDealItem() {
-    setDealItems((current) => [...current, createBlankDealItem()]);
+    if (!selectedDays.length) {
+      setScheduleErrorMessage('Select the day or days to edit before adding a special item.');
+      return;
+    }
+    setDealItems((current) => [
+      ...current,
+      { ...createBlankDealItem(), selectedDays },
+    ]);
   }
 
   function removeDealItem(itemId: string) {
     setDealItems((current) =>
-      current.length === 1 ? [createBlankDealItem()] : current.filter((item) => item.id !== itemId)
+      current.filter((item) => item.id !== itemId)
     );
   }
 
@@ -2337,7 +2344,7 @@ export default function AdminMasterPage() {
       setSpecialPrice('');
       setNotes('');
       if (isDealScheduleType(targetScheduleType)) {
-        setDealItems([{ ...createBlankDealItem(), selectedDays: [day] }]);
+        setDealItems([]);
       }
       setVenueRuleAvailabilityMode('always');
       if (targetScheduleType === 'happy_hour') {
@@ -2361,21 +2368,22 @@ export default function AdminMasterPage() {
 
   useEffect(() => {
     if (!isDealScheduleType(scheduleType)) return;
+    if (!selectedDays.length) {
+      setDealItems([]);
+      return;
+    }
 
-    const nextDays = Array.from(
-      new Set(dealItems.flatMap((item) => item.selectedDays))
-    ) as DayOfWeek[];
+    const scopedRows = loadedScheduleRowsSnapshot.filter((row) =>
+      selectedDays.includes(row.day_of_week)
+    );
 
-    setSelectedDays((current) => {
-      if (
-        current.length === nextDays.length &&
-        current.every((day) => nextDays.includes(day))
-      ) {
-        return current;
-      }
-      return nextDays;
-    });
-  }, [dealItems, scheduleType]);
+    if (!loadedScheduleRowsSnapshot.length || !scopedRows.length) {
+      setDealItems([]);
+      return;
+    }
+
+    populateDealItemsFromRows(scopedRows);
+  }, [loadedScheduleRowsSnapshot, scheduleType, selectedDays]);
 
   useEffect(() => {
     if (isDealScheduleType(scheduleType)) return;
@@ -3678,19 +3686,11 @@ export default function AdminMasterPage() {
       ? '1 venue selected'
       : `${selectedCount} venues selected`;
   const selectedDaySummary =
-    (isDealScheduleType(scheduleType)
-      ? Array.from(new Set(dealItems.flatMap((item) => item.selectedDays))).length
-      : selectedDays.length) === 0
+    selectedDays.length === 0
       ? 'No days selected yet'
-      : (isDealScheduleType(scheduleType)
-          ? Array.from(new Set(dealItems.flatMap((item) => item.selectedDays))).length
-          : selectedDays.length) === 1
+      : selectedDays.length === 1
       ? '1 day selected'
-      : `${
-          isDealScheduleType(scheduleType)
-            ? Array.from(new Set(dealItems.flatMap((item) => item.selectedDays))).length
-            : selectedDays.length
-        } days selected`;
+      : `${selectedDays.length} days selected`;
   const enteredTimeBlockCount = isDealScheduleType(scheduleType)
     ? dealItems.reduce(
         (count, item) =>
@@ -4948,20 +4948,86 @@ export default function AdminMasterPage() {
                 </div>
               )}
               {(scheduleType === 'daily_special' || scheduleType === 'lunch_special') && (
-                <DealScheduleItemsEditor
-                  items={dealItems}
-                  scheduleType={scheduleType}
-                  variant="admin"
-                  onAddItem={addDealItem}
-                  onRemoveItem={removeDealItem}
-                  onToggleDay={toggleDealItemDay}
-                  onSetDaysPreset={setDealItemDaysPreset}
-                  onAddTimeBlock={addDealItemTimeBlock}
-                  onRemoveTimeBlock={removeDealItemTimeBlock}
-                  onUpdateTimeBlock={updateDealItemTimeBlock}
-                  onUpdateField={updateDealItemField}
-                  onUseHoursTemplate={applyDealItemHoursTemplate}
-                />
+                <>
+                  <div className="mt-3.5 sm:mt-4">
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDaysPreset('weekdays')}
+                        className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                      >
+                        Mon-Fri
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDaysPreset('weekend')}
+                        className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                      >
+                        Weekend
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDaysPreset('all')}
+                        className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                      >
+                        All days
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDaysPreset('clear')}
+                        className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                      >
+                        Clear days
+                      </button>
+                    </div>
+                    <label className="mb-2 block text-sm font-medium">Editing selected days only</label>
+                    <div className="flex flex-wrap gap-2">
+                      {DAY_OPTIONS.map((day) => {
+                        const active = selectedDays.includes(day.value);
+                        return (
+                          <button
+                            key={`deal-${day.value}`}
+                            type="button"
+                            onClick={() => toggleDay(day.value)}
+                            className={`min-h-[42px] rounded-xl border px-3 py-2 text-sm font-semibold ${
+                              active
+                                ? 'border-orange-400 bg-orange-500 text-black shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
+                                : 'admin-ghost-button border'
+                            }`}
+                            aria-pressed={active}
+                          >
+                            {active ? `Selected ${day.label}` : day.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <DealScheduleItemsEditor
+                    items={dealItems}
+                    scheduleType={scheduleType}
+                    variant="admin"
+                    selectedDays={selectedDays}
+                    emptyStateMessage={
+                      selectedDays.length === 1
+                        ? `No ${scheduleType === 'daily_special' ? 'daily specials' : 'lunch specials'} for ${getDayLabel(selectedDays[0])} yet.`
+                        : `No ${scheduleType === 'daily_special' ? 'daily specials' : 'lunch specials'} for selected days yet.`
+                    }
+                    emptyActionLabel={
+                      selectedDays.length === 1
+                        ? `Add ${getDayLabel(selectedDays[0])} special`
+                        : 'Add special for selected days'
+                    }
+                    onAddItem={addDealItem}
+                    onRemoveItem={removeDealItem}
+                    onToggleDay={toggleDealItemDay}
+                    onSetDaysPreset={setDealItemDaysPreset}
+                    onAddTimeBlock={addDealItemTimeBlock}
+                    onRemoveTimeBlock={removeDealItemTimeBlock}
+                    onUpdateTimeBlock={updateDealItemTimeBlock}
+                    onUpdateField={updateDealItemField}
+                    onUseHoursTemplate={applyDealItemHoursTemplate}
+                  />
+                </>
               )}
               {(!isDealScheduleType(scheduleType) && (isEventScheduleType(scheduleType) || scheduleType === 'happy_hour')) && (
                 <div className="mt-3">
