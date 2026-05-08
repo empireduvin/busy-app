@@ -2518,18 +2518,23 @@ export default function PortalVenueDetailPage() {
                       return <button key={day.value} type="button" onClick={() => toggleDay(day.value)} className={`min-h-[42px] rounded-xl border px-3 py-2 text-sm font-semibold ${active ? 'border-orange-400 bg-orange-500 text-black shadow-[0_0_0_2px_rgba(251,146,60,0.22)]' : 'portal-ghost-button'}`} aria-pressed={active}>{active ? `Selected ${day.label}` : day.label}</button>;
                     })}
                   </div>
-                  {(scheduleType === 'happy_hour' ||
+                  {(scheduleType === 'kitchen' ||
+                    scheduleType === 'happy_hour' ||
                     isEventScheduleType(scheduleType) ||
                     (isVenueRuleScheduleType(scheduleType) &&
                       venueRuleAvailabilityMode === 'restricted')) ? (
                     <div className="portal-surface-subtle mt-4 rounded-2xl border p-4 sm:mt-5">
                       <div className="text-sm font-semibold text-white">Use existing venue hours</div>
                       <div className="mt-1 text-xs text-white/62">
-                        Copy opening or kitchen hours for the selected days, then adjust before saving.
+                        {scheduleType === 'kitchen'
+                          ? 'Copy opening hours for the selected days, then adjust before saving.'
+                          : 'Copy opening or kitchen hours for the selected days, then adjust before saving.'}
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button type="button" onClick={() => applyHoursTemplate('opening')} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">Use opening hours</button>
-                        <button type="button" onClick={() => applyHoursTemplate('kitchen')} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">Use kitchen hours</button>
+                        {scheduleType === 'kitchen' ? null : (
+                          <button type="button" onClick={() => applyHoursTemplate('kitchen')} className="portal-ghost-button rounded-xl border px-3 py-2 text-sm">Use kitchen hours</button>
+                        )}
                       </div>
                     </div>
                   ) : null}

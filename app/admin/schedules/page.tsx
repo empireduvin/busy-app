@@ -4878,14 +4878,17 @@ export default function AdminMasterPage() {
                   })}
                 </div>
               </div>
-              {(scheduleType === 'happy_hour' ||
+              {(scheduleType === 'kitchen' ||
+                scheduleType === 'happy_hour' ||
                 isEventScheduleType(scheduleType) ||
                 (isVenueRuleScheduleType(scheduleType) &&
                   venueRuleAvailabilityMode === 'restricted')) ? (
                 <div className="mt-3.5 rounded-2xl border border-neutral-200 bg-neutral-50 p-3 sm:mt-4">
                   <div className="text-sm font-semibold">Use existing venue hours</div>
                   <div className="mt-1 text-xs text-neutral-600">
-                    Copy opening or kitchen hours for the selected days, then adjust before saving.
+                    {scheduleType === 'kitchen'
+                      ? 'Copy opening hours for the selected days, then adjust before saving.'
+                      : 'Copy opening or kitchen hours for the selected days, then adjust before saving.'}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -4895,13 +4898,15 @@ export default function AdminMasterPage() {
                     >
                       Use opening hours
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => applyHoursTemplate('kitchen')}
-                      className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
-                    >
-                      Use kitchen hours
-                    </button>
+                    {scheduleType === 'kitchen' ? null : (
+                      <button
+                        type="button"
+                        onClick={() => applyHoursTemplate('kitchen')}
+                        className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                      >
+                        Use kitchen hours
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : null}
