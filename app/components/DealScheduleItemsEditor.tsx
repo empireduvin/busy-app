@@ -67,10 +67,10 @@ export default function DealScheduleItemsEditor({
 
   const surfaceClassName = isPortal
     ? 'portal-surface-subtle rounded-2xl border p-4'
-    : 'rounded-2xl border border-orange-200 bg-orange-50 p-4';
+    : 'admin-surface-subtle rounded-2xl border p-4';
   const itemClassName = isPortal
     ? 'portal-surface rounded-2xl border p-4'
-    : 'rounded-2xl border border-black/10 bg-white p-4';
+    : 'admin-surface rounded-2xl border p-4';
   const ghostButtonClassName = isPortal
     ? 'portal-ghost-button rounded-xl border px-3 py-2 text-sm'
     : 'admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium';
@@ -80,8 +80,8 @@ export default function DealScheduleItemsEditor({
   const textareaClassName = inputClassName;
   const itemLabelClassName = isPortal
     ? 'text-sm font-semibold text-white'
-    : 'text-sm font-semibold text-neutral-900';
-  const helperTextClassName = isPortal ? 'text-white/62' : 'text-neutral-600';
+    : 'text-sm font-semibold text-white';
+  const helperTextClassName = isPortal ? 'text-white/62' : 'text-white/62';
   const dayButtonBase = 'min-h-[40px] rounded-xl border px-3 py-2 text-sm font-semibold';
   const selectedDayClassName = isPortal
     ? 'border-orange-400 bg-orange-500 text-black shadow-[0_0_0_2px_rgba(251,146,60,0.22)]'
@@ -110,7 +110,7 @@ export default function DealScheduleItemsEditor({
         {items.length === 0 ? (
           <div className={isPortal
             ? 'portal-surface rounded-2xl border border-dashed p-4 text-sm text-white/68'
-            : 'rounded-2xl border border-dashed border-orange-300 bg-white/65 p-4 text-sm text-neutral-700'}
+            : 'admin-surface rounded-2xl border border-dashed p-4 text-sm text-white/68'}
           >
             <div className={itemLabelClassName}>
               {emptyStateMessage ?? 'No specials for selected days yet.'}
@@ -138,7 +138,7 @@ export default function DealScheduleItemsEditor({
             </div>
 
             {selectedDays ? (
-              <div className={`mt-3 rounded-xl border px-3 py-2 text-xs ${isPortal ? 'border-white/10 bg-black/20 text-white/62' : 'border-orange-200 bg-orange-50 text-neutral-700'}`}>
+              <div className={`mt-3 rounded-xl border px-3 py-2 text-xs ${isPortal ? 'border-white/10 bg-black/20 text-white/62' : 'border-white/10 bg-black/20 text-white/62'}`}>
                 Applies to:{' '}
                 {selectedDays.length
                   ? selectedDays
