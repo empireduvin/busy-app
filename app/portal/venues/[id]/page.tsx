@@ -657,6 +657,7 @@ export default function PortalVenueDetailPage() {
   const [scheduleError, setScheduleError] = useState<string | null>(null);
   const [activityEntries, setActivityEntries] = useState<PortalActivityEntry[]>([]);
   const [showActivityLog, setShowActivityLog] = useState(false);
+  const scheduleEditorRef = useRef<HTMLDivElement | null>(null);
   const portalUiStorageKey = useMemo(
     () => (venueId ? `portal-ui-state-${venueId}` : null),
     [venueId]
@@ -1299,6 +1300,9 @@ export default function PortalVenueDetailPage() {
     setPortalEditTarget('schedule');
     setPortalMode('edit');
     setScheduleType(targetScheduleType);
+    window.setTimeout(() => {
+      scheduleEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
     if (targetScheduleType === 'venue_rule') {
       setVenueRuleKind(targetVenueRuleKind);
     }
@@ -1353,6 +1357,9 @@ export default function PortalVenueDetailPage() {
     setPortalMode('edit');
     setScheduleMessage('Opened the schedule editor. Choose a type and selected days to edit.');
     setScheduleError(null);
+    window.setTimeout(() => {
+      scheduleEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
   }
 
   function openPortalVenueEditor() {
@@ -2165,6 +2172,49 @@ export default function PortalVenueDetailPage() {
                         venueRuleKind?: VenueRuleKind;
                       } => Boolean(action)
                     );
+                    const getLineEditAction = (line: string) => {
+                      if (line.startsWith('Opening:')) {
+                        return { type: 'opening' as PortalScheduleType, label: 'opening hours' };
+                      }
+                      if (line.startsWith('Kitchen:')) {
+                        return { type: 'kitchen' as PortalScheduleType, label: 'kitchen hours' };
+                      }
+                      if (line.startsWith('Happy hour:')) {
+                        return { type: 'happy_hour' as PortalScheduleType, label: 'happy hour' };
+                      }
+                      if (line.startsWith('Bottle shop:')) {
+                        return { type: 'bottle_shop' as PortalScheduleType, label: 'bottle shop hours' };
+                      }
+                      if (line.startsWith('Daily Specials:')) {
+                        return { type: 'daily_special' as PortalScheduleType, label: 'daily specials' };
+                      }
+                      if (line.startsWith('Lunch Specials:')) {
+                        return { type: 'lunch_special' as PortalScheduleType, label: 'lunch specials' };
+                      }
+                      if (line.startsWith('Dog friendly:')) {
+                        return {
+                          type: 'venue_rule' as PortalScheduleType,
+                          venueRuleKind: 'dog' as VenueRuleKind,
+                          label: 'dog friendly',
+                        };
+                      }
+                      if (line.startsWith('Kids allowed:')) {
+                        return {
+                          type: 'venue_rule' as PortalScheduleType,
+                          venueRuleKind: 'kid' as VenueRuleKind,
+                          label: 'kids allowed',
+                        };
+                      }
+                      const matchingEvent = EVENT_SCHEDULE_TYPES.find((eventType) =>
+                        line.startsWith(`${getScheduleTypeLabel(eventType)}:`)
+                      );
+                      return matchingEvent
+                        ? {
+                            type: matchingEvent as PortalScheduleType,
+                            label: getScheduleTypeLabel(matchingEvent).toLowerCase(),
+                          }
+                        : null;
+                    };
 
                     return (
                       <div key={summary.day} className="portal-surface-subtle rounded-2xl border p-4">
@@ -2173,11 +2223,30 @@ export default function PortalVenueDetailPage() {
                         </div>
                         <div className="mt-3 space-y-2 text-sm text-white/78">
                           {lines.length > 0 ? (
-                            lines.map((line) => (
-                              <div key={`${summary.day}-${line}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                                {line}
-                              </div>
-                            ))
+                            lines.map((line) => {
+                              const lineAction = getLineEditAction(line);
+                              return lineAction ? (
+                                <button
+                                  key={`${summary.day}-${line}`}
+                                  type="button"
+                                  title={`Edit ${DAY_OPTIONS.find((option) => option.value === summary.day)?.label ?? summary.day} ${lineAction.label}`}
+                                  onClick={() =>
+                                    loadDayIntoForm(
+                                      summary.day,
+                                      lineAction.type,
+                                      lineAction.venueRuleKind
+                                    )
+                                  }
+                                  className="w-full cursor-pointer rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-left transition hover:border-orange-300/35 hover:bg-orange-400/10 focus:outline-none focus:ring-2 focus:ring-orange-300/50"
+                                >
+                                  {line}
+                                </button>
+                              ) : (
+                                <div key={`${summary.day}-${line}`} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                                  {line}
+                                </div>
+                              );
+                            })
                           ) : (
                             <div className="rounded-xl border border-dashed border-white/10 px-3 py-2 text-white/48">
                               Nothing configured yet
@@ -2235,7 +2304,7 @@ export default function PortalVenueDetailPage() {
               </div>
             </section>
 
-            <section className="mt-6">
+            <section ref={scheduleEditorRef} className="mt-6">
               {portalEditTarget === 'venue' ? (
                 <div className="portal-surface rounded-3xl border p-4 sm:p-6">
                   <h2 className="text-xl font-semibold">Venue details</h2>
@@ -2362,9 +2431,14 @@ export default function PortalVenueDetailPage() {
                             row.notes?.trim() ||
                             '';
                           return (
-                            <div
+                            <button
                               key={`${row.id}-${row.day_of_week}-${row.start_time}-${row.end_time}`}
-                              className="portal-surface rounded-xl border p-3 text-sm"
+                              type="button"
+                              title={`Edit ${DAY_OPTIONS.find((option) => option.value === row.day_of_week)?.label ?? row.day_of_week} ${getScheduleTypePickerLabel(scheduleType, venueRuleKind).toLowerCase()}`}
+                              onClick={() =>
+                                loadDayIntoForm(row.day_of_week, scheduleType, venueRuleKind)
+                              }
+                              className="portal-surface cursor-pointer rounded-xl border p-3 text-left text-sm transition hover:border-orange-300/35 hover:bg-orange-400/10 focus:outline-none focus:ring-2 focus:ring-orange-300/50"
                             >
                               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-300/75">
                                 {DAY_OPTIONS.find((option) => option.value === row.day_of_week)?.label ?? row.day_of_week}
@@ -2378,7 +2452,7 @@ export default function PortalVenueDetailPage() {
                               {summary ? (
                                 <div className="mt-1 text-xs text-white/62">{summary}</div>
                               ) : null}
-                            </div>
+                            </button>
                           );
                         })}
                       </div>

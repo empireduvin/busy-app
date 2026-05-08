@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import DealScheduleItemsEditor, {
   type DealScheduleItemDraft,
 } from '@/app/components/DealScheduleItemsEditor';
@@ -1474,6 +1474,7 @@ export default function AdminMasterPage() {
   const [showVenuePickerMobile, setShowVenuePickerMobile] = useState(true);
   const [scheduleWorkspaceArmed, setScheduleWorkspaceArmed] = useState(false);
   const [adminMode, setAdminMode] = useState<'overview' | 'edit'>('overview');
+  const scheduleEditorRef = useRef<HTMLDivElement | null>(null);
 
   function requireSupabaseClient() {
     if (!supabase) {
@@ -2325,6 +2326,9 @@ export default function AdminMasterPage() {
     setScheduleWorkspaceArmed(true);
     setAdminMode('edit');
     setSelectedVenueIds([venue.id]);
+    window.setTimeout(() => {
+      scheduleEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
     const rows = getExistingScheduleRowsForEdit(
       venue,
       targetScheduleType,
@@ -2568,6 +2572,9 @@ export default function AdminMasterPage() {
     setAdminMode('edit');
     setScheduleErrorMessage(null);
     setScheduleMessage('Opened the schedule editor. Choose a type and selected days to edit.');
+    window.setTimeout(() => {
+      scheduleEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
   }
 
   async function handleGoogleSearch() {
@@ -4467,6 +4474,48 @@ export default function AdminMasterPage() {
                                 } => Boolean(action)
                               )
                             : [];
+                          const getLineEditAction = (line: string) => {
+                            if (line.startsWith('Opening:')) {
+                              return { type: 'opening' as ScheduleType, label: 'opening hours' };
+                            }
+                            if (line.startsWith('Kitchen:')) {
+                              return { type: 'kitchen' as ScheduleType, label: 'kitchen hours' };
+                            }
+                            if (line.startsWith('Happy hour:')) {
+                              return { type: 'happy_hour' as ScheduleType, label: 'happy hour' };
+                            }
+                            if (line.startsWith('Bottle shop:')) {
+                              return { type: 'bottle_shop' as ScheduleType, label: 'bottle shop hours' };
+                            }
+                            if (line.startsWith('Daily Specials:')) {
+                              return { type: 'daily_special' as ScheduleType, label: 'daily specials' };
+                            }
+                            if (line.startsWith('Lunch Specials:')) {
+                              return { type: 'lunch_special' as ScheduleType, label: 'lunch specials' };
+                            }
+                            const matchingEvent = summary.events.find((event) => event.summary === line);
+                            if (matchingEvent) {
+                              return {
+                                type: matchingEvent.scheduleType,
+                                label: getScheduleTypeLabel(matchingEvent.scheduleType).toLowerCase(),
+                              };
+                            }
+                            if (line.startsWith('Dog friendly:')) {
+                              return {
+                                type: 'venue_rule' as ScheduleType,
+                                venueRuleKind: 'dog' as VenueRuleKind,
+                                label: 'dog friendly',
+                              };
+                            }
+                            if (line.startsWith('Kids allowed:')) {
+                              return {
+                                type: 'venue_rule' as ScheduleType,
+                                venueRuleKind: 'kid' as VenueRuleKind,
+                                label: 'kids allowed',
+                              };
+                            }
+                            return null;
+                          };
 
                           return (
                             <div key={summary.day} className="rounded-2xl border border-black/5 bg-white p-3">
@@ -4475,11 +4524,31 @@ export default function AdminMasterPage() {
                               </div>
                               <div className="mt-3 space-y-2 text-sm text-neutral-700">
                                 {summaryLines.length > 0 ? (
-                                  summaryLines.map((line) => (
-                                    <div key={`${summary.day}-${line}`} className="rounded-lg border border-black/5 bg-white/60 px-3 py-2">
+                                  summaryLines.map((line) => {
+                                    const lineAction = getLineEditAction(line);
+                                    return lineAction && focusedOverviewVenue ? (
+                                      <button
+                                        key={`${summary.day}-${line}`}
+                                        type="button"
+                                        title={`Edit ${getDayLabel(summary.day)} ${lineAction.label}`}
+                                        onClick={() =>
+                                          handleEditVenueDayForType(
+                                            focusedOverviewVenue,
+                                            summary.day,
+                                            lineAction.type,
+                                            lineAction.venueRuleKind
+                                          )
+                                        }
+                                        className="w-full cursor-pointer rounded-lg border border-black/5 bg-white/60 px-3 py-2 text-left transition hover:border-orange-200 hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                                      >
+                                        {line}
+                                      </button>
+                                    ) : (
+                                      <div key={`${summary.day}-${line}`} className="rounded-lg border border-black/5 bg-white/60 px-3 py-2">
                                       {line}
-                                    </div>
-                                  ))
+                                      </div>
+                                    );
+                                  })
                                 ) : (
                                   <div className="rounded-lg border border-dashed border-black/10 px-3 py-2 text-neutral-500">
                                     Nothing configured yet
@@ -4545,7 +4614,7 @@ export default function AdminMasterPage() {
                   </div>
                 </div>
               ) : null}
-              <div className={isScheduleWorkspaceActive ? '' : 'hidden'}>
+              <div ref={scheduleEditorRef} className={isScheduleWorkspaceActive ? '' : 'hidden'}>
                 {isScheduleWorkspaceActive ? (
                   <div className="admin-surface-subtle mb-4 rounded-2xl border p-3.5 sm:p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -4675,9 +4744,21 @@ export default function AdminMasterPage() {
                         row.notes?.trim() ||
                         '';
                       return (
-                        <div
+                        <button
                           key={`${row.id}-${row.day_of_week}-${row.start_time}-${row.end_time}`}
-                          className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800"
+                          type="button"
+                          title={`Edit ${getDayLabel(row.day_of_week)} ${getScheduleTypePickerLabel(scheduleType, venueRuleKind).toLowerCase()}`}
+                          onClick={() =>
+                            focusedOverviewVenue
+                              ? handleEditVenueDayForType(
+                                  focusedOverviewVenue,
+                                  row.day_of_week,
+                                  scheduleType,
+                                  venueRuleKind
+                                )
+                              : undefined
+                          }
+                          className="cursor-pointer rounded-xl border border-neutral-200 bg-white px-3 py-2 text-left text-sm text-neutral-800 transition hover:border-orange-200 hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-300"
                         >
                           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-700">
                             {getDayLabel(row.day_of_week)}
@@ -4691,7 +4772,7 @@ export default function AdminMasterPage() {
                           {summary ? (
                             <div className="mt-1 text-xs text-neutral-600">{summary}</div>
                           ) : null}
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
