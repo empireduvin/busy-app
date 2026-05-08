@@ -1358,7 +1358,6 @@ function VenuesPageContent() {
         <div
           className={[
             'z-40 mt-2 rounded-[1.2rem] border border-white/9 bg-white/[0.04] p-2 shadow-[0_16px_36px_rgba(0,0,0,0.2)] backdrop-blur transition-transform duration-200 ease-out sm:mt-4 sm:rounded-3xl sm:p-4',
-            'sticky top-[68px] sm:top-auto lg:sticky lg:top-24',
             mobileFiltersHidden ? '-translate-y-[125%] opacity-0 pointer-events-none sm:pointer-events-auto sm:opacity-100 sm:translate-y-0' : 'translate-y-0 opacity-100',
           ].join(' ')}
         >
