@@ -2312,17 +2312,23 @@ export default function AdminMasterPage() {
   function handleEditVenueDayForType(
     venue: Venue,
     day: DayOfWeek,
-    targetScheduleType: ScheduleType
+    targetScheduleType: ScheduleType,
+    targetVenueRuleKind?: VenueRuleKind
   ) {
     setScheduleWorkspaceArmed(true);
     setAdminMode('edit');
     setSelectedVenueIds([venue.id]);
-    const rows = getExistingSchedulePreviewRows(venue, targetScheduleType).filter(
-      (row) => row.day_of_week === day
-    );
+    const rows = getExistingScheduleRowsForEdit(
+      venue,
+      targetScheduleType,
+      targetVenueRuleKind
+    ).filter((row) => row.day_of_week === day);
 
     if (!rows.length) {
       setScheduleType(targetScheduleType);
+      if (targetScheduleType === 'venue_rule') {
+        setVenueRuleKind(targetVenueRuleKind ?? 'kid');
+      }
       setSelectedDays([day]);
       setTimeBlocks([{ start_time: '', end_time: '' }]);
       setTitle('');
@@ -2330,6 +2336,9 @@ export default function AdminMasterPage() {
       setDealText('');
       setSpecialPrice('');
       setNotes('');
+      if (isDealScheduleType(targetScheduleType)) {
+        setDealItems([{ ...createBlankDealItem(), selectedDays: [day] }]);
+      }
       setVenueRuleAvailabilityMode('always');
       if (targetScheduleType === 'happy_hour') {
         setHappyHourForm(blankHappyHourForm());
@@ -2345,7 +2354,8 @@ export default function AdminMasterPage() {
     loadExistingRowsIntoScheduleForm(
       targetScheduleType,
       rows,
-      `Loaded ${venue.name ?? 'venue'} ${getScheduleTypeLabel(targetScheduleType).toLowerCase()} for ${getDayLabel(day)}. Amend it below, then save.`
+      `Loaded ${venue.name ?? 'venue'} ${getScheduleTypeLabel(targetScheduleType).toLowerCase()} for ${getDayLabel(day)}. Amend it below, then save.`,
+      targetVenueRuleKind
     );
   }
 
@@ -4431,10 +4441,36 @@ export default function AdminMasterPage() {
                                   label: `Edit ${getScheduleTypeLabel(event.scheduleType).toLowerCase()}`,
                                   type: event.scheduleType,
                                 })),
+                                getExistingScheduleRowsForEdit(
+                                  focusedOverviewVenue,
+                                  'venue_rule',
+                                  'kid'
+                                ).some((row) => row.day_of_week === summary.day)
+                                  ? {
+                                      label: 'Edit kids allowed',
+                                      type: 'venue_rule' as ScheduleType,
+                                      venueRuleKind: 'kid' as VenueRuleKind,
+                                    }
+                                  : null,
+                                getExistingScheduleRowsForEdit(
+                                  focusedOverviewVenue,
+                                  'venue_rule',
+                                  'dog'
+                                ).some((row) => row.day_of_week === summary.day)
+                                  ? {
+                                      label: 'Edit dog friendly',
+                                      type: 'venue_rule' as ScheduleType,
+                                      venueRuleKind: 'dog' as VenueRuleKind,
+                                    }
+                                  : null,
                               ].filter(
                                 (
                                   action
-                                ): action is { label: string; type: ScheduleType } => Boolean(action)
+                                ): action is {
+                                  label: string;
+                                  type: ScheduleType;
+                                  venueRuleKind?: VenueRuleKind;
+                                } => Boolean(action)
                               )
                             : [];
 
@@ -4467,7 +4503,8 @@ export default function AdminMasterPage() {
                                           ? handleEditVenueDayForType(
                                               focusedOverviewVenue,
                                               summary.day,
-                                              action.type
+                                              action.type,
+                                              action.venueRuleKind
                                             )
                                           : undefined
                                       }
@@ -4629,11 +4666,13 @@ export default function AdminMasterPage() {
               <div className="admin-surface-subtle mt-4 rounded-2xl border p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-semibold text-neutral-900">Existing data loaded</div>
+                    <div className="text-sm font-semibold text-neutral-900">
+                      Existing data for selected days
+                    </div>
                     <div className="mt-1 text-xs text-neutral-600">
                       {focusedExistingEditRows.length
-                        ? 'These are the current live rows loaded into the form as your starting point.'
-                        : 'No live rows were found for this edit type yet, so you are starting with a fresh form.'}
+                        ? 'Only rows for the selected day set are shown here and loaded into the editable area.'
+                        : 'No existing rows for selected days. Add a new item below.'}
                     </div>
                   </div>
                   <div className="admin-surface rounded-xl border px-3 py-2 text-xs text-neutral-700">

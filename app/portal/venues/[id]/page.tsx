@@ -1318,10 +1318,14 @@ export default function PortalVenueDetailPage() {
     );
     setTitle('');
     setDescription('');
-   setDealText('');
+    setDealText('');
     setSpecialPrice('');
     setNotes('');
-    setDealItems([createBlankDealItem()]);
+    setDealItems(
+      isDealScheduleType(targetScheduleType)
+        ? [{ ...createBlankDealItem(), selectedDays: [day] }]
+        : [createBlankDealItem()]
+    );
     setLoadedScheduleRowsSnapshot([]);
     setVenueRuleAvailabilityMode('always');
     setHappyHourForm(blankHappyHourForm());
@@ -2114,9 +2118,32 @@ export default function PortalVenueDetailPage() {
                           type: type as PortalScheduleType,
                         };
                       }),
+                      getPortalExistingScheduleRowsForEdit(venue, 'venue_rule', 'kid').some(
+                        (row) => row.day_of_week === summary.day
+                      )
+                        ? {
+                            label: 'Edit kids allowed',
+                            type: 'venue_rule' as PortalScheduleType,
+                            venueRuleKind: 'kid' as VenueRuleKind,
+                          }
+                        : null,
+                      getPortalExistingScheduleRowsForEdit(venue, 'venue_rule', 'dog').some(
+                        (row) => row.day_of_week === summary.day
+                      )
+                        ? {
+                            label: 'Edit dog friendly',
+                            type: 'venue_rule' as PortalScheduleType,
+                            venueRuleKind: 'dog' as VenueRuleKind,
+                          }
+                        : null,
                     ].filter(
-                      (action): action is { label: string; type: PortalScheduleType } =>
-                        Boolean(action)
+                      (
+                        action
+                      ): action is {
+                        label: string;
+                        type: PortalScheduleType;
+                        venueRuleKind?: VenueRuleKind;
+                      } => Boolean(action)
                     );
 
                     return (
@@ -2143,7 +2170,13 @@ export default function PortalVenueDetailPage() {
                               <button
                                 key={`${summary.day}-${action.type}-${actionIndex}`}
                                 type="button"
-                                onClick={() => loadDayIntoForm(summary.day, action.type)}
+                                onClick={() =>
+                                  loadDayIntoForm(
+                                    summary.day,
+                                    action.type,
+                                    action.venueRuleKind
+                                  )
+                                }
                                 className="portal-ghost-button rounded-lg border px-2.5 py-1.5 text-xs font-medium"
                               >
                                 {action.label}
@@ -2286,11 +2319,13 @@ export default function PortalVenueDetailPage() {
                   <div className="portal-surface-subtle mt-4 rounded-2xl border p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <h3 className="text-sm font-semibold text-white">Existing data loaded</h3>
+                        <h3 className="text-sm font-semibold text-white">
+                          Existing data for selected days
+                        </h3>
                         <p className="mt-1 text-xs text-white/62">
                           {currentEditRows.length
-                            ? 'These current live rows are already loaded into the form as your starting point.'
-                            : 'No live rows were found for this edit type yet, so you are starting with a fresh form.'}
+                            ? 'Only rows for the selected day set are shown here and loaded into the editable area.'
+                            : 'No existing rows for selected days. Add a new item below.'}
                         </p>
                       </div>
                       <div className="portal-surface rounded-xl border px-3 py-2 text-xs text-white/66">

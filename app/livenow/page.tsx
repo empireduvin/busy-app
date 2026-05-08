@@ -31,6 +31,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 type LiveNowFilter =
   | 'all'
   | 'happy_hour'
+  | 'specials_now'
   | 'food_deals_now'
   | 'kid_friendly_now'
   | 'dog_friendly_now'
@@ -48,15 +49,16 @@ type LiveNowRow = ReturnType<typeof buildLiveNowRow>;
 const PRIMARY_LIVE_NOW_FILTERS: Array<{ value: LiveNowFilter; label: string }> = [
   { value: 'all', label: 'All live' },
   { value: 'happy_hour', label: 'Happy hour now' },
+  { value: 'specials_now', label: 'Specials now' },
   { value: 'events', label: 'Events now' },
   { value: 'trivia', label: 'Trivia now' },
   { value: 'live_music', label: 'Live music now' },
   { value: 'sport', label: 'Sport now' },
   { value: 'starts_soon', label: 'Starting soon' },
-  { value: 'open_late', label: 'Open late' },
 ];
 
 const SECONDARY_LIVE_NOW_FILTERS: Array<{ value: LiveNowFilter; label: string }> = [
+  { value: 'open_late', label: 'Open late' },
   { value: 'food_deals_now', label: 'Food specials now' },
   { value: 'dog_friendly_now', label: 'Dog friendly' },
   { value: 'kid_friendly_now', label: 'Kid friendly' },
@@ -152,22 +154,22 @@ export default function LiveNowPage() {
         emptyLabel: 'Live now',
       },
       {
-        label: 'Happy hours now',
+        label: 'Happy hour now',
         value: liveRows.filter((row) => row.liveHappyHourRules.length > 0).length,
         sectionId: activeFilter === 'all' ? 'happy-hour-live' : 'live-matches',
-        emptyLabel: 'Happy hours now',
+        emptyLabel: 'Happy hour now',
+      },
+      {
+        label: 'Specials now',
+        value: liveRows.filter((row) => row.liveSpecialRules.length > 0).length,
+        sectionId: activeFilter === 'all' ? 'specials-live' : 'live-matches',
+        emptyLabel: 'Specials now',
       },
       {
         label: 'Events now',
         value: liveRows.filter((row) => row.liveEventRules.length > 0).length,
         sectionId: activeFilter === 'all' ? 'events-live' : 'live-matches',
         emptyLabel: 'Events now',
-      },
-      {
-        label: 'Open late',
-        value: liveRows.filter((row) => row.openLate).length,
-        sectionId: activeFilter === 'all' ? 'open-late' : 'live-matches',
-        emptyLabel: 'Open late',
       },
     ],
     [activeFilter, liveRows]
@@ -666,7 +668,6 @@ function buildLiveNowRow(venue: Venue) {
     endsSoon,
     startsSoon,
     liveSpecialRules,
-    openLate,
   });
   const urgencyScore =
     liveHappyHourRules.length * 60 +
@@ -733,6 +734,7 @@ function buildLiveNowRow(venue: Venue) {
 function matchesLiveFilter(row: LiveNowRow, filter: LiveNowFilter) {
   if (filter === 'all') return true;
   if (filter === 'happy_hour') return row.liveHappyHourRules.length > 0;
+  if (filter === 'specials_now') return row.liveSpecialRules.length > 0;
   if (filter === 'food_deals_now') return row.liveSpecialRules.length > 0;
   if (filter === 'kid_friendly_now') return Boolean(row.liveKidRule);
   if (filter === 'dog_friendly_now') return Boolean(row.liveDogRule);
@@ -814,6 +816,12 @@ function buildLiveSections(rows: LiveNowRow[]) {
       rows: take((row) => row.liveHappyHourRules.length > 0),
     },
     {
+      id: 'specials-live',
+      title: 'Specials now',
+      description: 'Active daily, lunch, food, and promotional offers running right now.',
+      rows: take((row) => row.liveSpecialRules.length > 0),
+    },
+    {
       id: 'events-live',
       title: 'Events now',
       description: 'Trivia, music, sport, comedy, and social reasons already underway.',
@@ -825,18 +833,6 @@ function buildLiveSections(rows: LiveNowRow[]) {
       description: 'Worth moving for in the next 30 minutes.',
       rows: take((row) => row.startsSoon),
     },
-    {
-      id: 'open-late',
-      title: 'Open late',
-      description: 'Live reasons that carry into the evening.',
-      rows: take((row) => row.openLate),
-    },
-    {
-      id: 'food-specials-now',
-      title: 'Food specials now',
-      description: 'Active food specials, kept behind drinks and social moments.',
-      rows: take((row) => row.liveSpecialRules.length > 0),
-    },
   ].filter((section) => section.rows.length > 0);
 }
 
@@ -847,7 +843,6 @@ function getLiveReasonPriority({
   endsSoon,
   startsSoon,
   liveSpecialRules,
-  openLate,
 }: {
   liveHappyHourRules: VenueScheduleRule[];
   liveEventRules: VenueScheduleRule[];
@@ -855,21 +850,19 @@ function getLiveReasonPriority({
   endsSoon: boolean;
   startsSoon: boolean;
   liveSpecialRules: VenueScheduleRule[];
-  openLate: boolean;
 }) {
   if (liveHappyHourRules.length > 0) return 1;
-  if (liveEventRules.length > 0) return 2;
+  if (liveSpecialRules.length > 0) return 2;
+  if (liveEventRules.length > 0) return 3;
   if (
     liveEventTypes.includes('sport') ||
     liveEventTypes.includes('live_music') ||
     liveEventTypes.includes('trivia')
   ) {
-    return 3;
+    return 4;
   }
-  if (startsSoon) return 4;
-  if (endsSoon) return 5;
-  if (liveSpecialRules.length > 0) return 6;
-  if (openLate) return 7;
+  if (startsSoon) return 5;
+  if (endsSoon) return 6;
   return 8;
 }
 
@@ -915,6 +908,7 @@ function collectRuleSearchParts(rule: VenueScheduleRule) {
 
 function getFilterHeading(filter: LiveNowFilter) {
   if (filter === 'happy_hour') return 'Happy hour now';
+  if (filter === 'specials_now') return 'Specials now';
   if (filter === 'food_deals_now') return 'Food specials now';
   if (filter === 'kid_friendly_now') return 'Kid friendly';
   if (filter === 'dog_friendly_now') return 'Dog friendly';
@@ -929,6 +923,7 @@ function getFilterHeading(filter: LiveNowFilter) {
 }
 
 function getFilterDescription(filter: LiveNowFilter) {
+  if (filter === 'specials_now') return 'Active daily, lunch, food, and promotional offers running right now.';
   if (filter === 'food_deals_now') return 'Active food specials that are strong enough to influence a venue choice.';
   if (filter === 'dog_friendly_now' || filter === 'kid_friendly_now' || filter === 'byo') {
     return 'Secondary venue attributes layered onto the live-now list.';
@@ -1016,10 +1011,6 @@ function buildReasonToCare(row: LiveNowRow) {
 
   if (firstSpecialRule) {
     return getCompactSpecialLine(firstSpecialRule);
-  }
-
-  if (row.openLate) {
-    return 'Open late tonight';
   }
 
   return 'Something is happening now';
