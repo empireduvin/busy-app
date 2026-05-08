@@ -427,6 +427,15 @@ function getExistingHours(venue: PortalVenueDetail | null, scheduleType: PortalS
   return null;
 }
 
+function isHoursBackedScheduleType(scheduleType: PortalScheduleType) {
+  return (
+    scheduleType === 'opening' ||
+    scheduleType === 'kitchen' ||
+    scheduleType === 'happy_hour' ||
+    scheduleType === 'bottle_shop'
+  );
+}
+
 function createBlankDealItem(): DealScheduleItemDraft {
   return {
     id: `deal-item-${Math.random().toString(36).slice(2, 10)}`,
@@ -501,24 +510,9 @@ function getPortalExistingScheduleRowsForEdit(
     }))
     .filter((row) => row.start_time && row.end_time);
 
-  if (liveRules.length > 0) {
-    const filtered =
-      scheduleType === 'venue_rule'
-        ? liveRules.filter(
-            (row) =>
-              (normalizeScheduleRuleDetailJson(row.detail_json)?.rule_kind ?? 'kid') ===
-              (currentVenueRuleKind ?? 'kid')
-          )
-        : liveRules;
-
-    return sortPortalExistingPreviewRows(filtered);
-  }
-
   const periods = getExistingHours(venue, scheduleType);
-  if (!periods) return [];
-
-  const rows = DAY_OPTIONS.flatMap((day) =>
-    (periods[day.value] ?? []).map((period, index) => ({
+  const hoursRows = DAY_OPTIONS.flatMap((day) =>
+    (periods?.[day.value] ?? []).map((period, index) => ({
       id: `${scheduleType}-${day.value}-${period.open}-${period.close}-${index}`,
       day_of_week: day.value,
       start_time: period.open,
@@ -532,7 +526,30 @@ function getPortalExistingScheduleRowsForEdit(
     }))
   );
 
-  return sortPortalExistingPreviewRows(rows);
+  if (scheduleType === 'venue_rule') {
+    return sortPortalExistingPreviewRows(
+      liveRules.filter(
+        (row) =>
+          (normalizeScheduleRuleDetailJson(row.detail_json)?.rule_kind ?? 'kid') ===
+          (currentVenueRuleKind ?? 'kid')
+      )
+    );
+  }
+
+  if (!isHoursBackedScheduleType(scheduleType)) {
+    return sortPortalExistingPreviewRows(liveRules);
+  }
+
+  if (!liveRules.length) {
+    return sortPortalExistingPreviewRows(hoursRows);
+  }
+
+  const ruleDays = new Set(liveRules.map((row) => row.day_of_week));
+  const fallbackRowsForMissingDays = hoursRows.filter(
+    (row) => !ruleDays.has(row.day_of_week)
+  );
+
+  return sortPortalExistingPreviewRows([...liveRules, ...fallbackRowsForMissingDays]);
 }
 
 function buildPortalVenueDaySummaries(venue: PortalVenueDetail): PortalVenueDaySummary[] {

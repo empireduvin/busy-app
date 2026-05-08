@@ -522,10 +522,19 @@ function getNormalizedVenueHoursForScheduleType(
       }))
       .filter((row) => row.start_time && row.end_time);
 
-    return buildHoursJsonFromRows(liveBottleShopRows);
+    return buildHoursJsonFromRows(liveBottleShopRows) ?? venue.bottle_shop_hours ?? null;
   }
 
   return null;
+}
+
+function isHoursBackedScheduleType(currentScheduleType: ScheduleType) {
+  return (
+    currentScheduleType === 'opening' ||
+    currentScheduleType === 'kitchen' ||
+    currentScheduleType === 'happy_hour' ||
+    currentScheduleType === 'bottle_shop'
+  );
 }
 
 function buildExistingPreviewRowsFromHours(
@@ -616,15 +625,24 @@ function getExistingSchedulePreviewRows(
     }))
     .filter((row) => row.start_time && row.end_time);
 
-  if (liveRules.length > 0) {
+  const hoursRows = buildExistingPreviewRowsFromHours(
+    getNormalizedVenueHoursForScheduleType(venue, currentScheduleType)
+  );
+
+  if (!isHoursBackedScheduleType(currentScheduleType)) {
     return sortExistingPreviewRows(liveRules);
   }
 
-  return sortExistingPreviewRows(
-    buildExistingPreviewRowsFromHours(
-      getNormalizedVenueHoursForScheduleType(venue, currentScheduleType)
-    )
+  if (!liveRules.length) {
+    return sortExistingPreviewRows(hoursRows);
+  }
+
+  const ruleDays = new Set(liveRules.map((row) => row.day_of_week));
+  const fallbackRowsForMissingDays = hoursRows.filter(
+    (row) => !ruleDays.has(row.day_of_week)
   );
+
+  return sortExistingPreviewRows([...liveRules, ...fallbackRowsForMissingDays]);
 }
 
 function getExistingScheduleRowsForEdit(
