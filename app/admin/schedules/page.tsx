@@ -4707,7 +4707,9 @@ export default function AdminMasterPage() {
                   />
                   {isEventScheduleType(scheduleType) ? (
                     <div className="mt-2 text-xs text-neutral-500">
-                      Event rows only appear on the website when published details exist for that venue and day.
+                      {scheduleType === 'sport'
+                        ? 'Use Sport for a specific game or fixture. For general sport-friendly venues, update Shows sport in venue details.'
+                        : 'Event rows only appear on the website when published details exist for that venue and day.'}
                     </div>
                   ) : isVenueRuleScheduleType(scheduleType) ? (
                     <div className="mt-2 text-xs text-neutral-500">
@@ -4976,29 +4978,29 @@ export default function AdminMasterPage() {
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
                       placeholder={
-                        scheduleType === 'daily_special'
-                          ? 'e.g. Steak Night'
-                          : scheduleType === 'lunch_special'
-                            ? 'e.g. Lunch Special'
-                            : 'Optional event title'
+                        scheduleType === 'sport'
+                          ? 'e.g. State of Origin Game 1'
+                          : 'Optional event title'
                       }
                       className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium">
-                      {isEventScheduleType(scheduleType) ? 'Summary' : 'Deal text'}
+                      {scheduleType === 'sport'
+                        ? 'Sport type'
+                        : isEventScheduleType(scheduleType)
+                          ? 'Summary'
+                          : 'Deal text'}
                     </label>
                     <input
                       type="text"
                       value={dealText}
                       onChange={(e) => setDealText(e.target.value)}
                       placeholder={
-                        scheduleType === 'daily_special'
-                          ? 'e.g. Parmi + chips $20'
-                          : scheduleType === 'lunch_special'
-                            ? 'e.g. Lunch special $15'
-                            : 'Short event summary for the public card'
+                        scheduleType === 'sport'
+                          ? 'e.g. Rugby League, AFL, UFC, Football'
+                          : 'Short event summary for the public card'
                       }
                       className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                     />
@@ -5128,7 +5130,9 @@ export default function AdminMasterPage() {
                     placeholder={
                       isDealScheduleType(scheduleType)
                         ? 'Public-facing detail or context for this offer'
-                        : isEventScheduleType(scheduleType)
+                        : scheduleType === 'sport'
+                          ? 'Optional fixture detail, venue screen area, or broadcast context'
+                          : isEventScheduleType(scheduleType)
                           ? 'Optional event detail for the public card or venue page'
                           : 'Optional happy hour detail if you need more context'
                     }
@@ -5146,6 +5150,8 @@ export default function AdminMasterPage() {
                     placeholder={
                       isVenueRuleScheduleType(scheduleType)
                         ? 'Optional nuance such as Beer garden only or Front bar only'
+                        : scheduleType === 'sport'
+                          ? 'Optional notes such as Live & loud, main bar only, or sound for major games'
                         : 'Operator notes, sourcing notes, or reminders'
                     }
                     rows={3}
@@ -5392,7 +5398,7 @@ export default function AdminMasterPage() {
                 </div>
               </div>
               <div className="mb-3">
-                <label className="mb-1 block text-sm font-medium">Sport types</label>
+                <label className="mb-1 block text-sm font-medium">Venue sport types</label>
                 <input
                   type="text"
                   value={venueForm.sport_types}
@@ -5401,16 +5407,16 @@ export default function AdminMasterPage() {
                   className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                 />
                 <div className="mt-1 text-xs text-neutral-500">
-                  Only fill this in if the venue actually promotes live sport.
+                  Use this for venues that generally show sport. Use Sport event for a specific game or fixture.
                 </div>
               </div>
               <div className="mb-3">
-                <label className="mb-1 block text-sm font-medium">Sport notes</label>
+                <label className="mb-1 block text-sm font-medium">Venue sport notes</label>
                 <textarea
                   value={venueForm.sport_notes}
                   onChange={(e) => updateVenueForm('sport_notes', e.target.value)}
                   rows={2}
-                  placeholder="Optional notes like AFL only on main screen or Sound for marquee games"
+                  placeholder="Optional notes like big screen, main bar only, or sound for major games"
                   className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                 />
               </div>
@@ -5424,7 +5430,7 @@ export default function AdminMasterPage() {
                       : 'admin-ghost-button'
                   }`}
                 >
-                  <div className="font-semibold">Shows live sport</div>
+                  <div className="font-semibold">Shows sport</div>
                   <div className="mt-1 text-xs uppercase tracking-wide opacity-70">
                     {venueForm.shows_sport ? 'Yes' : 'No'}
                   </div>
@@ -5441,7 +5447,7 @@ export default function AdminMasterPage() {
                       : 'border-neutral-200 bg-neutral-50 text-neutral-400'
                   }`}
                 >
-                  <div className="font-semibold">Sport with sound</div>
+                  <div className="font-semibold">Live & loud / sound available</div>
                   <div className="mt-1 text-xs uppercase tracking-wide opacity-70">
                     {!venueForm.shows_sport && !venueForm.plays_with_sound
                       ? 'Enable sport first'

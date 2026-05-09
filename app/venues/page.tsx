@@ -205,7 +205,7 @@ const EVENT_SCHEDULE_TYPES: ScheduleType[] = [
 const EVENT_FILTER_OPTIONS: Array<{ type: ScheduleType; label: string }> = [
   { type: 'trivia', label: '\u2753 Trivia' },
   { type: 'live_music', label: '\u{1F3B8} Live Music' },
-  { type: 'sport', label: '\u{1F3DF}\uFE0F Sport Events' },
+  { type: 'sport', label: '\u{1F3DF}\uFE0F Sport fixture' },
   { type: 'comedy', label: '\u{1F602} Comedy' },
   { type: 'karaoke', label: '\u{1F3A4} Karaoke' },
   { type: 'dj', label: '\u{1F3A7} DJ' },
@@ -1915,7 +1915,7 @@ function VenuesPageContent() {
                             {normalizeBooleanFlag(v.shows_sport) ? <Pill>🏈 Sport</Pill> : null}
                             {normalizeBooleanFlag(v.shows_sport) &&
                             normalizeBooleanFlag(v.plays_with_sound) ? (
-                              <Pill>🏈 Sound</Pill>
+                              <Pill>Live & loud</Pill>
                             ) : null}
                             {v.byo_allowed ? <Pill>🍾 BYO</Pill> : null}
                           </div>
@@ -2665,7 +2665,7 @@ function getScheduleTypeDisplayLabel(type: ScheduleType): string {
     venue_rule: 'Venue Rule',
     trivia: '\u2753 Trivia',
     live_music: '\u{1F3B8} Live Music',
-    sport: '\u{1F3DF}\uFE0F Sport Events',
+    sport: '\u{1F3DF}\uFE0F Sport fixture',
     comedy: '\u{1F602} Comedy',
     karaoke: '\u{1F3A4} Karaoke',
     dj: '\u{1F3A7} DJ',
@@ -2684,7 +2684,7 @@ function getScheduleTypeBaseLabel(type: ScheduleType): string {
     venue_rule: 'Venue Rule',
     trivia: 'Trivia',
     live_music: 'Live Music',
-    sport: 'Sport Events',
+    sport: 'Sport fixture',
     comedy: 'Comedy',
     karaoke: 'Karaoke',
     dj: 'DJ',

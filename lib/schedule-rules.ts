@@ -115,7 +115,7 @@ export const SCHEDULE_TYPE_PICKER_GROUPS: ScheduleTypePickerGroup[] = [
     options: [
       { id: 'trivia', label: 'Trivia', scheduleType: 'trivia' },
       { id: 'live_music', label: 'Live music', scheduleType: 'live_music' },
-      { id: 'sport', label: 'Sport', scheduleType: 'sport' },
+      { id: 'sport', label: 'Sport fixture', scheduleType: 'sport' },
       { id: 'comedy', label: 'Comedy', scheduleType: 'comedy' },
       { id: 'karaoke', label: 'Karaoke', scheduleType: 'karaoke' },
       { id: 'dj', label: 'DJ', scheduleType: 'dj' },

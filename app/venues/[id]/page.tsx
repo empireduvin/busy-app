@@ -148,6 +148,7 @@ function buildVenueProfileNotes(
   const notes: Array<{ label: string; value: string }> = [];
 
   const sportParts = [
+    normalizeBooleanFlag(venue.plays_with_sound) ? 'Live & loud' : null,
     venue.sport_types?.trim() || null,
     venue.sport_notes?.trim() || null,
   ].filter(Boolean) as string[];
@@ -824,6 +825,10 @@ export default function PublicVenueDetailPage() {
                 </div>
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {normalizeBooleanFlag(venue.shows_sport) ? <StatusPill>Sport</StatusPill> : null}
+                  {normalizeBooleanFlag(venue.shows_sport) &&
+                  normalizeBooleanFlag(venue.plays_with_sound) ? (
+                    <StatusPill>Live & loud</StatusPill>
+                  ) : null}
                   {normalizeBooleanFlag(venue.byo_allowed) ? <StatusPill>BYO</StatusPill> : null}
                   {venueRuleSignals.map((signal) => (
                     <StatusPill key={signal}>{signal}</StatusPill>

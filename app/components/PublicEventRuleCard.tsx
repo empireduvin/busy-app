@@ -17,7 +17,7 @@ const EVENT_LABELS: Record<
 > = {
   trivia: 'Trivia',
   live_music: 'Live Music',
-  sport: 'Sport Event',
+  sport: 'Sport fixture',
   comedy: 'Comedy',
   karaoke: 'Karaoke',
   dj: 'DJ',

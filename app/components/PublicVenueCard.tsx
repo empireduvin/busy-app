@@ -42,7 +42,7 @@ export default function PublicVenueCard({
     ...(badges ?? []),
     ...(normalizeBooleanFlag(venue.shows_sport) ? ['Sport'] : []),
     ...(normalizeBooleanFlag(venue.shows_sport) && normalizeBooleanFlag(venue.plays_with_sound)
-      ? ['With sound']
+      ? ['Live & loud']
       : []),
     ...(normalizeBooleanFlag(venue.byo_allowed) ? ['BYO'] : []),
   ];
