@@ -116,25 +116,33 @@ export default function PublicVenueCard({
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,122,40,0.10),transparent_30%)]" />
 
         <div className="relative">
-          <VenuePrimaryImage venue={venue} variant="compact-card" className="mb-2" />
-          <div className="flex items-start justify-between gap-2.5">
-            <div className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-200/88">
-              {eyebrow}
+          <div className="flex items-start gap-2.5 sm:gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-200/88">
+                  {eyebrow}
+                </div>
+                {heroBadge ? <div className="shrink-0">{heroBadge}</div> : null}
+              </div>
+
+              <h2 className="mt-1 line-clamp-2 text-[20px] font-semibold leading-[1.02] tracking-tight text-white sm:mt-1.5 sm:text-[24px]">
+                {venue.name || 'Untitled venue'}
+              </h2>
+              <VenueIntentBadge venueId={venue.id} />
+
+              {summary ? <div className="mt-0.5 min-w-0 text-[13px] font-medium leading-4.5 text-white/94 sm:text-[14px]">{summary}</div> : null}
+
+              <div className="mt-0.5 min-w-0 break-words text-[11px] leading-4 text-white/68 sm:mt-1 sm:text-[12px] sm:leading-5">
+                <span>{venue.suburb ?? 'Suburb TBC'}</span>
+                {venueTypeLabel ? <span>{` | ${venueTypeLabel}`}</span> : null}
+                {details ? <span>{` | `}{details}</span> : null}
+              </div>
             </div>
-            {heroBadge ? <div className="shrink-0">{heroBadge}</div> : null}
-          </div>
-
-          <h2 className="mt-1 line-clamp-2 text-[20px] font-semibold leading-[1.02] tracking-tight text-white sm:mt-1.5 sm:text-[24px]">
-            {venue.name || 'Untitled venue'}
-          </h2>
-          <VenueIntentBadge venueId={venue.id} />
-
-          {summary ? <div className="mt-0.5 min-w-0 text-[13px] font-medium leading-4.5 text-white/94 sm:text-[14px]">{summary}</div> : null}
-
-          <div className="mt-0.5 min-w-0 break-words text-[11px] leading-4 text-white/68 sm:mt-1 sm:text-[12px] sm:leading-5">
-            <span>{venue.suburb ?? 'Suburb TBC'}</span>
-            {venueTypeLabel ? <span>{` | ${venueTypeLabel}`}</span> : null}
-            {details ? <span>{` | `}{details}</span> : null}
+            <VenuePrimaryImage
+              venue={venue}
+              variant="compact-card"
+              className="w-[92px] shrink-0 sm:w-[110px]"
+            />
           </div>
 
           <div className="mt-1.5">
@@ -176,7 +184,6 @@ export default function PublicVenueCard({
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,122,40,0.10),transparent_32%)]" />
 
       <div className="relative">
-        <VenuePrimaryImage venue={venue} variant="card" className="mb-3 sm:mb-4" />
         <div className="flex items-start justify-between gap-3">
           <div className="inline-flex items-center gap-2">
             <span className="h-1.5 w-1.5 rounded-full bg-orange-400 shadow-[0_0_10px_rgba(255,138,61,0.75)]" />
@@ -187,49 +194,59 @@ export default function PublicVenueCard({
           {heroBadge ? <div className="shrink-0">{heroBadge}</div> : null}
         </div>
 
-        <div className="mt-2.5 flex flex-wrap items-start justify-between gap-2.5 sm:mt-3 sm:gap-3">
+        <div className="mt-2.5 flex items-start gap-3 sm:mt-3 sm:gap-4">
           <div className="min-w-0 flex-1">
-            <h2
-              className={[
-                compact ? 'text-[20px] sm:text-[26px]' : 'text-[24px] sm:text-3xl',
-                'break-words font-semibold leading-[1.04] text-white',
-              ].join(' ')}
-            >
-              {venue.name || 'Untitled venue'}
-            </h2>
-            <VenueIntentBadge venueId={venue.id} />
-            <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px] text-white/58 sm:mt-2 sm:gap-2 sm:text-xs sm:text-white/72">
-              {venue.suburb ? <MetaPill>{venue.suburb.toUpperCase()}</MetaPill> : null}
-              {venueTypeLabel ? <MetaPill>{venueTypeLabel.toUpperCase()}</MetaPill> : null}
+            <div className="flex flex-wrap items-start justify-between gap-2.5 sm:gap-3">
+              <div className="min-w-0 flex-1">
+                <h2
+                  className={[
+                    compact ? 'text-[20px] sm:text-[26px]' : 'text-[24px] sm:text-3xl',
+                    'break-words font-semibold leading-[1.04] text-white',
+                  ].join(' ')}
+                >
+                  {venue.name || 'Untitled venue'}
+                </h2>
+                <VenueIntentBadge venueId={venue.id} />
+                <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px] text-white/58 sm:mt-2 sm:gap-2 sm:text-xs sm:text-white/72">
+                  {venue.suburb ? <MetaPill>{venue.suburb.toUpperCase()}</MetaPill> : null}
+                  {venueTypeLabel ? <MetaPill>{venueTypeLabel.toUpperCase()}</MetaPill> : null}
+                </div>
+              </div>
+
+              {venue.google_rating ? (
+                <div className="rounded-full border border-white/8 bg-black/18 px-2 py-0.5 text-[10px] text-white/46 sm:border-white/10 sm:bg-black/25 sm:px-2.5 sm:py-1 sm:text-[11px] sm:text-white/68">
+                  Star {venue.google_rating.toFixed(1)}
+                </div>
+              ) : null}
             </div>
+
+            {venue.address ? (
+              <div className="mt-2 flex min-w-0 items-start gap-2 text-[12px] text-white/46 sm:mt-3 sm:text-sm sm:text-white/56">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-400/80" />
+                <span className="min-w-0 break-words">{venue.address}</span>
+              </div>
+            ) : null}
+
+            {summary ? <div className="mt-3.5 sm:mt-4">{summary}</div> : null}
+
+            {!compact && visibleBadges.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-4 sm:gap-2">
+              {visibleBadges.map((badge) => (
+                <MetaPill key={badge}>{badge}</MetaPill>
+              ))}
+              {hiddenBadgeCount > 0 ? <MetaPill>+{hiddenBadgeCount} more</MetaPill> : null}
+              </div>
+            ) : null}
+
+            {details ? <div className="mt-3.5 space-y-2.5 sm:mt-4 sm:space-y-3">{details}</div> : null}
           </div>
 
-          {venue.google_rating ? (
-            <div className="rounded-full border border-white/8 bg-black/18 px-2 py-0.5 text-[10px] text-white/46 sm:border-white/10 sm:bg-black/25 sm:px-2.5 sm:py-1 sm:text-[11px] sm:text-white/68">
-              Star {venue.google_rating.toFixed(1)}
-            </div>
-          ) : null}
+          <VenuePrimaryImage
+            venue={venue}
+            variant="card"
+            className="w-[104px] shrink-0 sm:w-[150px] lg:w-[168px]"
+          />
         </div>
-
-        {venue.address ? (
-          <div className="mt-2 flex min-w-0 items-start gap-2 text-[12px] text-white/46 sm:mt-3 sm:text-sm sm:text-white/56">
-            <span className="h-1.5 w-1.5 rounded-full bg-orange-400/80" />
-            <span className="min-w-0 break-words">{venue.address}</span>
-          </div>
-        ) : null}
-
-        {summary ? <div className="mt-3.5 sm:mt-4">{summary}</div> : null}
-
-        {!compact && visibleBadges.length > 0 ? (
-          <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-4 sm:gap-2">
-          {visibleBadges.map((badge) => (
-            <MetaPill key={badge}>{badge}</MetaPill>
-          ))}
-          {hiddenBadgeCount > 0 ? <MetaPill>+{hiddenBadgeCount} more</MetaPill> : null}
-          </div>
-        ) : null}
-
-        {details ? <div className="mt-3.5 space-y-2.5 sm:mt-4 sm:space-y-3">{details}</div> : null}
 
         <div className="mt-3.5 grid grid-cols-2 gap-2 text-sm sm:gap-2.5">
           <a

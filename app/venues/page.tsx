@@ -1,6 +1,7 @@
 'use client';
 
 import SaveVenueButton from '@/app/components/SaveVenueButton';
+import VenuePrimaryImage from '@/app/components/VenuePrimaryImage';
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import { isBottleShopVenueType } from '@/lib/venue-type-rules';
 import {
@@ -1842,7 +1843,8 @@ function VenuesPageContent() {
                         key={v.id}
                         className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5"
                       >
-                        <div className="space-y-2">
+                        <div className="flex items-start gap-3 sm:gap-4">
+                          <div className="min-w-0 flex-1 space-y-2">
                           <div className="text-[28px] font-semibold leading-tight tracking-tight sm:text-[30px]">
                             {v.name ?? 'Unnamed venue'}
                           </div>
@@ -1947,6 +1949,13 @@ function VenuesPageContent() {
                               ))}
                             </div>
                           ) : null}
+                          </div>
+
+                          <VenuePrimaryImage
+                            venue={v}
+                            variant="card"
+                            className="w-[96px] shrink-0 sm:w-[138px] lg:w-[156px]"
+                          />
                         </div>
 
                         <div className="mt-4">
