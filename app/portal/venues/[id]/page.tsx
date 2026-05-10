@@ -695,6 +695,7 @@ export default function PortalVenueDetailPage() {
   const [role, setRole] = useState<string | null>(null);
   const [venueForm, setVenueForm] = useState<VenueFormState>(blankVenueForm());
   const [savingVenue, setSavingVenue] = useState(false);
+  const [uploadingVenueImage, setUploadingVenueImage] = useState(false);
   const [venueSaveMessage, setVenueSaveMessage] = useState<string | null>(null);
   const [venueSaveError, setVenueSaveError] = useState<string | null>(null);
   const [portalMode, setPortalMode] = useState<PortalEditorMode>('overview');
@@ -968,6 +969,67 @@ export default function PortalVenueDetailPage() {
 
   function updateVenueForm<K extends keyof VenueFormState>(field: K, value: VenueFormState[K]) {
     setVenueForm((current) => updateVenueFlags(current, field, value));
+  }
+
+  async function handleUploadPrimaryImage(file: File | null) {
+    setVenueSaveMessage(null);
+    setVenueSaveError(null);
+
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setVenueSaveError('Upload a JPEG, PNG, or WebP image.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setVenueSaveError('Image must be 5MB or smaller.');
+      return;
+    }
+
+    try {
+      setUploadingVenueImage(true);
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+      if (error) throw error;
+      if (!session?.access_token) {
+        throw new Error('You must be signed in to upload an image.');
+      }
+
+      const formData = new FormData();
+      formData.append('venue_id', venueId);
+      formData.append('file', file);
+
+      const response = await fetch('/api/venue-images/upload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: formData,
+      });
+      const json = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        publicUrl?: string;
+      };
+
+      if (!response.ok || json.ok === false || !json.publicUrl) {
+        throw new Error(json.error || `Upload failed with status ${response.status}`);
+      }
+
+      setVenueForm((current) => ({
+        ...current,
+        primary_image_url: json.publicUrl ?? '',
+        primary_image_source: 'uploaded',
+      }));
+      setVenueSaveMessage('Image uploaded. Save venue details to keep it as the primary image.');
+    } catch (error) {
+      setVenueSaveError(error instanceof Error ? error.message : 'Image upload failed.');
+    } finally {
+      setUploadingVenueImage(false);
+    }
   }
 
   function appendActivity(action: string, details: string) {
@@ -2457,6 +2519,28 @@ export default function PortalVenueDetailPage() {
                           <p className="mt-1 text-xs leading-5 text-white/62">
                             Use a venue exterior, interior, bar, or atmosphere image where possible. Avoid food-only images unless it is the best available image.
                           </p>
+                          <div className="mt-3 rounded-xl border border-dashed border-white/15 bg-black/20 px-3 py-3">
+                            <label className="mb-1 block text-sm font-medium text-white/85">Upload image file</label>
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              disabled={uploadingVenueImage}
+                              onChange={(event) => {
+                                const file = event.target.files?.[0] ?? null;
+                                void handleUploadPrimaryImage(file);
+                                event.currentTarget.value = '';
+                              }}
+                              className="block w-full text-sm text-white/70 file:mr-3 file:rounded-lg file:border-0 file:bg-orange-500 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-black disabled:cursor-not-allowed disabled:opacity-60"
+                            />
+                            <div className="mt-2 text-xs text-white/50">
+                              JPEG, PNG, or WebP. Max 5MB. Upload sets the URL below; save venue details to keep it.
+                            </div>
+                            {uploadingVenueImage ? (
+                              <div className="mt-2 text-xs font-medium text-orange-200">
+                                Uploading image...
+                              </div>
+                            ) : null}
+                          </div>
                           <div className="mt-3 grid gap-3 md:grid-cols-2">
                             <div className="md:col-span-2"><label className="mb-1 block text-sm font-medium text-white/85">Primary image URL</label><input type="url" value={venueForm.primary_image_url} onChange={(event) => updateVenueForm('primary_image_url', event.target.value)} placeholder="https://..." className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
                             <div><label className="mb-1 block text-sm font-medium text-white/85">Image source</label><input type="text" value={venueForm.primary_image_source} onChange={(event) => updateVenueForm('primary_image_source', event.target.value)} placeholder="e.g. Venue website, Google, Instagram" className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>

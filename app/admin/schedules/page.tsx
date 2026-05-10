@@ -1517,6 +1517,7 @@ export default function AdminMasterPage() {
   const [remoteActivityLogEnabled, setRemoteActivityLogEnabled] = useState(false);
   const [venueForm, setVenueForm] = useState<VenueFormState>(blankVenueForm());
   const [savingVenue, setSavingVenue] = useState(false);
+  const [uploadingVenueImage, setUploadingVenueImage] = useState(false);
   const [venueMessage, setVenueMessage] = useState<string | null>(null);
   const [venueErrorMessage, setVenueErrorMessage] = useState<string | null>(null);
   const [venueAccessRows, setVenueAccessRows] = useState<VenueAccessEntry[]>([]);
@@ -2452,6 +2453,74 @@ export default function AdminMasterPage() {
 
       return next;
     });
+  }
+
+  async function handleUploadPrimaryImage(file: File | null) {
+    setVenueMessage(null);
+    setVenueErrorMessage(null);
+
+    if (!file) return;
+
+    if (!venueForm.id) {
+      setVenueErrorMessage('Save the venue before uploading an image.');
+      return;
+    }
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setVenueErrorMessage('Upload a JPEG, PNG, or WebP image.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setVenueErrorMessage('Image must be 5MB or smaller.');
+      return;
+    }
+
+    try {
+      setUploadingVenueImage(true);
+      const client = requireSupabaseClient();
+      const {
+        data: { session },
+        error,
+      } = await client.auth.getSession();
+
+      if (error) throw error;
+      if (!session?.access_token) {
+        throw new Error('You must be signed in as an admin to upload an image.');
+      }
+
+      const formData = new FormData();
+      formData.append('venue_id', venueForm.id);
+      formData.append('file', file);
+
+      const response = await fetch('/api/venue-images/upload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: formData,
+      });
+      const json = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        publicUrl?: string;
+      };
+
+      if (!response.ok || json.ok === false || !json.publicUrl) {
+        throw new Error(json.error || `Upload failed with status ${response.status}`);
+      }
+
+      setVenueForm((current) => ({
+        ...current,
+        primary_image_url: json.publicUrl ?? '',
+        primary_image_source: 'uploaded',
+      }));
+      setVenueMessage('Image uploaded. Save venue details to keep it as the primary image.');
+    } catch (error) {
+      setVenueErrorMessage(error instanceof Error ? error.message : 'Image upload failed.');
+    } finally {
+      setUploadingVenueImage(false);
+    }
   }
 
   function resetVenueForm() {
@@ -5572,6 +5641,30 @@ export default function AdminMasterPage() {
                     <div className="text-sm font-semibold text-neutral-900">Primary image</div>
                     <div className="mt-1 text-xs leading-5 text-neutral-600">
                       Use a venue exterior, interior, bar, or atmosphere image where possible. Avoid food-only images unless it is the best available image.
+                    </div>
+                    <div className="mt-3 rounded-xl border border-dashed border-neutral-300 bg-white px-3 py-3">
+                      <label className="mb-1 block text-sm font-medium">Upload image file</label>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        disabled={uploadingVenueImage || !venueForm.id}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null;
+                          void handleUploadPrimaryImage(file);
+                          e.currentTarget.value = '';
+                        }}
+                        className="block w-full text-sm text-neutral-700 file:mr-3 file:rounded-lg file:border-0 file:bg-neutral-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                      <div className="mt-2 text-xs text-neutral-500">
+                        {venueForm.id
+                          ? 'JPEG, PNG, or WebP. Max 5MB. Upload sets the URL below; save venue details to keep it.'
+                          : 'Save the venue before uploading an image.'}
+                      </div>
+                      {uploadingVenueImage ? (
+                        <div className="mt-2 text-xs font-medium text-orange-700">
+                          Uploading image...
+                        </div>
+                      ) : null}
                     </div>
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
                       <div className="md:col-span-2">
