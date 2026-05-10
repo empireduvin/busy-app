@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { VenueIntentBadge } from '@/app/components/VenueIntentButtons';
+import VenuePrimaryImage from '@/app/components/VenuePrimaryImage';
 import {
   buildPublicVenueHref,
   getVenueTypeLabel,
@@ -115,6 +116,7 @@ export default function PublicVenueCard({
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,122,40,0.10),transparent_30%)]" />
 
         <div className="relative">
+          <VenuePrimaryImage venue={venue} variant="compact-card" className="mb-2" />
           <div className="flex items-start justify-between gap-2.5">
             <div className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-200/88">
               {eyebrow}
@@ -174,6 +176,7 @@ export default function PublicVenueCard({
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,122,40,0.10),transparent_32%)]" />
 
       <div className="relative">
+        <VenuePrimaryImage venue={venue} variant="card" className="mb-3 sm:mb-4" />
         <div className="flex items-start justify-between gap-3">
           <div className="inline-flex items-center gap-2">
             <span className="h-1.5 w-1.5 rounded-full bg-orange-400 shadow-[0_0_10px_rgba(255,138,61,0.75)]" />

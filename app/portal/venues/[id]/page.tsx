@@ -4,6 +4,7 @@ import DealScheduleItemsEditor, {
   type DealScheduleItemDraft,
 } from '@/app/components/DealScheduleItemsEditor';
 import { GroupedScheduleTypeSelector } from '@/app/components/GroupedScheduleTypeSelector';
+import VenuePrimaryImage from '@/app/components/VenuePrimaryImage';
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import { buildPublicVenueHref } from '@/lib/public-venue-discovery';
 import {
@@ -92,6 +93,10 @@ type PortalVenueDetail = {
   phone?: string | null;
   website_url?: string | null;
   instagram_url?: string | null;
+  primary_image_url?: string | null;
+  primary_image_source?: string | null;
+  primary_image_attribution?: string | null;
+  primary_image_alt?: string | null;
   shows_sport?: boolean | null;
   plays_with_sound?: boolean | null;
   sport_types?: string | null;
@@ -151,6 +156,10 @@ type VenueFormState = {
   phone: string;
   website_url: string;
   instagram_url: string;
+  primary_image_url: string;
+  primary_image_source: string;
+  primary_image_attribution: string;
+  primary_image_alt: string;
   shows_sport: boolean;
   plays_with_sound: boolean;
   sport_types: string;
@@ -177,6 +186,10 @@ function blankVenueForm(): VenueFormState {
     phone: '',
     website_url: '',
     instagram_url: '',
+    primary_image_url: '',
+    primary_image_source: '',
+    primary_image_attribution: '',
+    primary_image_alt: '',
     shows_sport: false,
     plays_with_sound: false,
     sport_types: '',
@@ -247,6 +260,15 @@ function getVenueTypeLabel(venue: PortalVenueDetail | null) {
   const relation = venue?.venue_types;
   if (Array.isArray(relation)) return relation[0]?.label ?? formatVenueType(relation[0]?.slug) ?? 'Venue';
   return relation?.label ?? formatVenueType(relation?.slug) ?? 'Venue';
+}
+
+function isMissingPrimaryImageColumnError(error: { message?: string } | null) {
+  const message = error?.message?.toLowerCase() ?? '';
+  return (
+    message.includes('column') &&
+    message.includes('primary_image_') &&
+    message.includes('does not exist')
+  );
 }
 
 function formatPortalTimestamp(value: string) {
@@ -781,13 +803,24 @@ export default function PortalVenueDetailPage() {
       }
       return;
     }
-    const { data: venueRow, error: venueError } = await supabase
+    let { data: venueRow, error: venueError } = await supabase
       .from('venues')
       .select(
-        'id, name, suburb, venue_type_id, updated_at, address, phone, website_url, instagram_url, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours, kitchen_hours, happy_hour_hours, venue_types(label, slug), venue_schedule_rules(id, venue_id, schedule_type, day_of_week, start_time, end_time, sort_order, title, description, deal_text, notes, detail_json, is_active, status)'
+        'id, name, suburb, venue_type_id, updated_at, address, phone, website_url, instagram_url, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours, kitchen_hours, happy_hour_hours, venue_types(label, slug), venue_schedule_rules(id, venue_id, schedule_type, day_of_week, start_time, end_time, sort_order, title, description, deal_text, notes, detail_json, is_active, status)'
       )
       .eq('id', venueId)
       .maybeSingle();
+    if (isMissingPrimaryImageColumnError(venueError)) {
+      const fallback = await supabase
+        .from('venues')
+        .select(
+          'id, name, suburb, venue_type_id, updated_at, address, phone, website_url, instagram_url, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours, kitchen_hours, happy_hour_hours, venue_types(label, slug), venue_schedule_rules(id, venue_id, schedule_type, day_of_week, start_time, end_time, sort_order, title, description, deal_text, notes, detail_json, is_active, status)'
+        )
+        .eq('id', venueId)
+        .maybeSingle();
+      venueRow = fallback.data as typeof venueRow;
+      venueError = fallback.error;
+    }
     if (venueError) {
       setErrorMessage(venueError.message);
       if (!background) {
@@ -812,6 +845,10 @@ export default function PortalVenueDetailPage() {
       phone: nextVenue.phone ?? '',
       website_url: nextVenue.website_url ?? '',
       instagram_url: nextVenue.instagram_url ?? '',
+      primary_image_url: nextVenue.primary_image_url ?? '',
+      primary_image_source: nextVenue.primary_image_source ?? '',
+      primary_image_attribution: nextVenue.primary_image_attribution ?? '',
+      primary_image_alt: nextVenue.primary_image_alt ?? '',
       shows_sport: normalizeBooleanFlag(nextVenue.shows_sport),
       plays_with_sound: normalizeBooleanFlag(nextVenue.plays_with_sound),
       sport_types: nextVenue.sport_types ?? '',
@@ -1416,6 +1453,20 @@ export default function PortalVenueDetailPage() {
           website_url: String(result.venue?.website_url ?? current.website_url ?? ''),
           instagram_url: String(
             result.venue?.instagram_url ?? current.instagram_url ?? ''
+          ),
+          primary_image_url: String(
+            result.venue?.primary_image_url ?? current.primary_image_url ?? ''
+          ),
+          primary_image_source: String(
+            result.venue?.primary_image_source ?? current.primary_image_source ?? ''
+          ),
+          primary_image_attribution: String(
+            result.venue?.primary_image_attribution ??
+              current.primary_image_attribution ??
+              ''
+          ),
+          primary_image_alt: String(
+            result.venue?.primary_image_alt ?? current.primary_image_alt ?? ''
           ),
           shows_sport:
             result.venue?.shows_sport != null
@@ -2333,6 +2384,46 @@ export default function PortalVenueDetailPage() {
                     <div><label className="mb-1 block text-sm font-medium text-white/85">Phone</label><input type="text" value={venueForm.phone} onChange={(event) => updateVenueForm('phone', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
                     <div><label className="mb-1 block text-sm font-medium text-white/85">Website</label><input type="text" value={venueForm.website_url} onChange={(event) => updateVenueForm('website_url', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
                     <div><label className="mb-1 block text-sm font-medium text-white/85">Instagram</label><input type="text" value={venueForm.instagram_url} onChange={(event) => updateVenueForm('instagram_url', event.target.value)} placeholder="@venuehandle or https://instagram.com/..." className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                    <div className="md:col-span-2 rounded-2xl border border-white/10 bg-black/18 p-3">
+                      <div className="grid gap-3 md:grid-cols-[14rem_1fr]">
+                        <VenuePrimaryImage
+                          venue={{
+                            name: venueForm.name,
+                            primary_image_url: venueForm.primary_image_url,
+                            primary_image_alt: venueForm.primary_image_alt,
+                            primary_image_attribution: venueForm.primary_image_attribution,
+                          }}
+                          variant="preview"
+                        />
+                        <div>
+                          <div className="text-sm font-semibold text-white">Primary image</div>
+                          <p className="mt-1 text-xs leading-5 text-white/62">
+                            Use a venue exterior, interior, bar, or atmosphere image where possible. Avoid food-only images unless it is the best available image.
+                          </p>
+                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            <div className="md:col-span-2"><label className="mb-1 block text-sm font-medium text-white/85">Primary image URL</label><input type="url" value={venueForm.primary_image_url} onChange={(event) => updateVenueForm('primary_image_url', event.target.value)} placeholder="https://..." className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                            <div><label className="mb-1 block text-sm font-medium text-white/85">Image source</label><input type="text" value={venueForm.primary_image_source} onChange={(event) => updateVenueForm('primary_image_source', event.target.value)} placeholder="e.g. Venue website, Google, Instagram" className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                            <div><label className="mb-1 block text-sm font-medium text-white/85">Attribution</label><input type="text" value={venueForm.primary_image_attribution} onChange={(event) => updateVenueForm('primary_image_attribution', event.target.value)} placeholder="Optional credit" className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                            <div className="md:col-span-2"><label className="mb-1 block text-sm font-medium text-white/85">Alt text</label><input type="text" value={venueForm.primary_image_alt} onChange={(event) => updateVenueForm('primary_image_alt', event.target.value)} placeholder="e.g. Interior bar at The Bank Hotel" className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setVenueForm((current) => ({
+                                ...current,
+                                primary_image_url: '',
+                                primary_image_source: '',
+                                primary_image_attribution: '',
+                                primary_image_alt: '',
+                              }))
+                            }
+                            className="portal-ghost-button mt-3 rounded-xl border px-3 py-2 text-sm font-semibold"
+                          >
+                            Remove image
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                     <div>
                       <label className="mb-1 block text-sm font-medium text-white/85">Venue sport types</label>
                       <input type="text" value={venueForm.sport_types} onChange={(event) => updateVenueForm('sport_types', event.target.value)} placeholder="e.g. AFL, NRL, UFC" className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" />

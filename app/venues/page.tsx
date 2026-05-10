@@ -123,6 +123,10 @@ type Venue = {
   instagram_url: string | null;
   booking_url: string | null;
   google_maps_uri: string | null;
+  primary_image_url: string | null;
+  primary_image_source: string | null;
+  primary_image_attribution: string | null;
+  primary_image_alt: string | null;
 
   google_rating: number | null;
   google_user_rating_count: number | null;

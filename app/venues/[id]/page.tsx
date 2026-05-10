@@ -6,6 +6,7 @@ import PublicHappyHourRuleCard from '@/app/components/PublicHappyHourRuleCard';
 import SaveVenueButton from '@/app/components/SaveVenueButton';
 import TodayHoursSummary from '@/app/components/TodayHoursSummary';
 import VenueIntentButtons, { VenueIntentBadge } from '@/app/components/VenueIntentButtons';
+import VenuePrimaryImage from '@/app/components/VenuePrimaryImage';
 import WeeklyTimelineChart from '@/app/components/WeeklyTimelineChart';
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import {
@@ -498,6 +499,12 @@ export default function PublicVenueDetailPage() {
 
           <div className="mt-3.5 grid gap-3.5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.75fr)] xl:items-start">
             <div className="max-w-3xl">
+              <VenuePrimaryImage
+                venue={venue}
+                variant="detail"
+                priority
+                className="mb-4 sm:mb-5"
+              />
               <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-orange-300/80">
                 {venueTypeLabel ?? 'Venue'}
               </div>

@@ -15,7 +15,11 @@ type OpeningHours = {
 };
 
 const VENUE_SELECT =
-  'id, name, suburb, venue_type_id, status, updated_at, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, byo_allowed, byo_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours, kitchen_hours, happy_hour_hours, bottle_shop_hours, venue_schedule_rules(id, venue_id, schedule_type, day_of_week, start_time, end_time, sort_order, title, description, deal_text, notes, detail_json, is_active, status)';
+  'id, name, suburb, venue_type_id, status, updated_at, google_place_id, address, lat, lng, phone, website_url, instagram_url, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, byo_allowed, byo_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours, kitchen_hours, happy_hour_hours, bottle_shop_hours, venue_schedule_rules(id, venue_id, schedule_type, day_of_week, start_time, end_time, sort_order, title, description, deal_text, notes, detail_json, is_active, status)';
+const VENUE_SELECT_WITHOUT_PRIMARY_IMAGES = VENUE_SELECT.replace(
+  'primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, ',
+  ''
+);
 
 const VENUE_TYPE_ATTEMPTS = [
   { select: 'id, name', field: 'name' },
@@ -51,6 +55,24 @@ function formatVenueTypeId(value: string | null | undefined) {
 
 function normalizeText(value: string | null | undefined) {
   return (value ?? '').toLowerCase().replace(/[_-]/g, ' ').trim();
+}
+
+function isMissingPrimaryImageColumnError(error: { message?: string } | null) {
+  const message = error?.message?.toLowerCase() ?? '';
+  return (
+    message.includes('column') &&
+    message.includes('primary_image_') &&
+    message.includes('does not exist')
+  );
+}
+
+function withoutPrimaryImagePayload<T extends Record<string, unknown>>(payload: T) {
+  const next = { ...payload };
+  delete next.primary_image_url;
+  delete next.primary_image_source;
+  delete next.primary_image_attribution;
+  delete next.primary_image_alt;
+  return next;
 }
 
 function isUuid(value: string | null | undefined) {
@@ -120,9 +142,19 @@ export async function GET(request: Request) {
   try {
     const { supabase } = await requireAdminRequest(request);
 
-    const [{ data: venues, error: venuesError }] = await Promise.all([
-      supabase.from('venues').select(VENUE_SELECT).order('name', { ascending: true }),
-    ]);
+    let { data: venues, error: venuesError } = await supabase
+      .from('venues')
+      .select(VENUE_SELECT)
+      .order('name', { ascending: true });
+
+    if (isMissingPrimaryImageColumnError(venuesError)) {
+      const fallback = await supabase
+        .from('venues')
+        .select(VENUE_SELECT_WITHOUT_PRIMARY_IMAGES)
+        .order('name', { ascending: true });
+      venues = fallback.data as typeof venues;
+      venuesError = fallback.error;
+    }
 
     if (venuesError) {
       throw new Error(venuesError.message);
@@ -238,6 +270,11 @@ export async function POST(request: Request) {
       phone: String(venue.phone ?? '').trim() || null,
       website_url: String(venue.website_url ?? '').trim() || null,
       instagram_url: normalizeInstagramUrl(String(venue.instagram_url ?? '')),
+      primary_image_url: String(venue.primary_image_url ?? '').trim() || null,
+      primary_image_source: String(venue.primary_image_source ?? '').trim() || null,
+      primary_image_attribution:
+        String(venue.primary_image_attribution ?? '').trim() || null,
+      primary_image_alt: String(venue.primary_image_alt ?? '').trim() || null,
       google_rating: parseOptionalNumber(venue.google_rating),
       price_level: String(venue.price_level ?? '').trim() || null,
       shows_sport: normalizedShowsSport,
@@ -272,14 +309,27 @@ export async function POST(request: Request) {
     }
 
     if (existingVenueId) {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('venues')
         .update(payload)
         .eq('id', existingVenueId)
         .select(
-          'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
+          'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
         )
         .single();
+
+      if (isMissingPrimaryImageColumnError(error)) {
+        const fallback = await supabase
+          .from('venues')
+          .update(withoutPrimaryImagePayload(payload))
+          .eq('id', existingVenueId)
+          .select(
+            'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
+          )
+          .single();
+        data = fallback.data as typeof data;
+        error = fallback.error;
+      }
 
       if (error) throw new Error(error.message);
       return NextResponse.json({
@@ -290,13 +340,25 @@ export async function POST(request: Request) {
       });
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('venues')
       .insert(payload)
       .select(
-        'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
+        'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
       )
       .single();
+
+    if (isMissingPrimaryImageColumnError(error)) {
+      const fallback = await supabase
+        .from('venues')
+        .insert(withoutPrimaryImagePayload(payload))
+        .select(
+          'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
+        )
+        .single();
+      data = fallback.data as typeof data;
+      error = fallback.error;
+    }
 
     if (error) throw new Error(error.message);
 

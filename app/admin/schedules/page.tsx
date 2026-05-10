@@ -5,6 +5,7 @@ import DealScheduleItemsEditor, {
   type DealScheduleItemDraft,
 } from '@/app/components/DealScheduleItemsEditor';
 import { GroupedScheduleTypeSelector } from '@/app/components/GroupedScheduleTypeSelector';
+import VenuePrimaryImage from '@/app/components/VenuePrimaryImage';
 import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { getVenueProductGuardrails } from '@/lib/venue-product-guardrails';
@@ -110,6 +111,10 @@ type Venue = {
   phone?: string | null;
   website_url?: string | null;
   instagram_url?: string | null;
+  primary_image_url?: string | null;
+  primary_image_source?: string | null;
+  primary_image_attribution?: string | null;
+  primary_image_alt?: string | null;
   google_rating?: number | null;
   price_level?: string | null;
   shows_sport?: boolean | null;
@@ -210,6 +215,10 @@ type VenueFormState = {
   phone: string;
   website_url: string;
   instagram_url: string;
+  primary_image_url: string;
+  primary_image_source: string;
+  primary_image_attribution: string;
+  primary_image_alt: string;
   google_rating: string;
   price_level: string;
   shows_sport: boolean;
@@ -932,6 +941,10 @@ function diffVenuePayload(
     phone: 'Phone',
     website_url: 'Website',
     instagram_url: 'Instagram',
+    primary_image_url: 'Primary image URL',
+    primary_image_source: 'Image source',
+    primary_image_attribution: 'Image attribution',
+    primary_image_alt: 'Image alt text',
     google_rating: 'Google rating',
     price_level: 'Price level',
     shows_sport: 'Shows live sport',
@@ -957,6 +970,10 @@ function diffVenuePayload(
     phone: originalVenue?.phone ?? null,
     website_url: originalVenue?.website_url ?? null,
     instagram_url: originalVenue?.instagram_url ?? null,
+    primary_image_url: originalVenue?.primary_image_url ?? null,
+    primary_image_source: originalVenue?.primary_image_source ?? null,
+    primary_image_attribution: originalVenue?.primary_image_attribution ?? null,
+    primary_image_alt: originalVenue?.primary_image_alt ?? null,
     google_rating: originalVenue?.google_rating ?? null,
     price_level: originalVenue?.price_level ?? null,
     shows_sport: originalVenue?.shows_sport ?? null,
@@ -1054,6 +1071,10 @@ function blankVenueForm(): VenueFormState {
     phone: '',
     website_url: '',
     instagram_url: '',
+    primary_image_url: '',
+    primary_image_source: '',
+    primary_image_attribution: '',
+    primary_image_alt: '',
     google_rating: '',
     price_level: '',
     shows_sport: false,
@@ -2549,6 +2570,10 @@ export default function AdminMasterPage() {
       phone: venue.phone ?? '',
       website_url: venue.website_url ?? '',
       instagram_url: venue.instagram_url ?? '',
+      primary_image_url: venue.primary_image_url ?? '',
+      primary_image_source: venue.primary_image_source ?? '',
+      primary_image_attribution: venue.primary_image_attribution ?? '',
+      primary_image_alt: venue.primary_image_alt ?? '',
       google_rating:
         venue.google_rating != null ? String(venue.google_rating) : '',
       price_level: venue.price_level ?? '',
@@ -2681,6 +2706,10 @@ export default function AdminMasterPage() {
         phone: place.nationalPhoneNumber ?? existingMatch?.phone ?? '',
         website_url: place.websiteUri ?? existingMatch?.website_url ?? '',
         instagram_url: existingMatch?.instagram_url ?? '',
+        primary_image_url: existingMatch?.primary_image_url ?? '',
+        primary_image_source: existingMatch?.primary_image_source ?? '',
+        primary_image_attribution: existingMatch?.primary_image_attribution ?? '',
+        primary_image_alt: existingMatch?.primary_image_alt ?? '',
         google_rating: place.rating != null ? String(place.rating) : '',
         price_level: place.priceLevel ?? '',
         shows_sport: normalizeBooleanFlag(existingMatch?.shows_sport),
@@ -2777,6 +2806,10 @@ export default function AdminMasterPage() {
         phone: venueForm.phone.trim() || null,
         website_url: venueForm.website_url.trim() || null,
         instagram_url: venueForm.instagram_url.trim() || null,
+        primary_image_url: venueForm.primary_image_url.trim() || null,
+        primary_image_source: venueForm.primary_image_source.trim() || null,
+        primary_image_attribution: venueForm.primary_image_attribution.trim() || null,
+        primary_image_alt: venueForm.primary_image_alt.trim() || null,
         google_rating: venueForm.google_rating.trim()
           ? Number(venueForm.google_rating)
           : null,
@@ -2829,6 +2862,20 @@ export default function AdminMasterPage() {
           website_url: String(result.venue?.website_url ?? current.website_url ?? ''),
           instagram_url: String(
             result.venue?.instagram_url ?? current.instagram_url ?? ''
+          ),
+          primary_image_url: String(
+            result.venue?.primary_image_url ?? current.primary_image_url ?? ''
+          ),
+          primary_image_source: String(
+            result.venue?.primary_image_source ?? current.primary_image_source ?? ''
+          ),
+          primary_image_attribution: String(
+            result.venue?.primary_image_attribution ??
+              current.primary_image_attribution ??
+              ''
+          ),
+          primary_image_alt: String(
+            result.venue?.primary_image_alt ?? current.primary_image_alt ?? ''
           ),
           google_rating:
             result.venue?.google_rating != null
@@ -5395,6 +5442,86 @@ export default function AdminMasterPage() {
                     placeholder="@venuehandle or https://instagram.com/..."
                     className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                   />
+                </div>
+              </div>
+              <div className="mb-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-3.5 sm:p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start">
+                  <div className="md:w-56">
+                    <VenuePrimaryImage
+                      venue={{
+                        name: venueForm.name,
+                        primary_image_url: venueForm.primary_image_url,
+                        primary_image_alt: venueForm.primary_image_alt,
+                        primary_image_attribution: venueForm.primary_image_attribution,
+                      }}
+                      variant="preview"
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-neutral-900">Primary image</div>
+                    <div className="mt-1 text-xs leading-5 text-neutral-600">
+                      Use a venue exterior, interior, bar, or atmosphere image where possible. Avoid food-only images unless it is the best available image.
+                    </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="md:col-span-2">
+                        <label className="mb-1 block text-sm font-medium">Primary image URL</label>
+                        <input
+                          type="url"
+                          value={venueForm.primary_image_url}
+                          onChange={(e) => updateVenueForm('primary_image_url', e.target.value)}
+                          placeholder="https://..."
+                          className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">Image source</label>
+                        <input
+                          type="text"
+                          value={venueForm.primary_image_source}
+                          onChange={(e) => updateVenueForm('primary_image_source', e.target.value)}
+                          placeholder="e.g. Venue website, Google, Instagram"
+                          className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">Attribution</label>
+                        <input
+                          type="text"
+                          value={venueForm.primary_image_attribution}
+                          onChange={(e) =>
+                            updateVenueForm('primary_image_attribution', e.target.value)
+                          }
+                          placeholder="Optional credit"
+                          className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="mb-1 block text-sm font-medium">Alt text</label>
+                        <input
+                          type="text"
+                          value={venueForm.primary_image_alt}
+                          onChange={(e) => updateVenueForm('primary_image_alt', e.target.value)}
+                          placeholder="e.g. Exterior of The Bank Hotel"
+                          className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setVenueForm((current) => ({
+                          ...current,
+                          primary_image_url: '',
+                          primary_image_source: '',
+                          primary_image_attribution: '',
+                          primary_image_alt: '',
+                        }))
+                      }
+                      className="admin-ghost-button mt-3 rounded-xl border px-3 py-2 text-sm font-medium"
+                    >
+                      Remove image
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="mb-3">

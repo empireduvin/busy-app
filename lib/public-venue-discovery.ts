@@ -96,6 +96,10 @@ export type Venue = {
   instagram_url: string | null;
   booking_url: string | null;
   google_maps_uri: string | null;
+  primary_image_url: string | null;
+  primary_image_source: string | null;
+  primary_image_attribution: string | null;
+  primary_image_alt: string | null;
   google_rating: number | null;
   google_user_rating_count: number | null;
   price_level: string | null;
@@ -137,6 +141,10 @@ export const PUBLIC_VENUE_SELECT = `
   instagram_url,
   booking_url,
   google_maps_uri,
+  primary_image_url,
+  primary_image_source,
+  primary_image_attribution,
+  primary_image_alt,
   google_rating,
   google_user_rating_count,
   price_level,
@@ -192,6 +200,10 @@ export const PUBLIC_VENUE_SELECT_WITH_BOTTLE_SHOP = `
   instagram_url,
   booking_url,
   google_maps_uri,
+  primary_image_url,
+  primary_image_source,
+  primary_image_attribution,
+  primary_image_alt,
   google_rating,
   google_user_rating_count,
   price_level,
@@ -231,6 +243,14 @@ export const PUBLIC_VENUE_SELECT_WITH_BOTTLE_SHOP = `
 `;
 
 export const INNER_WEST_LIVE_SUBURBS = ['NEWTOWN', 'ENMORE', 'ERSKINEVILLE'] as const;
+
+function withoutPrimaryImageColumns(selectText: string) {
+  return selectText
+    .replace(/\s+primary_image_url,\n/g, '\n')
+    .replace(/\s+primary_image_source,\n/g, '\n')
+    .replace(/\s+primary_image_attribution,\n/g, '\n')
+    .replace(/\s+primary_image_alt,\n/g, '\n');
+}
 
 export const DAY_ORDER: DayOfWeek[] = DAY_OPTIONS.map((option) => option.value);
 
@@ -680,6 +700,15 @@ function isMissingBottleShopHoursColumnError(error: { message?: string } | null)
   );
 }
 
+function isMissingPrimaryImageColumnError(error: { message?: string } | null) {
+  const message = error?.message?.toLowerCase() ?? '';
+  return (
+    message.includes('column') &&
+    message.includes('primary_image_') &&
+    message.includes('does not exist')
+  );
+}
+
 export async function fetchPublicVenues(
   supabase: SupabaseClient,
   options?: {
@@ -701,13 +730,26 @@ export async function fetchPublicVenues(
     return query;
   };
 
-  const primaryResult = await buildQuery(PUBLIC_VENUE_SELECT_WITH_BOTTLE_SHOP);
+  const primarySelect = PUBLIC_VENUE_SELECT_WITH_BOTTLE_SHOP;
+  const primaryResult = await buildQuery(primarySelect);
 
-  if (!isMissingBottleShopHoursColumnError(primaryResult.error)) {
+  if (
+    !isMissingBottleShopHoursColumnError(primaryResult.error) &&
+    !isMissingPrimaryImageColumnError(primaryResult.error)
+  ) {
     return primaryResult;
   }
 
-  return buildQuery(PUBLIC_VENUE_SELECT);
+  const fallbackSelect = isMissingPrimaryImageColumnError(primaryResult.error)
+    ? withoutPrimaryImageColumns(PUBLIC_VENUE_SELECT)
+    : PUBLIC_VENUE_SELECT;
+  const fallbackResult = await buildQuery(fallbackSelect);
+
+  if (isMissingPrimaryImageColumnError(fallbackResult.error)) {
+    return buildQuery(withoutPrimaryImageColumns(PUBLIC_VENUE_SELECT));
+  }
+
+  return fallbackResult;
 }
 
 export function hasText(value: string | null | undefined) {
