@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server';
 import { requireAdminRequest } from '@/lib/admin-server';
 import { getErrorStatus } from '@/lib/authz';
 import { getEffectiveKitchenHours } from '@/lib/venue-type-rules';
-import { normalizeInstagramUrl } from '@/lib/social-links';
+import {
+  normalizeInstagramContentUrl,
+  normalizeInstagramHandle,
+  normalizeInstagramUrl,
+} from '@/lib/social-links';
 
 type OpeningHours = {
   monday?: Array<{ open: string; close: string }>;
@@ -15,11 +19,17 @@ type OpeningHours = {
 };
 
 const VENUE_SELECT =
-  'id, name, suburb, venue_type_id, status, updated_at, google_place_id, address, lat, lng, phone, website_url, instagram_url, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, byo_allowed, byo_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours, kitchen_hours, happy_hour_hours, bottle_shop_hours, venue_schedule_rules(id, venue_id, schedule_type, day_of_week, start_time, end_time, sort_order, title, description, deal_text, notes, detail_json, is_active, status)';
+  'id, name, suburb, venue_type_id, status, updated_at, google_place_id, address, lat, lng, phone, website_url, instagram_handle, instagram_url, featured_instagram_url, social_freshness_label, social_note, social_last_updated_at, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, byo_allowed, byo_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours, kitchen_hours, happy_hour_hours, bottle_shop_hours, venue_schedule_rules(id, venue_id, schedule_type, day_of_week, start_time, end_time, sort_order, title, description, deal_text, notes, detail_json, is_active, status)';
 const VENUE_SELECT_WITHOUT_PRIMARY_IMAGES = VENUE_SELECT.replace(
   'primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, ',
   ''
 );
+const VENUE_SELECT_WITHOUT_OPTIONAL_SOCIAL = VENUE_SELECT
+  .replace('instagram_handle, ', '')
+  .replace('featured_instagram_url, ', '')
+  .replace('social_freshness_label, ', '')
+  .replace('social_note, ', '')
+  .replace('social_last_updated_at, ', '');
 
 const VENUE_TYPE_ATTEMPTS = [
   { select: 'id, name', field: 'name' },
@@ -57,11 +67,30 @@ function normalizeText(value: string | null | undefined) {
   return (value ?? '').toLowerCase().replace(/[_-]/g, ' ').trim();
 }
 
+function normalizeSocialFreshnessLabel(value: string | null | undefined) {
+  const trimmed = String(value ?? '').trim();
+  const allowed = ['Posted today', 'Posted this week', 'New event post', 'Fresh update'];
+  return allowed.includes(trimmed) ? trimmed : null;
+}
+
 function isMissingPrimaryImageColumnError(error: { message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? '';
   return (
     message.includes('column') &&
     message.includes('primary_image_') &&
+    message.includes('does not exist')
+  );
+}
+
+function isMissingSocialColumnError(error: { message?: string } | null) {
+  const message = error?.message?.toLowerCase() ?? '';
+  return (
+    message.includes('column') &&
+    (message.includes('instagram_handle') ||
+      message.includes('featured_instagram_url') ||
+      message.includes('social_freshness_label') ||
+      message.includes('social_note') ||
+      message.includes('social_last_updated_at')) &&
     message.includes('does not exist')
   );
 }
@@ -72,6 +101,16 @@ function withoutPrimaryImagePayload<T extends Record<string, unknown>>(payload: 
   delete next.primary_image_source;
   delete next.primary_image_attribution;
   delete next.primary_image_alt;
+  return next;
+}
+
+function withoutOptionalSocialPayload<T extends Record<string, unknown>>(payload: T) {
+  const next = { ...payload };
+  delete next.instagram_handle;
+  delete next.featured_instagram_url;
+  delete next.social_freshness_label;
+  delete next.social_note;
+  delete next.social_last_updated_at;
   return next;
 }
 
@@ -147,10 +186,27 @@ export async function GET(request: Request) {
       .select(VENUE_SELECT)
       .order('name', { ascending: true });
 
-    if (isMissingPrimaryImageColumnError(venuesError)) {
+    if (isMissingPrimaryImageColumnError(venuesError) || isMissingSocialColumnError(venuesError)) {
+      const fallbackSelect = isMissingPrimaryImageColumnError(venuesError)
+        ? VENUE_SELECT_WITHOUT_PRIMARY_IMAGES
+        : VENUE_SELECT_WITHOUT_OPTIONAL_SOCIAL;
       const fallback = await supabase
         .from('venues')
-        .select(VENUE_SELECT_WITHOUT_PRIMARY_IMAGES)
+        .select(fallbackSelect)
+        .order('name', { ascending: true });
+      venues = fallback.data as typeof venues;
+      venuesError = fallback.error;
+    }
+
+    if (isMissingPrimaryImageColumnError(venuesError) || isMissingSocialColumnError(venuesError)) {
+      const fallback = await supabase
+        .from('venues')
+        .select(
+          VENUE_SELECT_WITHOUT_OPTIONAL_SOCIAL.replace(
+            'primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, ',
+            ''
+          )
+        )
         .order('name', { ascending: true });
       venues = fallback.data as typeof venues;
       venuesError = fallback.error;
@@ -269,7 +325,23 @@ export async function POST(request: Request) {
       lng: parseOptionalNumber(venue.lng),
       phone: String(venue.phone ?? '').trim() || null,
       website_url: String(venue.website_url ?? '').trim() || null,
+      instagram_handle: normalizeInstagramHandle(String(venue.instagram_handle ?? '')),
       instagram_url: normalizeInstagramUrl(String(venue.instagram_url ?? '')),
+      featured_instagram_url: normalizeInstagramContentUrl(
+        String(venue.featured_instagram_url ?? '')
+      ),
+      social_freshness_label: normalizeSocialFreshnessLabel(
+        String(venue.social_freshness_label ?? '')
+      ),
+      social_note: String(venue.social_note ?? '').trim() || null,
+      social_last_updated_at:
+        String(venue.instagram_handle ?? '').trim() ||
+        String(venue.instagram_url ?? '').trim() ||
+        String(venue.featured_instagram_url ?? '').trim() ||
+        String(venue.social_freshness_label ?? '').trim() ||
+        String(venue.social_note ?? '').trim()
+          ? new Date().toISOString()
+          : null,
       primary_image_url: String(venue.primary_image_url ?? '').trim() || null,
       primary_image_source: String(venue.primary_image_source ?? '').trim() || null,
       primary_image_attribution:
@@ -314,14 +386,17 @@ export async function POST(request: Request) {
         .update(payload)
         .eq('id', existingVenueId)
         .select(
-          'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
+          'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_handle, instagram_url, featured_instagram_url, social_freshness_label, social_note, social_last_updated_at, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
         )
         .single();
 
-      if (isMissingPrimaryImageColumnError(error)) {
+      if (isMissingPrimaryImageColumnError(error) || isMissingSocialColumnError(error)) {
+        const fallbackPayload = isMissingSocialColumnError(error)
+          ? withoutOptionalSocialPayload(withoutPrimaryImagePayload(payload))
+          : withoutPrimaryImagePayload(payload);
         const fallback = await supabase
           .from('venues')
-          .update(withoutPrimaryImagePayload(payload))
+          .update(fallbackPayload)
           .eq('id', existingVenueId)
           .select(
             'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
@@ -344,14 +419,17 @@ export async function POST(request: Request) {
       .from('venues')
       .insert(payload)
       .select(
-        'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
+        'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_handle, instagram_url, featured_instagram_url, social_freshness_label, social_note, social_last_updated_at, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
       )
       .single();
 
-    if (isMissingPrimaryImageColumnError(error)) {
+    if (isMissingPrimaryImageColumnError(error) || isMissingSocialColumnError(error)) {
+      const fallbackPayload = isMissingSocialColumnError(error)
+        ? withoutOptionalSocialPayload(withoutPrimaryImagePayload(payload))
+        : withoutPrimaryImagePayload(payload);
       const fallback = await supabase
         .from('venues')
-        .insert(withoutPrimaryImagePayload(payload))
+        .insert(fallbackPayload)
         .select(
           'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
         )

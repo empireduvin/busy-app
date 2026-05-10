@@ -121,7 +121,12 @@ type Venue = {
 
   phone: string | null;
   website_url: string | null;
+  instagram_handle: string | null;
   instagram_url: string | null;
+  featured_instagram_url: string | null;
+  social_freshness_label: string | null;
+  social_note: string | null;
+  social_last_updated_at: string | null;
   booking_url: string | null;
   google_maps_uri: string | null;
   primary_image_url: string | null;
@@ -1836,6 +1841,9 @@ function VenuesPageContent() {
                     const ratingText = formatGoogleRating(v.google_rating);
                     const reviewCountText = formatReviewCount(v.google_user_rating_count);
                     const priceText = formatPriceLevel(v.price_level);
+                    const socialSignal =
+                      v.social_freshness_label?.trim() ||
+                      (v.social_note?.trim() ? 'New Instagram update' : null);
 
                     return (
                       <div
@@ -1934,6 +1942,12 @@ function VenuesPageContent() {
                               <div className="mt-1 font-medium text-white">
                                 {getSpecialBadge(featuredSpecialRule)}
                               </div>
+                            </div>
+                          ) : null}
+
+                          {socialSignal ? (
+                            <div className="text-sm font-medium text-orange-200/72">
+                              {socialSignal}
                             </div>
                           ) : null}
 

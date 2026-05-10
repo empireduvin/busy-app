@@ -36,7 +36,7 @@ import {
   type Venue,
   type VenueScheduleRule,
 } from '@/lib/public-venue-discovery';
-import { normalizeInstagramUrl } from '@/lib/social-links';
+import { normalizeInstagramContentUrl, normalizeInstagramUrl } from '@/lib/social-links';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -386,6 +386,13 @@ export default function PublicVenueDetailPage() {
         ? 'Opens later'
         : 'Closed';
   const instagramHref = normalizeInstagramUrl(venue.instagram_url);
+  const featuredInstagramHref = normalizeInstagramContentUrl(venue.featured_instagram_url);
+  const hasSocialUpdate = Boolean(
+    venue.social_freshness_label?.trim() ||
+      venue.social_note?.trim() ||
+      instagramHref ||
+      featuredInstagramHref
+  );
   const liveHappyHourRule =
     detail.todayHappyHourRules.find((rule) => isRuleLiveNow(rule, detail.timezone)) ?? null;
   const liveSpecialRule =
@@ -658,6 +665,45 @@ export default function PublicVenueDetailPage() {
             </div>
 
             <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-1">
+              {hasSocialUpdate ? (
+                <div className="rounded-2xl border border-white/9 bg-black/28 p-3.5 sm:p-4">
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-orange-300/70">
+                    Latest from the venue
+                  </div>
+                  {venue.social_freshness_label?.trim() ? (
+                    <div className="mt-2 text-lg font-semibold text-white">
+                      {venue.social_freshness_label.trim()}
+                    </div>
+                  ) : null}
+                  {venue.social_note?.trim() ? (
+                    <div className="mt-2 text-sm leading-5 text-white/68">
+                      {venue.social_note.trim()}
+                    </div>
+                  ) : null}
+                  <div className="mt-3 grid gap-2">
+                    {instagramHref ? (
+                      <a
+                        href={instagramHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-[36px] items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[13px] text-white/78 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-white"
+                      >
+                        View Instagram
+                      </a>
+                    ) : null}
+                    {featuredInstagramHref ? (
+                      <a
+                        href={featuredInstagramHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-[36px] items-center justify-center rounded-xl border border-orange-300/20 bg-orange-500/10 px-3 py-1.5 text-[13px] font-medium text-orange-100 transition hover:border-orange-200/35 hover:bg-orange-500/16"
+                      >
+                        Featured post/reel
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
               <div className="rounded-2xl border border-white/9 bg-black/28 p-3.5 sm:p-4">
                 <div className="text-[11px] uppercase tracking-[0.22em] text-white/45">
                   This week

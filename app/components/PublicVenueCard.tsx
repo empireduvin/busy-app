@@ -39,6 +39,9 @@ export default function PublicVenueCard({
   const venueTypeLabel = getVenueTypeLabel(venue);
   const websiteHref = buildPublicVenueHref(venue);
   const instagramHref = normalizeInstagramUrl(venue.instagram_url);
+  const socialSignal =
+    venue.social_freshness_label?.trim() ||
+    (venue.social_note?.trim() ? 'New Instagram update' : null);
   const allBadges = [
     ...(badges ?? []),
     ...(normalizeBooleanFlag(venue.shows_sport) ? ['Sport'] : []),
@@ -137,6 +140,11 @@ export default function PublicVenueCard({
                 {venueTypeLabel ? <span>{` | ${venueTypeLabel}`}</span> : null}
                 {details ? <span>{` | `}{details}</span> : null}
               </div>
+              {socialSignal ? (
+                <div className="mt-1 text-[11px] font-medium text-orange-200/72">
+                  {socialSignal}
+                </div>
+              ) : null}
             </div>
             <VenuePrimaryImage
               venue={venue}
@@ -228,6 +236,12 @@ export default function PublicVenueCard({
             ) : null}
 
             {summary ? <div className="mt-3.5 sm:mt-4">{summary}</div> : null}
+
+            {socialSignal ? (
+              <div className="mt-2 text-[12px] font-medium text-orange-200/72">
+                {socialSignal}
+              </div>
+            ) : null}
 
             {!compact && visibleBadges.length > 0 ? (
               <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-4 sm:gap-2">

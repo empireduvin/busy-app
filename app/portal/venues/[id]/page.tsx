@@ -92,7 +92,12 @@ type PortalVenueDetail = {
   address?: string | null;
   phone?: string | null;
   website_url?: string | null;
+  instagram_handle?: string | null;
   instagram_url?: string | null;
+  featured_instagram_url?: string | null;
+  social_freshness_label?: string | null;
+  social_note?: string | null;
+  social_last_updated_at?: string | null;
   primary_image_url?: string | null;
   primary_image_source?: string | null;
   primary_image_attribution?: string | null;
@@ -155,7 +160,12 @@ type VenueFormState = {
   address: string;
   phone: string;
   website_url: string;
+  instagram_handle: string;
   instagram_url: string;
+  featured_instagram_url: string;
+  social_freshness_label: string;
+  social_note: string;
+  social_last_updated_at: string;
   primary_image_url: string;
   primary_image_source: string;
   primary_image_attribution: string;
@@ -185,7 +195,12 @@ function blankVenueForm(): VenueFormState {
     address: '',
     phone: '',
     website_url: '',
+    instagram_handle: '',
     instagram_url: '',
+    featured_instagram_url: '',
+    social_freshness_label: '',
+    social_note: '',
+    social_last_updated_at: '',
     primary_image_url: '',
     primary_image_source: '',
     primary_image_attribution: '',
@@ -267,6 +282,19 @@ function isMissingPrimaryImageColumnError(error: { message?: string } | null) {
   return (
     message.includes('column') &&
     message.includes('primary_image_') &&
+    message.includes('does not exist')
+  );
+}
+
+function isMissingSocialColumnError(error: { message?: string } | null) {
+  const message = error?.message?.toLowerCase() ?? '';
+  return (
+    message.includes('column') &&
+    (message.includes('instagram_handle') ||
+      message.includes('featured_instagram_url') ||
+      message.includes('social_freshness_label') ||
+      message.includes('social_note') ||
+      message.includes('social_last_updated_at')) &&
     message.includes('does not exist')
   );
 }
@@ -806,11 +834,11 @@ export default function PortalVenueDetailPage() {
     let { data: venueRow, error: venueError } = await supabase
       .from('venues')
       .select(
-        'id, name, suburb, venue_type_id, updated_at, address, phone, website_url, instagram_url, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours, kitchen_hours, happy_hour_hours, venue_types(label, slug), venue_schedule_rules(id, venue_id, schedule_type, day_of_week, start_time, end_time, sort_order, title, description, deal_text, notes, detail_json, is_active, status)'
+        'id, name, suburb, venue_type_id, updated_at, address, phone, website_url, instagram_handle, instagram_url, featured_instagram_url, social_freshness_label, social_note, social_last_updated_at, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours, kitchen_hours, happy_hour_hours, venue_types(label, slug), venue_schedule_rules(id, venue_id, schedule_type, day_of_week, start_time, end_time, sort_order, title, description, deal_text, notes, detail_json, is_active, status)'
       )
       .eq('id', venueId)
       .maybeSingle();
-    if (isMissingPrimaryImageColumnError(venueError)) {
+    if (isMissingPrimaryImageColumnError(venueError) || isMissingSocialColumnError(venueError)) {
       const fallback = await supabase
         .from('venues')
         .select(
@@ -844,7 +872,12 @@ export default function PortalVenueDetailPage() {
       address: nextVenue.address ?? '',
       phone: nextVenue.phone ?? '',
       website_url: nextVenue.website_url ?? '',
+      instagram_handle: nextVenue.instagram_handle ?? '',
       instagram_url: nextVenue.instagram_url ?? '',
+      featured_instagram_url: nextVenue.featured_instagram_url ?? '',
+      social_freshness_label: nextVenue.social_freshness_label ?? '',
+      social_note: nextVenue.social_note ?? '',
+      social_last_updated_at: nextVenue.social_last_updated_at ?? '',
       primary_image_url: nextVenue.primary_image_url ?? '',
       primary_image_source: nextVenue.primary_image_source ?? '',
       primary_image_attribution: nextVenue.primary_image_attribution ?? '',
@@ -1451,8 +1484,21 @@ export default function PortalVenueDetailPage() {
           address: String(result.venue?.address ?? current.address ?? ''),
           phone: String(result.venue?.phone ?? current.phone ?? ''),
           website_url: String(result.venue?.website_url ?? current.website_url ?? ''),
+          instagram_handle: String(
+            result.venue?.instagram_handle ?? current.instagram_handle ?? ''
+          ),
           instagram_url: String(
             result.venue?.instagram_url ?? current.instagram_url ?? ''
+          ),
+          featured_instagram_url: String(
+            result.venue?.featured_instagram_url ?? current.featured_instagram_url ?? ''
+          ),
+          social_freshness_label: String(
+            result.venue?.social_freshness_label ?? current.social_freshness_label ?? ''
+          ),
+          social_note: String(result.venue?.social_note ?? current.social_note ?? ''),
+          social_last_updated_at: String(
+            result.venue?.social_last_updated_at ?? current.social_last_updated_at ?? ''
           ),
           primary_image_url: String(
             result.venue?.primary_image_url ?? current.primary_image_url ?? ''
@@ -2383,7 +2429,18 @@ export default function PortalVenueDetailPage() {
                     <div><label className="mb-1 block text-sm font-medium text-white/85">Address</label><input type="text" value={venueForm.address} onChange={(event) => updateVenueForm('address', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
                     <div><label className="mb-1 block text-sm font-medium text-white/85">Phone</label><input type="text" value={venueForm.phone} onChange={(event) => updateVenueForm('phone', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
                     <div><label className="mb-1 block text-sm font-medium text-white/85">Website</label><input type="text" value={venueForm.website_url} onChange={(event) => updateVenueForm('website_url', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
-                    <div><label className="mb-1 block text-sm font-medium text-white/85">Instagram</label><input type="text" value={venueForm.instagram_url} onChange={(event) => updateVenueForm('instagram_url', event.target.value)} placeholder="@venuehandle or https://instagram.com/..." className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                    <div><label className="mb-1 block text-sm font-medium text-white/85">Instagram profile URL</label><input type="text" value={venueForm.instagram_url} onChange={(event) => updateVenueForm('instagram_url', event.target.value)} placeholder="https://www.instagram.com/venuehandle" className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                    <div className="rounded-2xl border border-white/10 bg-black/18 p-3">
+                      <div className="text-sm font-semibold text-white">Social / Instagram</div>
+                      <p className="mt-1 text-xs leading-5 text-white/62">Manual updates only. No Instagram API, scraping, or feed embeds.</p>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div><label className="mb-1 block text-sm font-medium text-white/85">Instagram handle</label><input type="text" value={venueForm.instagram_handle} onChange={(event) => updateVenueForm('instagram_handle', event.target.value)} placeholder="@venuehandle" className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                        <div><label className="mb-1 block text-sm font-medium text-white/85">Featured Instagram post/reel URL</label><input type="url" value={venueForm.featured_instagram_url} onChange={(event) => updateVenueForm('featured_instagram_url', event.target.value)} placeholder="https://www.instagram.com/p/..." className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                        <div><label className="mb-1 block text-sm font-medium text-white/85">Social freshness label</label><select value={venueForm.social_freshness_label} onChange={(event) => updateVenueForm('social_freshness_label', event.target.value)} className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40"><option value="">No label</option><option value="Posted today">Posted today</option><option value="Posted this week">Posted this week</option><option value="New event post">New event post</option><option value="Fresh update">Fresh update</option></select></div>
+                        <div><label className="mb-1 block text-sm font-medium text-white/85">Last updated</label><input type="text" value={venueForm.social_last_updated_at || 'Set automatically on save'} readOnly className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/15 px-3 py-2 text-sm text-white/50 outline-none" /></div>
+                        <div className="md:col-span-2"><label className="mb-1 block text-sm font-medium text-white/85">Social note</label><input type="text" value={venueForm.social_note} onChange={(event) => updateVenueForm('social_note', event.target.value)} placeholder="New event post, fresh specials update, latest live music post" className="min-h-[44px] w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                      </div>
+                    </div>
                     <div className="md:col-span-2 rounded-2xl border border-white/10 bg-black/18 p-3">
                       <div className="grid gap-3 md:grid-cols-[14rem_1fr]">
                         <VenuePrimaryImage

@@ -93,7 +93,12 @@ export type Venue = {
   lng: number | null;
   phone: string | null;
   website_url: string | null;
+  instagram_handle: string | null;
   instagram_url: string | null;
+  featured_instagram_url: string | null;
+  social_freshness_label: string | null;
+  social_note: string | null;
+  social_last_updated_at: string | null;
   booking_url: string | null;
   google_maps_uri: string | null;
   primary_image_url: string | null;
@@ -138,7 +143,12 @@ export const PUBLIC_VENUE_SELECT = `
   lng,
   phone,
   website_url,
+  instagram_handle,
   instagram_url,
+  featured_instagram_url,
+  social_freshness_label,
+  social_note,
+  social_last_updated_at,
   booking_url,
   google_maps_uri,
   primary_image_url,
@@ -197,7 +207,12 @@ export const PUBLIC_VENUE_SELECT_WITH_BOTTLE_SHOP = `
   lng,
   phone,
   website_url,
+  instagram_handle,
   instagram_url,
+  featured_instagram_url,
+  social_freshness_label,
+  social_note,
+  social_last_updated_at,
   booking_url,
   google_maps_uri,
   primary_image_url,
@@ -250,6 +265,15 @@ function withoutPrimaryImageColumns(selectText: string) {
     .replace(/\s+primary_image_source,\n/g, '\n')
     .replace(/\s+primary_image_attribution,\n/g, '\n')
     .replace(/\s+primary_image_alt,\n/g, '\n');
+}
+
+function withoutSocialColumns(selectText: string) {
+  return selectText
+    .replace(/\s+instagram_handle,\n/g, '\n')
+    .replace(/\s+featured_instagram_url,\n/g, '\n')
+    .replace(/\s+social_freshness_label,\n/g, '\n')
+    .replace(/\s+social_note,\n/g, '\n')
+    .replace(/\s+social_last_updated_at,\n/g, '\n');
 }
 
 export const DAY_ORDER: DayOfWeek[] = DAY_OPTIONS.map((option) => option.value);
@@ -709,6 +733,19 @@ function isMissingPrimaryImageColumnError(error: { message?: string } | null) {
   );
 }
 
+function isMissingSocialColumnError(error: { message?: string } | null) {
+  const message = error?.message?.toLowerCase() ?? '';
+  return (
+    message.includes('column') &&
+    (message.includes('instagram_handle') ||
+      message.includes('featured_instagram_url') ||
+      message.includes('social_freshness_label') ||
+      message.includes('social_note') ||
+      message.includes('social_last_updated_at')) &&
+    message.includes('does not exist')
+  );
+}
+
 export async function fetchPublicVenues(
   supabase: SupabaseClient,
   options?: {
@@ -735,18 +772,20 @@ export async function fetchPublicVenues(
 
   if (
     !isMissingBottleShopHoursColumnError(primaryResult.error) &&
-    !isMissingPrimaryImageColumnError(primaryResult.error)
+    !isMissingPrimaryImageColumnError(primaryResult.error) &&
+    !isMissingSocialColumnError(primaryResult.error)
   ) {
     return primaryResult;
   }
 
-  const fallbackSelect = isMissingPrimaryImageColumnError(primaryResult.error)
-    ? withoutPrimaryImageColumns(PUBLIC_VENUE_SELECT)
-    : PUBLIC_VENUE_SELECT;
+  const fallbackSelect = [
+    isMissingPrimaryImageColumnError(primaryResult.error) ? withoutPrimaryImageColumns : null,
+    isMissingSocialColumnError(primaryResult.error) ? withoutSocialColumns : null,
+  ].reduce((selectText, stripColumns) => (stripColumns ? stripColumns(selectText) : selectText), PUBLIC_VENUE_SELECT);
   const fallbackResult = await buildQuery(fallbackSelect);
 
-  if (isMissingPrimaryImageColumnError(fallbackResult.error)) {
-    return buildQuery(withoutPrimaryImageColumns(PUBLIC_VENUE_SELECT));
+  if (isMissingPrimaryImageColumnError(fallbackResult.error) || isMissingSocialColumnError(fallbackResult.error)) {
+    return buildQuery(withoutSocialColumns(withoutPrimaryImageColumns(PUBLIC_VENUE_SELECT)));
   }
 
   return fallbackResult;

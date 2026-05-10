@@ -110,7 +110,12 @@ type Venue = {
   lng?: number | null;
   phone?: string | null;
   website_url?: string | null;
+  instagram_handle?: string | null;
   instagram_url?: string | null;
+  featured_instagram_url?: string | null;
+  social_freshness_label?: string | null;
+  social_note?: string | null;
+  social_last_updated_at?: string | null;
   primary_image_url?: string | null;
   primary_image_source?: string | null;
   primary_image_attribution?: string | null;
@@ -214,7 +219,12 @@ type VenueFormState = {
   lng: string;
   phone: string;
   website_url: string;
+  instagram_handle: string;
   instagram_url: string;
+  featured_instagram_url: string;
+  social_freshness_label: string;
+  social_note: string;
+  social_last_updated_at: string;
   primary_image_url: string;
   primary_image_source: string;
   primary_image_attribution: string;
@@ -940,7 +950,11 @@ function diffVenuePayload(
     lng: 'Longitude',
     phone: 'Phone',
     website_url: 'Website',
+    instagram_handle: 'Instagram handle',
     instagram_url: 'Instagram',
+    featured_instagram_url: 'Featured Instagram post',
+    social_freshness_label: 'Social freshness',
+    social_note: 'Social note',
     primary_image_url: 'Primary image URL',
     primary_image_source: 'Image source',
     primary_image_attribution: 'Image attribution',
@@ -969,7 +983,11 @@ function diffVenuePayload(
     lng: originalVenue?.lng ?? null,
     phone: originalVenue?.phone ?? null,
     website_url: originalVenue?.website_url ?? null,
+    instagram_handle: originalVenue?.instagram_handle ?? null,
     instagram_url: originalVenue?.instagram_url ?? null,
+    featured_instagram_url: originalVenue?.featured_instagram_url ?? null,
+    social_freshness_label: originalVenue?.social_freshness_label ?? null,
+    social_note: originalVenue?.social_note ?? null,
     primary_image_url: originalVenue?.primary_image_url ?? null,
     primary_image_source: originalVenue?.primary_image_source ?? null,
     primary_image_attribution: originalVenue?.primary_image_attribution ?? null,
@@ -1070,7 +1088,12 @@ function blankVenueForm(): VenueFormState {
     lng: '',
     phone: '',
     website_url: '',
+    instagram_handle: '',
     instagram_url: '',
+    featured_instagram_url: '',
+    social_freshness_label: '',
+    social_note: '',
+    social_last_updated_at: '',
     primary_image_url: '',
     primary_image_source: '',
     primary_image_attribution: '',
@@ -2569,7 +2592,12 @@ export default function AdminMasterPage() {
       lng: venue.lng != null ? String(venue.lng) : '',
       phone: venue.phone ?? '',
       website_url: venue.website_url ?? '',
+      instagram_handle: venue.instagram_handle ?? '',
       instagram_url: venue.instagram_url ?? '',
+      featured_instagram_url: venue.featured_instagram_url ?? '',
+      social_freshness_label: venue.social_freshness_label ?? '',
+      social_note: venue.social_note ?? '',
+      social_last_updated_at: venue.social_last_updated_at ?? '',
       primary_image_url: venue.primary_image_url ?? '',
       primary_image_source: venue.primary_image_source ?? '',
       primary_image_attribution: venue.primary_image_attribution ?? '',
@@ -2705,7 +2733,12 @@ export default function AdminMasterPage() {
             : '',
         phone: place.nationalPhoneNumber ?? existingMatch?.phone ?? '',
         website_url: place.websiteUri ?? existingMatch?.website_url ?? '',
+        instagram_handle: existingMatch?.instagram_handle ?? '',
         instagram_url: existingMatch?.instagram_url ?? '',
+        featured_instagram_url: existingMatch?.featured_instagram_url ?? '',
+        social_freshness_label: existingMatch?.social_freshness_label ?? '',
+        social_note: existingMatch?.social_note ?? '',
+        social_last_updated_at: existingMatch?.social_last_updated_at ?? '',
         primary_image_url: existingMatch?.primary_image_url ?? '',
         primary_image_source: existingMatch?.primary_image_source ?? '',
         primary_image_attribution: existingMatch?.primary_image_attribution ?? '',
@@ -2805,7 +2838,11 @@ export default function AdminMasterPage() {
         lng: venueForm.lng.trim() ? Number(venueForm.lng) : null,
         phone: venueForm.phone.trim() || null,
         website_url: venueForm.website_url.trim() || null,
+        instagram_handle: venueForm.instagram_handle.trim() || null,
         instagram_url: venueForm.instagram_url.trim() || null,
+        featured_instagram_url: venueForm.featured_instagram_url.trim() || null,
+        social_freshness_label: venueForm.social_freshness_label.trim() || null,
+        social_note: venueForm.social_note.trim() || null,
         primary_image_url: venueForm.primary_image_url.trim() || null,
         primary_image_source: venueForm.primary_image_source.trim() || null,
         primary_image_attribution: venueForm.primary_image_attribution.trim() || null,
@@ -2860,8 +2897,21 @@ export default function AdminMasterPage() {
               : current.lng,
           phone: String(result.venue?.phone ?? current.phone ?? ''),
           website_url: String(result.venue?.website_url ?? current.website_url ?? ''),
+          instagram_handle: String(
+            result.venue?.instagram_handle ?? current.instagram_handle ?? ''
+          ),
           instagram_url: String(
             result.venue?.instagram_url ?? current.instagram_url ?? ''
+          ),
+          featured_instagram_url: String(
+            result.venue?.featured_instagram_url ?? current.featured_instagram_url ?? ''
+          ),
+          social_freshness_label: String(
+            result.venue?.social_freshness_label ?? current.social_freshness_label ?? ''
+          ),
+          social_note: String(result.venue?.social_note ?? current.social_note ?? ''),
+          social_last_updated_at: String(
+            result.venue?.social_last_updated_at ?? current.social_last_updated_at ?? ''
           ),
           primary_image_url: String(
             result.venue?.primary_image_url ?? current.primary_image_url ?? ''
@@ -5434,14 +5484,75 @@ export default function AdminMasterPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Instagram</label>
+                  <label className="mb-1 block text-sm font-medium">Instagram profile URL</label>
                   <input
                     type="text"
                     value={venueForm.instagram_url}
                     onChange={(e) => updateVenueForm('instagram_url', e.target.value)}
-                    placeholder="@venuehandle or https://instagram.com/..."
+                    placeholder="https://www.instagram.com/venuehandle"
                     className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                   />
+                </div>
+              </div>
+              <div className="mb-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-3.5 sm:p-4">
+                <div className="text-sm font-semibold text-neutral-900">Social / Instagram</div>
+                <p className="mt-1 text-xs leading-5 text-neutral-600">
+                  Manual entry only. No Instagram API, scraping, or feed embeds. Keep the primary venue image separate.
+                </p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Instagram handle</label>
+                    <input
+                      type="text"
+                      value={venueForm.instagram_handle}
+                      onChange={(e) => updateVenueForm('instagram_handle', e.target.value)}
+                      placeholder="@venuehandle"
+                      className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Featured Instagram post/reel URL</label>
+                    <input
+                      type="url"
+                      value={venueForm.featured_instagram_url}
+                      onChange={(e) => updateVenueForm('featured_instagram_url', e.target.value)}
+                      placeholder="https://www.instagram.com/p/..."
+                      className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Social freshness label</label>
+                    <select
+                      value={venueForm.social_freshness_label}
+                      onChange={(e) => updateVenueForm('social_freshness_label', e.target.value)}
+                      className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                    >
+                      <option value="">No label</option>
+                      <option value="Posted today">Posted today</option>
+                      <option value="Posted this week">Posted this week</option>
+                      <option value="New event post">New event post</option>
+                      <option value="Fresh update">Fresh update</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">Last updated</label>
+                    <input
+                      type="text"
+                      value={venueForm.social_last_updated_at || 'Set automatically on save'}
+                      readOnly
+                      className="w-full rounded-xl border border-neutral-300 bg-white/70 px-3 py-2 text-sm text-neutral-500"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-sm font-medium">Social note</label>
+                    <input
+                      type="text"
+                      value={venueForm.social_note}
+                      onChange={(e) => updateVenueForm('social_note', e.target.value)}
+                      placeholder="New event post, fresh specials update, latest live music post"
+                      className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                    />
+                  </div>
                 </div>
               </div>
               <div className="mb-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-3.5 sm:p-4">
