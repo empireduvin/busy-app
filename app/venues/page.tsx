@@ -1842,8 +1842,14 @@ function VenuesPageContent() {
                     const reviewCountText = formatReviewCount(v.google_user_rating_count);
                     const priceText = formatPriceLevel(v.price_level);
                     const socialSignal =
-                      v.social_freshness_label?.trim() ||
-                      (v.social_note?.trim() ? 'New Instagram update' : null);
+                      buildSocialSignal(v.social_freshness_label, v.social_note);
+                    const venueMainReason = featuredSpecialRule
+                      ? getSpecialBadge(featuredSpecialRule) ?? 'Specials today'
+                      : happyHourNow
+                        ? 'Happy hour live now'
+                        : openNow
+                          ? 'Open now'
+                          : nextOpeningText ?? 'Check today\'s hours';
 
                     return (
                       <div
@@ -1853,7 +1859,10 @@ function VenuesPageContent() {
                       >
                         <div className="flex items-start gap-3 sm:gap-4">
                           <div className="min-w-0 flex-1 space-y-2">
-                          <div className="text-[28px] font-semibold leading-tight tracking-tight sm:text-[30px]">
+                          <div className="text-[19px] font-semibold leading-6 text-white sm:text-[22px] sm:leading-7">
+                            {venueMainReason}
+                          </div>
+                          <div className="text-[25px] font-semibold leading-tight tracking-tight text-white/90 sm:text-[28px]">
                             {v.name ?? 'Unnamed venue'}
                           </div>
 
@@ -1939,14 +1948,11 @@ function VenuesPageContent() {
                               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200/80">
                                 {liveDealRules.length > 0 ? 'Special live now' : 'Specials today'}
                               </div>
-                              <div className="mt-1 font-medium text-white">
-                                {getSpecialBadge(featuredSpecialRule)}
-                              </div>
                             </div>
                           ) : null}
 
                           {socialSignal ? (
-                            <div className="text-sm font-medium text-orange-200/72">
+                            <div className="text-sm font-medium leading-5 text-orange-100/74">
                               {socialSignal}
                             </div>
                           ) : null}
@@ -1968,7 +1974,7 @@ function VenuesPageContent() {
                           <VenuePrimaryImage
                             venue={v}
                             variant="card"
-                            className="w-[96px] shrink-0 sm:w-[138px] lg:w-[156px]"
+                            className="w-[122px] shrink-0 sm:w-[38%] sm:max-w-[220px]"
                           />
                         </div>
 
@@ -2796,7 +2802,15 @@ function isFoodDealRule(rule: VenueScheduleRule) {
   );
 }
 
+function buildSocialSignal(labelValue: string | null | undefined, noteValue: string | null | undefined) {
+  const label = labelValue?.trim();
+  const note = noteValue?.trim();
 
+  if (label && note) return `🔥 ${label}: ${note}`;
+  if (note) return `🔥 New Instagram update: ${note}`;
+  if (label) return `🔥 ${label}`;
+  return null;
+}
 
 
 

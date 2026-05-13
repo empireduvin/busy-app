@@ -39,9 +39,7 @@ export default function PublicVenueCard({
   const venueTypeLabel = getVenueTypeLabel(venue);
   const websiteHref = buildPublicVenueHref(venue);
   const instagramHref = normalizeInstagramUrl(venue.instagram_url);
-  const socialSignal =
-    venue.social_freshness_label?.trim() ||
-    (venue.social_note?.trim() ? 'New Instagram update' : null);
+  const socialSignal = buildSocialSignal(venue);
   const allBadges = [
     ...(badges ?? []),
     ...(normalizeBooleanFlag(venue.shows_sport) ? ['Sport'] : []),
@@ -53,19 +51,19 @@ export default function PublicVenueCard({
   const visibleBadges = compact ? [] : allBadges.slice(0, 4);
   const hiddenBadgeCount = compact ? 0 : Math.max(0, allBadges.length - visibleBadges.length);
   const secondaryActions = [
-    venue.website_url
-      ? {
-          key: 'website',
-          href: venue.website_url,
-          label: 'Website',
-          external: true,
-        }
-      : null,
     instagramHref
       ? {
           key: 'instagram',
           href: instagramHref,
           label: 'Instagram',
+          external: true,
+        }
+      : null,
+    venue.website_url
+      ? {
+          key: 'website',
+          href: venue.website_url,
+          label: 'Website',
           external: true,
         }
       : null,
@@ -122,18 +120,23 @@ export default function PublicVenueCard({
           <div className="flex items-start gap-2.5 sm:gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-200/88">
-                  {eyebrow}
-                </div>
                 {heroBadge ? <div className="shrink-0">{heroBadge}</div> : null}
               </div>
 
-              <h2 className="mt-1 line-clamp-2 text-[20px] font-semibold leading-[1.02] tracking-tight text-white sm:mt-1.5 sm:text-[24px]">
+              {summary ? (
+                <div className="min-w-0 text-[15px] font-semibold leading-5 text-white sm:text-[16px]">
+                  {summary}
+                </div>
+              ) : (
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-200/88">
+                  {eyebrow}
+                </div>
+              )}
+
+              <h2 className="mt-1 line-clamp-2 text-[18px] font-semibold leading-[1.04] tracking-tight text-white/88 sm:mt-1.5 sm:text-[21px]">
                 {venue.name || 'Untitled venue'}
               </h2>
               <VenueIntentBadge venueId={venue.id} />
-
-              {summary ? <div className="mt-0.5 min-w-0 text-[13px] font-medium leading-4.5 text-white/94 sm:text-[14px]">{summary}</div> : null}
 
               <div className="mt-0.5 min-w-0 break-words text-[11px] leading-4 text-white/68 sm:mt-1 sm:text-[12px] sm:leading-5">
                 <span>{venue.suburb ?? 'Suburb TBC'}</span>
@@ -149,22 +152,34 @@ export default function PublicVenueCard({
             <VenuePrimaryImage
               venue={venue}
               variant="compact-card"
-              className="w-[92px] shrink-0 sm:w-[110px]"
+              className="w-[112px] shrink-0 sm:w-[132px]"
             />
           </div>
 
-          <div className="mt-1.5">
-            <div className="grid gap-1.5">
+          <div className="mt-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <a
                 href={websiteHref}
                 onClick={(event) => event.stopPropagation()}
-                className="inline-flex min-h-[31px] w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.02] px-3 py-1.5 text-[12px] font-medium text-white/72 transition hover:border-white/16 hover:bg-white/[0.06] hover:text-white"
+                className="inline-flex min-h-[31px] flex-1 items-center justify-center rounded-xl border border-orange-300/20 bg-orange-500/12 px-3 py-1.5 text-[12px] font-semibold text-orange-50 transition hover:border-orange-200/35 hover:bg-orange-500/18"
               >
                 View venue
               </a>
               {secondaryFooterAction ? (
-                <div onClick={(event) => event.stopPropagation()}>{secondaryFooterAction}</div>
+                <div className="shrink-0" onClick={(event) => event.stopPropagation()}>{secondaryFooterAction}</div>
               ) : null}
+              {visibleSecondaryActions.map((action) => (
+                <a
+                  key={action.key}
+                  href={action.href}
+                  target={action.external ? '_blank' : undefined}
+                  rel={action.external ? 'noreferrer' : undefined}
+                  onClick={(event) => event.stopPropagation()}
+                  className="inline-flex min-h-[31px] items-center justify-center rounded-xl border border-white/8 bg-white/[0.02] px-2.5 py-1.5 text-[11px] font-medium text-white/62 transition hover:border-white/14 hover:bg-white/6 hover:text-white"
+                >
+                  {action.label}
+                </a>
+              ))}
             </div>
           </div>
         </div>
@@ -189,32 +204,35 @@ export default function PublicVenueCard({
         }
       }}
     >
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,122,40,0.10),transparent_32%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,122,40,0.10),transparent_32%)]" />
 
       <div className="relative">
-        <div className="flex items-start justify-between gap-3">
-          <div className="inline-flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-orange-400 shadow-[0_0_10px_rgba(255,138,61,0.75)]" />
-            <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-300/88">
-              {eyebrow}
-            </div>
-          </div>
+        <div className="flex items-start justify-end gap-3">
           {heroBadge ? <div className="shrink-0">{heroBadge}</div> : null}
         </div>
 
-        <div className="mt-2.5 flex items-start gap-3 sm:mt-3 sm:gap-4">
+        <div className="mt-2 flex items-start gap-3 sm:mt-2.5 sm:gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-start justify-between gap-2.5 sm:gap-3">
               <div className="min-w-0 flex-1">
+                {summary ? (
+                  <div className="mb-1.5 text-[18px] font-semibold leading-6 text-white sm:text-[21px] sm:leading-7">
+                    {summary}
+                  </div>
+                ) : null}
                 <h2
                   className={[
-                    compact ? 'text-[20px] sm:text-[26px]' : 'text-[24px] sm:text-3xl',
-                    'break-words font-semibold leading-[1.04] text-white',
+                    compact ? 'text-[20px] sm:text-[26px]' : 'text-[22px] sm:text-[26px]',
+                    'break-words font-semibold leading-[1.05] text-white/88',
                   ].join(' ')}
                 >
                   {venue.name || 'Untitled venue'}
                 </h2>
                 <VenueIntentBadge venueId={venue.id} />
+                <div className="mt-1.5 inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-300/78">
+                  <span className="h-1.5 w-1.5 rounded-full bg-orange-400 shadow-[0_0_10px_rgba(255,138,61,0.75)]" />
+                  {eyebrow}
+                </div>
                 <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px] text-white/58 sm:mt-2 sm:gap-2 sm:text-xs sm:text-white/72">
                   {venue.suburb ? <MetaPill>{venue.suburb.toUpperCase()}</MetaPill> : null}
                   {venueTypeLabel ? <MetaPill>{venueTypeLabel.toUpperCase()}</MetaPill> : null}
@@ -235,10 +253,8 @@ export default function PublicVenueCard({
               </div>
             ) : null}
 
-            {summary ? <div className="mt-3.5 sm:mt-4">{summary}</div> : null}
-
             {socialSignal ? (
-              <div className="mt-2 text-[12px] font-medium text-orange-200/72">
+              <div className="mt-2 text-[12px] font-medium leading-5 text-orange-100/74">
                 {socialSignal}
               </div>
             ) : null}
@@ -258,20 +274,20 @@ export default function PublicVenueCard({
           <VenuePrimaryImage
             venue={venue}
             variant="card"
-            className="w-[104px] shrink-0 sm:w-[150px] lg:w-[168px]"
+            className="w-[128px] shrink-0 sm:w-[38%] sm:max-w-[210px]"
           />
         </div>
 
-        <div className="mt-3.5 grid grid-cols-2 gap-2 text-sm sm:gap-2.5">
+        <div className="mt-3.5 flex flex-wrap items-center gap-2 text-sm sm:gap-2.5">
           <a
             href={websiteHref}
             onClick={(event) => event.stopPropagation()}
-            className="col-span-2 inline-flex min-h-[34px] items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[12px] font-medium text-white/80 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-white sm:min-h-[36px] sm:px-3 sm:text-[13px]"
+            className="inline-flex min-h-[34px] flex-1 items-center justify-center rounded-xl border border-orange-300/20 bg-orange-500/12 px-3 py-1.5 text-[12px] font-semibold text-orange-50 transition hover:border-orange-200/35 hover:bg-orange-500/18 sm:min-h-[36px] sm:px-3 sm:text-[13px]"
           >
             View venue
           </a>
           {secondaryFooterAction ? (
-            <div className="col-span-2" onClick={(event) => event.stopPropagation()}>
+            <div className="shrink-0" onClick={(event) => event.stopPropagation()}>
               {secondaryFooterAction}
             </div>
           ) : null}
@@ -282,7 +298,7 @@ export default function PublicVenueCard({
               target={action.external ? '_blank' : undefined}
               rel={action.external ? 'noreferrer' : undefined}
               onClick={(event) => event.stopPropagation()}
-              className="inline-flex min-h-[32px] items-center justify-center rounded-xl border border-white/8 bg-transparent px-3 py-1.5 text-[12px] font-medium text-white/60 transition hover:border-white/14 hover:bg-white/6 hover:text-white sm:min-h-[36px] sm:text-[13px]"
+              className="inline-flex min-h-[32px] items-center justify-center rounded-xl border border-white/8 bg-transparent px-2.5 py-1.5 text-[12px] font-medium text-white/60 transition hover:border-white/14 hover:bg-white/6 hover:text-white sm:min-h-[36px] sm:px-3 sm:text-[13px]"
             >
               {action.label}
             </a>
@@ -291,6 +307,16 @@ export default function PublicVenueCard({
       </div>
     </article>
   );
+}
+
+function buildSocialSignal(venue: Pick<Venue, 'social_freshness_label' | 'social_note'>) {
+  const label = venue.social_freshness_label?.trim();
+  const note = venue.social_note?.trim();
+
+  if (label && note) return `🔥 ${label}: ${note}`;
+  if (note) return `🔥 New Instagram update: ${note}`;
+  if (label) return `🔥 ${label}`;
+  return null;
 }
 
 function MetaPill({ children }: { children: ReactNode }) {

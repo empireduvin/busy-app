@@ -5566,7 +5566,7 @@ export default function AdminMasterPage() {
               <div className="mb-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-3.5 sm:p-4">
                 <div className="text-sm font-semibold text-neutral-900">Social / Instagram</div>
                 <p className="mt-1 text-xs leading-5 text-neutral-600">
-                  Manual entry only. No Instagram API, scraping, or feed embeds. Keep the primary venue image separate.
+                  Paste a venue Instagram profile or post/reel link. Use the note to explain why it matters, e.g. &quot;New happy hour menu posted this week.&quot; Manual entry only; no API, scraping, or feed embeds.
                 </p>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <div>
@@ -5618,7 +5618,7 @@ export default function AdminMasterPage() {
                       type="text"
                       value={venueForm.social_note}
                       onChange={(e) => updateVenueForm('social_note', e.target.value)}
-                      placeholder="New event post, fresh specials update, latest live music post"
+                      placeholder="New happy hour menu posted this week; Tonight's DJ lineup posted; Fresh food special announced"
                       className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                     />
                   </div>

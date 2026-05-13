@@ -393,6 +393,8 @@ export default function PublicVenueDetailPage() {
       instagramHref ||
       featuredInstagramHref
   );
+  const socialLabel = venue.social_freshness_label?.trim();
+  const socialNote = venue.social_note?.trim();
   const liveHappyHourRule =
     detail.todayHappyHourRules.find((rule) => isRuleLiveNow(rule, detail.timezone)) ?? null;
   const liveSpecialRule =
@@ -670,14 +672,14 @@ export default function PublicVenueDetailPage() {
                   <div className="text-[11px] uppercase tracking-[0.22em] text-orange-300/70">
                     Latest from the venue
                   </div>
-                  {venue.social_freshness_label?.trim() ? (
+                  {socialLabel ? (
                     <div className="mt-2 text-lg font-semibold text-white">
-                      {venue.social_freshness_label.trim()}
+                      🔥 {socialLabel}
                     </div>
                   ) : null}
-                  {venue.social_note?.trim() ? (
+                  {socialNote ? (
                     <div className="mt-2 text-sm leading-5 text-white/68">
-                      {venue.social_note.trim()}
+                      {socialNote}
                     </div>
                   ) : null}
                   <div className="mt-3 grid gap-2">
@@ -698,7 +700,7 @@ export default function PublicVenueDetailPage() {
                         rel="noopener noreferrer"
                         className="inline-flex min-h-[36px] items-center justify-center rounded-xl border border-orange-300/20 bg-orange-500/10 px-3 py-1.5 text-[13px] font-medium text-orange-100 transition hover:border-orange-200/35 hover:bg-orange-500/16"
                       >
-                        Featured post/reel
+                        View latest post/reel
                       </a>
                     ) : null}
                   </div>
