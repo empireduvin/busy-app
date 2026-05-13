@@ -82,6 +82,7 @@ export default function AdminLayout({
       }
 
       const accessResponse = await fetch('/api/admin/access', {
+        cache: 'no-store',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -89,13 +90,17 @@ export default function AdminLayout({
 
       const accessJson = (await accessResponse.json()) as {
         ok?: boolean;
+        authenticated?: boolean;
+        isAdmin?: boolean;
         role?: 'admin' | 'portal' | 'none';
+        reason?: string;
+        email?: string | null;
         error?: string;
       };
 
       if (!mounted) return;
 
-      if (!accessResponse.ok || accessJson?.ok === false) {
+      if (!accessResponse.ok || accessJson?.ok === false || !accessJson.isAdmin) {
         const portalAccess = accessJson?.role === 'portal';
         setHasPortalAccess(portalAccess);
 
@@ -105,7 +110,12 @@ export default function AdminLayout({
           return;
         }
 
-        setErrorMessage(accessJson?.error || 'This account is not allowed to use the admin area.');
+        setErrorMessage(
+          accessJson?.error ||
+            (accessJson?.reason === 'not_admin'
+              ? 'You are signed in, but this account does not have admin access.'
+              : 'This account is not allowed to use the admin area.')
+        );
         authorizedRef.current = false;
         setGuardState('unauthorized');
         return;
@@ -122,8 +132,15 @@ export default function AdminLayout({
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
 
+      if (event === 'INITIAL_SESSION') {
+        return;
+      }
+
       if (!session?.user) {
-        router.replace('/login');
+        authorizedRef.current = false;
+        router.replace(
+          `/login?next=${encodeURIComponent(pathnameRef.current || '/admin')}`
+        );
         return;
       }
 

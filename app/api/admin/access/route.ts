@@ -11,7 +11,14 @@ export async function GET(request: Request) {
 
     if (!token) {
       return NextResponse.json(
-        { ok: false, error: 'Missing admin authorization token.' },
+        {
+          ok: false,
+          authenticated: false,
+          isAdmin: false,
+          role: 'none',
+          reason: 'missing_token',
+          error: 'Missing admin authorization token.',
+        },
         { status: 401 }
       );
     }
@@ -24,10 +31,26 @@ export async function GET(request: Request) {
 
     if (userError || !user) {
       return NextResponse.json(
-        { ok: false, error: 'Invalid or expired admin session.' },
+        {
+          ok: false,
+          authenticated: false,
+          isAdmin: false,
+          role: 'none',
+          reason: 'invalid_session',
+          error: 'Invalid or expired admin session.',
+        },
         { status: 401 }
       );
     }
+
+    await supabase.from('profiles').upsert(
+      {
+        id: user.id,
+        email: user.email ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    );
 
     const { data: adminRow, error: adminError } = await supabase
       .from('admin_users')
@@ -42,6 +65,8 @@ export async function GET(request: Request) {
     if (adminRow?.user_id) {
       return NextResponse.json({
         ok: true,
+        authenticated: true,
+        isAdmin: true,
         role: 'admin',
         email: user.email ?? null,
       });
@@ -57,11 +82,22 @@ export async function GET(request: Request) {
       throw new Error(portalError.message);
     }
 
+    const role = (portalRows?.length ?? 0) > 0 ? 'portal' : 'none';
+    console.info('[admin-access] denied', {
+      reason: role === 'portal' ? 'portal_only' : 'not_admin',
+      userId: user.id,
+      hasPortalAccess: role === 'portal',
+    });
+
     return NextResponse.json(
       {
         ok: false,
-        role: (portalRows?.length ?? 0) > 0 ? 'portal' : 'none',
+        authenticated: true,
+        isAdmin: false,
+        role,
+        reason: role === 'portal' ? 'portal_only' : 'not_admin',
         email: user.email ?? null,
+        error: 'This account is not allowed to use the admin area.',
       },
       { status: 403 }
     );

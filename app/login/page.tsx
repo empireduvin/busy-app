@@ -4,7 +4,7 @@ import { getSupabaseBrowserClientResult } from '@/lib/supabase-browser';
 import { BROWSER_SUPABASE_ENV_ERROR } from '@/lib/public-env';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FormEvent, Suspense, useMemo, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useMemo, useState } from 'react';
 
 function LoginPageContent() {
   const supabase = useMemo(() => getSupabaseBrowserClientResult().client, []);
@@ -21,6 +21,21 @@ function LoginPageContent() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
   const [signupMessage, setSignupMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!supabase) return;
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted || !data.session?.user) return;
+      router.replace(nextPath);
+      router.refresh();
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, [nextPath, router, supabase]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

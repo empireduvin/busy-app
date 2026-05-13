@@ -119,8 +119,15 @@ export default function PortalLayout({
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
 
+      if (event === 'INITIAL_SESSION') {
+        return;
+      }
+
       if (event === 'SIGNED_OUT' || !session?.user) {
-        router.replace('/login');
+        authorizedRef.current = false;
+        router.replace(
+          `/login?next=${encodeURIComponent(pathnameRef.current || '/portal')}`
+        );
         return;
       }
 
