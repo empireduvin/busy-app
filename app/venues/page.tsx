@@ -27,7 +27,7 @@ import {
 } from '@/lib/opening-hours';
 import type { ReactNode } from 'react';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { normalizeInstagramUrl } from '@/lib/social-links';
+import { normalizeInstagramContentUrl, normalizeInstagramUrl } from '@/lib/social-links';
 import type { HappyHourDetailItem, HappyHourPrice, ScheduleRuleDetailJson } from '@/lib/venue-data';
 import GoogleMap from '../components/GoogleMap';
 import TodayHoursSummary from '../components/TodayHoursSummary';
@@ -1841,8 +1841,14 @@ function VenuesPageContent() {
                     const ratingText = formatGoogleRating(v.google_rating);
                     const reviewCountText = formatReviewCount(v.google_user_rating_count);
                     const priceText = formatPriceLevel(v.price_level);
-                    const socialSignal =
-                      buildSocialSignal(v.social_freshness_label, v.social_note);
+                    const instagramHref = normalizeInstagramUrl(v.instagram_url);
+                    const featuredInstagramHref = normalizeInstagramContentUrl(v.featured_instagram_url);
+                    const hasSocialSignal = Boolean(
+                      v.social_freshness_label?.trim() ||
+                        v.social_note?.trim() ||
+                        featuredInstagramHref ||
+                        instagramHref
+                    );
                     const venueMainReason = featuredSpecialRule
                       ? getSpecialBadge(featuredSpecialRule) ?? 'Specials today'
                       : happyHourNow
@@ -1951,10 +1957,13 @@ function VenuesPageContent() {
                             </div>
                           ) : null}
 
-                          {socialSignal ? (
-                            <div className="text-sm font-medium leading-5 text-orange-100/74">
-                              {socialSignal}
-                            </div>
+                          {hasSocialSignal ? (
+                            <VenueSocialSignal
+                              label={v.social_freshness_label}
+                              note={v.social_note}
+                              featuredHref={featuredInstagramHref}
+                              instagramHref={instagramHref}
+                            />
                           ) : null}
 
                           {venueRuleSignals.length > 0 ? (
@@ -2109,23 +2118,23 @@ function VenuesPageContent() {
                           </div>
                         ) : null}
 
-                        <div className="mt-4 grid grid-cols-2 gap-2 text-sm sm:flex sm:flex-wrap sm:gap-3">
+                        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm sm:gap-3">
                           <a
-                            className="col-span-2 min-h-[44px] rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10 sm:col-span-1"
+                            className="inline-flex min-h-[34px] shrink-0 items-center justify-center rounded-xl border border-orange-300/20 bg-orange-500/12 px-3 py-1.5 text-[12px] font-semibold text-orange-50 transition hover:border-orange-200/35 hover:bg-orange-500/18 sm:min-h-[36px] sm:text-[13px]"
                             href={buildPublicVenueHref(v)}
                           >
                             View venue
                           </a>
 
-                          <div className="col-span-2 sm:col-span-1">
-                            <SaveVenueButton venueId={v.id} variant="detail" />
+                          <div className="shrink-0">
+                            <SaveVenueButton venueId={v.id} variant="card" />
                           </div>
 
                           {isExpanded ? (
                             <button
                               type="button"
                               onClick={() => toggleExpanded(v.id)}
-                              className="min-h-[44px] rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
+                              className="inline-flex min-h-[34px] items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[12px] font-medium text-white/68 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-white sm:min-h-[36px] sm:text-[13px]"
                             >
                               Hide weekly view
                             </button>
@@ -2133,7 +2142,7 @@ function VenuesPageContent() {
 
                           {v.booking_url ? (
                             <a
-                              className="min-h-[44px] rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
+                              className="inline-flex min-h-[34px] items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[12px] font-medium text-white/68 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-white sm:min-h-[36px] sm:text-[13px]"
                               href={v.booking_url}
                               target="_blank"
                               rel="noreferrer"
@@ -2144,7 +2153,7 @@ function VenuesPageContent() {
 
                           {v.website_url ? (
                             <a
-                              className="min-h-[44px] rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
+                              className="inline-flex min-h-[34px] items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[12px] font-medium text-white/68 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-white sm:min-h-[36px] sm:text-[13px]"
                               href={v.website_url}
                               target="_blank"
                               rel="noreferrer"
@@ -2153,12 +2162,12 @@ function VenuesPageContent() {
                             </a>
                           ) : null}
 
-                          {normalizeInstagramUrl(v.instagram_url) ? (
+                          {instagramHref ? (
                             <a
-                              className="min-h-[44px] rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
-                              href={normalizeInstagramUrl(v.instagram_url) ?? undefined}
+                              className="inline-flex min-h-[34px] items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[12px] font-medium text-white/68 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-white sm:min-h-[36px] sm:text-[13px]"
+                              href={instagramHref}
                               target="_blank"
-                              rel="noreferrer"
+                              rel="noopener noreferrer"
                             >
                               Instagram
                             </a>
@@ -2166,7 +2175,7 @@ function VenuesPageContent() {
 
                           {v.phone ? (
                             <a
-                              className="min-h-[44px] rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
+                              className="inline-flex min-h-[34px] items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[12px] font-medium text-white/68 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-white sm:min-h-[36px] sm:text-[13px]"
                               href={`tel:${v.phone}`}
                             >
                               Call
@@ -2175,7 +2184,7 @@ function VenuesPageContent() {
 
                           {v.google_maps_uri ? (
                             <a
-                              className="min-h-[44px] rounded-lg border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10"
+                              className="inline-flex min-h-[34px] items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[12px] font-medium text-white/68 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-white sm:min-h-[36px] sm:text-[13px]"
                               href={v.google_maps_uri}
                               target="_blank"
                               rel="noreferrer"
@@ -2802,16 +2811,56 @@ function isFoodDealRule(rule: VenueScheduleRule) {
   );
 }
 
-function buildSocialSignal(labelValue: string | null | undefined, noteValue: string | null | undefined) {
-  const label = labelValue?.trim();
-  const note = noteValue?.trim();
+function VenueSocialSignal({
+  label,
+  note,
+  featuredHref,
+  instagramHref,
+}: {
+  label: string | null | undefined;
+  note: string | null | undefined;
+  featuredHref: string | null;
+  instagramHref: string | null;
+}) {
+  const cleanLabel = label?.trim();
+  const cleanNote = note?.trim();
 
-  if (label && note) return `🔥 ${label}: ${note}`;
-  if (note) return `🔥 New Instagram update: ${note}`;
-  if (label) return `🔥 ${label}`;
-  return null;
+  if (!cleanLabel && !cleanNote && !featuredHref && !instagramHref) return null;
+
+  return (
+    <div className="space-y-1.5 text-sm">
+      {cleanLabel ? (
+        <div className="font-semibold leading-5 text-orange-100/80">🔥 {cleanLabel}</div>
+      ) : null}
+      {cleanNote ? (
+        <div className="line-clamp-2 leading-5 text-white/64">{cleanNote}</div>
+      ) : null}
+      {(featuredHref || instagramHref) ? (
+        <div className="flex flex-wrap gap-1.5">
+          {featuredHref ? (
+            <a
+              href={featuredHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-[28px] items-center justify-center rounded-lg border border-orange-300/18 bg-orange-500/8 px-2.5 py-1 text-[11px] font-medium text-orange-100/82 transition hover:border-orange-200/30 hover:bg-orange-500/14 hover:text-orange-50"
+            >
+              View post
+            </a>
+          ) : null}
+          {instagramHref ? (
+            <a
+              href={instagramHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-[28px] items-center justify-center rounded-lg border border-white/8 bg-white/[0.02] px-2.5 py-1 text-[11px] font-medium text-white/62 transition hover:border-white/14 hover:bg-white/6 hover:text-white"
+            >
+              Instagram
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
-
-
 
 

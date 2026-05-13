@@ -10,7 +10,7 @@ import {
   normalizeBooleanFlag,
   type Venue,
 } from '@/lib/public-venue-discovery';
-import { normalizeInstagramUrl } from '@/lib/social-links';
+import { normalizeInstagramContentUrl, normalizeInstagramUrl } from '@/lib/social-links';
 
 type CardTone = 'default' | 'live' | 'today';
 
@@ -39,7 +39,13 @@ export default function PublicVenueCard({
   const venueTypeLabel = getVenueTypeLabel(venue);
   const websiteHref = buildPublicVenueHref(venue);
   const instagramHref = normalizeInstagramUrl(venue.instagram_url);
-  const socialSignal = buildSocialSignal(venue);
+  const featuredInstagramHref = normalizeInstagramContentUrl(venue.featured_instagram_url);
+  const hasSocialSignal = Boolean(
+    venue.social_freshness_label?.trim() ||
+      venue.social_note?.trim() ||
+      featuredInstagramHref ||
+      instagramHref
+  );
   const allBadges = [
     ...(badges ?? []),
     ...(normalizeBooleanFlag(venue.shows_sport) ? ['Sport'] : []),
@@ -51,14 +57,6 @@ export default function PublicVenueCard({
   const visibleBadges = compact ? [] : allBadges.slice(0, 4);
   const hiddenBadgeCount = compact ? 0 : Math.max(0, allBadges.length - visibleBadges.length);
   const secondaryActions = [
-    instagramHref
-      ? {
-          key: 'instagram',
-          href: instagramHref,
-          label: 'Instagram',
-          external: true,
-        }
-      : null,
     venue.website_url
       ? {
           key: 'website',
@@ -143,10 +141,14 @@ export default function PublicVenueCard({
                 {venueTypeLabel ? <span>{` | ${venueTypeLabel}`}</span> : null}
                 {details ? <span>{` | `}{details}</span> : null}
               </div>
-              {socialSignal ? (
-                <div className="mt-1 text-[11px] font-medium text-orange-200/72">
-                  {socialSignal}
-                </div>
+              {hasSocialSignal ? (
+                <VenueSocialSignal
+                  label={venue.social_freshness_label}
+                  note={venue.social_note}
+                  featuredHref={featuredInstagramHref}
+                  instagramHref={instagramHref}
+                  compact
+                />
               ) : null}
             </div>
             <VenuePrimaryImage
@@ -161,7 +163,7 @@ export default function PublicVenueCard({
               <a
                 href={websiteHref}
                 onClick={(event) => event.stopPropagation()}
-                className="inline-flex min-h-[31px] flex-1 items-center justify-center rounded-xl border border-orange-300/20 bg-orange-500/12 px-3 py-1.5 text-[12px] font-semibold text-orange-50 transition hover:border-orange-200/35 hover:bg-orange-500/18"
+                className="inline-flex min-h-[31px] shrink-0 items-center justify-center rounded-xl border border-orange-300/20 bg-orange-500/12 px-3 py-1.5 text-[12px] font-semibold text-orange-50 transition hover:border-orange-200/35 hover:bg-orange-500/18"
               >
                 View venue
               </a>
@@ -253,10 +255,13 @@ export default function PublicVenueCard({
               </div>
             ) : null}
 
-            {socialSignal ? (
-              <div className="mt-2 text-[12px] font-medium leading-5 text-orange-100/74">
-                {socialSignal}
-              </div>
+            {hasSocialSignal ? (
+              <VenueSocialSignal
+                label={venue.social_freshness_label}
+                note={venue.social_note}
+                featuredHref={featuredInstagramHref}
+                instagramHref={instagramHref}
+              />
             ) : null}
 
             {!compact && visibleBadges.length > 0 ? (
@@ -282,7 +287,7 @@ export default function PublicVenueCard({
           <a
             href={websiteHref}
             onClick={(event) => event.stopPropagation()}
-            className="inline-flex min-h-[34px] flex-1 items-center justify-center rounded-xl border border-orange-300/20 bg-orange-500/12 px-3 py-1.5 text-[12px] font-semibold text-orange-50 transition hover:border-orange-200/35 hover:bg-orange-500/18 sm:min-h-[36px] sm:px-3 sm:text-[13px]"
+            className="inline-flex min-h-[34px] shrink-0 items-center justify-center rounded-xl border border-orange-300/20 bg-orange-500/12 px-3 py-1.5 text-[12px] font-semibold text-orange-50 transition hover:border-orange-200/35 hover:bg-orange-500/18 sm:min-h-[36px] sm:px-3 sm:text-[13px]"
           >
             View venue
           </a>
@@ -309,14 +314,64 @@ export default function PublicVenueCard({
   );
 }
 
-function buildSocialSignal(venue: Pick<Venue, 'social_freshness_label' | 'social_note'>) {
-  const label = venue.social_freshness_label?.trim();
-  const note = venue.social_note?.trim();
+function VenueSocialSignal({
+  label,
+  note,
+  featuredHref,
+  instagramHref,
+  compact = false,
+}: {
+  label: string | null | undefined;
+  note: string | null | undefined;
+  featuredHref: string | null;
+  instagramHref: string | null;
+  compact?: boolean;
+}) {
+  const cleanLabel = label?.trim();
+  const cleanNote = note?.trim();
 
-  if (label && note) return `🔥 ${label}: ${note}`;
-  if (note) return `🔥 New Instagram update: ${note}`;
-  if (label) return `🔥 ${label}`;
-  return null;
+  if (!cleanLabel && !cleanNote && !featuredHref && !instagramHref) return null;
+
+  return (
+    <div className={compact ? 'mt-1 space-y-1' : 'mt-2 space-y-1.5'}>
+      {cleanLabel ? (
+        <div className={compact ? 'text-[11px] font-semibold text-orange-100/78' : 'text-[12px] font-semibold leading-5 text-orange-100/80'}>
+          🔥 {cleanLabel}
+        </div>
+      ) : null}
+      {cleanNote ? (
+        <div className={compact ? 'line-clamp-2 text-[11px] leading-4 text-white/62' : 'line-clamp-2 text-[12px] leading-5 text-white/64'}>
+          {cleanNote}
+        </div>
+      ) : null}
+      {(featuredHref || instagramHref) ? (
+        <div className="flex flex-wrap gap-1.5">
+          {featuredHref ? (
+            <a
+              href={featuredHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              className="inline-flex min-h-[28px] items-center justify-center rounded-lg border border-orange-300/18 bg-orange-500/8 px-2.5 py-1 text-[11px] font-medium text-orange-100/82 transition hover:border-orange-200/30 hover:bg-orange-500/14 hover:text-orange-50"
+            >
+              View post
+            </a>
+          ) : null}
+          {instagramHref ? (
+            <a
+              href={instagramHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              className="inline-flex min-h-[28px] items-center justify-center rounded-lg border border-white/8 bg-white/[0.02] px-2.5 py-1 text-[11px] font-medium text-white/62 transition hover:border-white/14 hover:bg-white/6 hover:text-white"
+            >
+              Instagram
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function MetaPill({ children }: { children: ReactNode }) {

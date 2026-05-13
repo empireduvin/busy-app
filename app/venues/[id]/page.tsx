@@ -682,17 +682,7 @@ export default function PublicVenueDetailPage() {
                       {socialNote}
                     </div>
                   ) : null}
-                  <div className="mt-3 grid gap-2">
-                    {instagramHref ? (
-                      <a
-                        href={instagramHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex min-h-[36px] items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[13px] text-white/78 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-white"
-                      >
-                        View Instagram
-                      </a>
-                    ) : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
                     {featuredInstagramHref ? (
                       <a
                         href={featuredInstagramHref}
@@ -701,6 +691,16 @@ export default function PublicVenueDetailPage() {
                         className="inline-flex min-h-[36px] items-center justify-center rounded-xl border border-orange-300/20 bg-orange-500/10 px-3 py-1.5 text-[13px] font-medium text-orange-100 transition hover:border-orange-200/35 hover:bg-orange-500/16"
                       >
                         View latest post/reel
+                      </a>
+                    ) : null}
+                    {instagramHref ? (
+                      <a
+                        href={instagramHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-[36px] items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[13px] text-white/78 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-white"
+                      >
+                        View Instagram
                       </a>
                     ) : null}
                   </div>
