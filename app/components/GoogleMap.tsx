@@ -5,8 +5,11 @@ import { useEffect, useRef, useState } from "react";
 type MapVenue = {
   id: string;
   name: string | null;
-  lat: number | null;
-  lng: number | null;
+  suburb?: string | null;
+  venueType?: string | null;
+  lat: number | string | null;
+  lng: number | string | null;
+  href?: string | null;
 };
 
 declare global {
@@ -70,6 +73,15 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
   const [status, setStatus] = useState<string>("Loading map...");
   const [mapReady, setMapReady] = useState(false);
 
+  const validVenues = venues
+    .map((venue) => {
+      const lat = normalizeCoordinate(venue.lat);
+      const lng = normalizeCoordinate(venue.lng);
+      if (lat == null || lng == null) return null;
+      return { ...venue, lat, lng };
+    })
+    .filter((venue): venue is MapVenue & { lat: number; lng: number } => venue != null);
+
   function refreshMapLayout() {
     const map = mapRef.current;
     if (!map || !window.google?.maps) return;
@@ -110,9 +122,9 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
             mapTypeControl: false,
             zoomControl: true,
             streetViewControl: false,
-            fullscreenControl: true,
+            fullscreenControl: false,
             clickableIcons: false,
-            gestureHandling: "greedy",
+            gestureHandling: "cooperative",
           });
 
           infoRef.current = new window.google.maps.InfoWindow();
@@ -138,51 +150,54 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
 
     markersRef.current.forEach((marker) => marker.setMap(null));
     markersRef.current = [];
+    infoRef.current?.close();
 
-    const withCoords = venues.filter(
-      (v) =>
-        typeof v.lat === "number" &&
-        !Number.isNaN(v.lat) &&
-        typeof v.lng === "number" &&
-        !Number.isNaN(v.lng)
-    );
-
-    if (withCoords.length === 0) return;
+    if (validVenues.length === 0) return;
 
     const bounds = new window.google.maps.LatLngBounds();
 
-    withCoords.forEach((v) => {
-      const pos = { lat: v.lat!, lng: v.lng! };
+    validVenues.forEach((v) => {
+      const pos = { lat: v.lat, lng: v.lng };
 
       const marker = new window.google.maps.Marker({
         position: pos,
         map,
         title: v.name ?? "Venue",
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          fillColor: "#f97316",
+          fillOpacity: 0.95,
+          strokeColor: "#111827",
+          strokeWeight: 2,
+          scale: 7,
+        },
       });
 
       marker.addListener("click", () => {
         const el = document.getElementById(`venue-${v.id}`);
         el?.scrollIntoView({ behavior: "smooth", block: "start" });
 
-        if (infoRef.current) {
-          infoRef.current.setContent(
-            `<div style="font-weight:600;">${escapeHtml(v.name ?? "Venue")}</div>`
-          );
-          infoRef.current.open({ anchor: marker, map });
-        }
+        const content = buildInfoWindowContent(v);
+        if (!infoRef.current || !content) return;
+
+        infoRef.current.setContent(content);
+        infoRef.current.open({ anchor: marker, map });
       });
 
       markersRef.current.push(marker);
       bounds.extend(pos);
     });
 
-    map.fitBounds(bounds, 60);
+    window.requestAnimationFrame(() => {
+      refreshMapLayout();
+      map.fitBounds(bounds, 56);
 
-    if (withCoords.length === 1) {
-      map.setZoom(15);
-      map.setCenter({ lat: withCoords[0].lat!, lng: withCoords[0].lng! });
-    }
-  }, [mapReady, venues]);
+      if (validVenues.length === 1) {
+        map.setZoom(15);
+        map.setCenter({ lat: validVenues[0].lat, lng: validVenues[0].lng });
+      }
+    });
+  }, [mapReady, validVenues]);
 
   useEffect(() => {
     if (!mapRef.current || !window.google?.maps) return;
@@ -223,7 +238,15 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
       window.clearTimeout(first);
       window.clearTimeout(second);
     };
-  }, [mapReady, venues.length]);
+  }, [mapReady, validVenues.length]);
+
+  if (validVenues.length === 0) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-white/65">
+        No valid map coordinates are available for these venues yet.
+      </div>
+    );
+  }
 
   return (
     <div className="grid gap-3">
@@ -235,10 +258,49 @@ export default function GoogleMap({ venues }: { venues: MapVenue[] }) {
 
       <div
         ref={mapDivRef}
-        className="h-[min(62vh,560px)] min-h-[300px] w-full overflow-hidden rounded-2xl border border-white/10 sm:h-[min(70vh,720px)] sm:min-h-[420px]"
+        className="h-[380px] w-full overflow-hidden rounded-2xl border border-white/10 bg-neutral-950 sm:h-[460px] lg:h-[520px]"
       />
     </div>
   );
+}
+
+function normalizeCoordinate(value: number | string | null) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value !== "string") return null;
+
+  const parsed = Number(value.trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function buildInfoWindowContent(venue: MapVenue) {
+  const name = venue.name?.trim();
+  if (!name) return null;
+
+  const metadata = [venue.suburb, venue.venueType]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" · ");
+  const href = venue.href?.trim() || `/venues/${encodeURIComponent(venue.id)}`;
+
+  return `
+    <div style="max-width: 220px; color: #111827; font-family: Arial, sans-serif;">
+      <div style="font-size: 14px; font-weight: 700; line-height: 1.25;">${escapeHtml(name)}</div>
+      ${
+        metadata
+          ? `<div style="margin-top: 3px; font-size: 12px; line-height: 1.35; color: #4b5563;">${escapeHtml(metadata)}</div>`
+          : ""
+      }
+      <a
+        href="${escapeHtml(href)}"
+        style="display: inline-block; margin-top: 9px; border-radius: 999px; background: #f97316; padding: 6px 10px; color: #111827; font-size: 12px; font-weight: 700; text-decoration: none;"
+      >
+        View venue
+      </a>
+    </div>
+  `;
 }
 
 function escapeHtml(input: string) {

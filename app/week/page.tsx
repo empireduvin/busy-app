@@ -9,6 +9,7 @@ import { getVenueProductGuardrails } from '@/lib/venue-product-guardrails';
 import { type DayOfWeek } from '@/lib/schedule-rules';
 import {
   HAPPY_HOUR_CATEGORIES,
+  buildPublicVenueHref,
   getCompactSpecialLine,
   getCompactVenueRuleSignal,
   getDayOfWeekForOffset,
@@ -20,6 +21,7 @@ import {
   getPublishedVenueRulesByKind,
   getRulesForDay,
   getScheduleRuleDisplayParts,
+  getVenueTypeLabel,
   hasText,
   type Venue,
   type VenueScheduleRule,
@@ -216,8 +218,11 @@ export default function WeekPage() {
       .map((row) => ({
         id: row.venue.id,
         name: row.venue.name,
+        suburb: row.venue.suburb,
+        venueType: getVenueTypeLabel(row.venue),
         lat: row.venue.lat,
         lng: row.venue.lng,
+        href: buildPublicVenueHref(row.venue),
       }));
   }, [renderedRows]);
 

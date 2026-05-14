@@ -9,6 +9,7 @@ import { formatTimeForUi, isOpenNow, type WeeklyHours } from '@/lib/opening-hour
 import { getVenueProductGuardrails } from '@/lib/venue-product-guardrails';
 import {
   HAPPY_HOUR_CATEGORIES,
+  buildPublicVenueHref,
   buildHoursJsonFromRules,
   getCompactSpecialLine,
   getCompactVenueRuleSignal,
@@ -20,6 +21,7 @@ import {
   getPublishedRulesByType,
   getPublishedVenueRulesByKind,
   getScheduleRuleDisplayParts,
+  getVenueTypeLabel,
   getTodayRulesForType,
   hasText,
   type Venue,
@@ -194,8 +196,11 @@ export default function LiveNowPage() {
       .map((row) => ({
         id: row.venue.id,
         name: row.venue.name,
+        suburb: row.venue.suburb,
+        venueType: getVenueTypeLabel(row.venue),
         lat: row.venue.lat,
         lng: row.venue.lng,
+        href: buildPublicVenueHref(row.venue),
       }));
   }, [renderedRows]);
 

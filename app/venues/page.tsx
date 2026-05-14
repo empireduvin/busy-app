@@ -1194,7 +1194,17 @@ function VenuesPageContent() {
   ]);
 
   const mapVenues = useMemo(() => {
-    return filtered.filter((v) => hasValidCoords(v.lat, v.lng));
+    return filtered
+      .filter((v) => hasValidCoords(v.lat, v.lng))
+      .map((venue) => ({
+        id: venue.id,
+        name: venue.name,
+        suburb: venue.suburb,
+        venueType: getVenueTypeLabel(venue),
+        lat: venue.lat,
+        lng: venue.lng,
+        href: buildPublicVenueHref(venue),
+      }));
   }, [filtered]);
 
   const searchSuggestions = useMemo(() => {
@@ -2862,4 +2872,3 @@ function VenueSocialSignal({
     </div>
   );
 }
-

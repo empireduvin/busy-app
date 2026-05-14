@@ -8,8 +8,10 @@ import { formatTimeForUi } from '@/lib/opening-hours';
 import { getVenueProductGuardrails } from '@/lib/venue-product-guardrails';
 import {
   HAPPY_HOUR_CATEGORIES,
+  buildPublicVenueHref,
   getCompactSpecialLine,
   getCompactVenueRuleSignal,
+  getVenueTypeLabel,
   getLunchSpecialEligibleRules,
   getPublishedDealRules,
   getDisplayHappyHourItems,
@@ -208,8 +210,11 @@ export default function TodayPage() {
       .map((row) => ({
         id: row.venue.id,
         name: row.venue.name,
+        suburb: row.venue.suburb,
+        venueType: getVenueTypeLabel(row.venue),
         lat: row.venue.lat,
         lng: row.venue.lng,
+        href: buildPublicVenueHref(row.venue),
       }));
   }, [renderedRows]);
 

@@ -372,7 +372,17 @@ export default function PublicVenueDetailPage() {
     !Number.isNaN(venue.lat) &&
     typeof venue.lng === 'number' &&
     !Number.isNaN(venue.lng)
-      ? [{ id: venue.id, name: venue.name, lat: venue.lat, lng: venue.lng }]
+      ? [
+          {
+            id: venue.id,
+            name: venue.name,
+            suburb: venue.suburb,
+            venueType: venueTypeLabel,
+            lat: venue.lat,
+            lng: venue.lng,
+            href: `/venues/${encodeURIComponent(venue.id)}`,
+          },
+        ]
       : [];
   const ratingText = venue.google_rating ? `Star ${venue.google_rating.toFixed(1)}` : null;
   const reviewsText = venue.google_user_rating_count
