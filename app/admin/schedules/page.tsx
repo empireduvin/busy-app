@@ -4251,10 +4251,11 @@ export default function AdminMasterPage() {
                       </div>
                     </div>
 
-                    <div
-                      ref={venueListScrollRef}
-                      className="admin-scrollbar-rail dark-scrollbar mt-4 max-h-[34rem] space-y-2 overflow-y-auto rounded-2xl border border-white/8 bg-black/10 p-2 pr-4"
-                    >
+                    <div className="relative mt-4">
+                      <div
+                        ref={venueListScrollRef}
+                        className="admin-scrollbar-rail dark-scrollbar max-h-[34rem] space-y-2 overflow-y-auto rounded-2xl border border-white/8 bg-black/10 p-2 pb-14 pr-4"
+                      >
                       {loadingVenues ? (
                         <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-6 text-sm text-white/60">
                           Loading...
@@ -4366,28 +4367,29 @@ export default function AdminMasterPage() {
                             </button>
                             );
                           })}
-                          {filteredVenues.length > 3 ? (
-                            <div className="pointer-events-none sticky bottom-2 z-20 flex justify-end">
-                              <div className="pointer-events-auto flex gap-1.5 rounded-full border border-orange-300/25 bg-black/80 p-1 shadow-[0_12px_30px_rgba(0,0,0,0.35)] backdrop-blur">
-                                <button
-                                  type="button"
-                                  onClick={() => scrollVenueList('up')}
-                                  className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-white/75 transition hover:border-white/20 hover:bg-white/8 hover:text-white"
-                                >
-                                  Up
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => scrollVenueList('down')}
-                                  className="rounded-full border border-orange-300/30 bg-orange-500/15 px-2.5 py-1 text-[11px] font-semibold text-orange-50 transition hover:border-orange-200/45 hover:bg-orange-500/24"
-                                >
-                                  Scroll down
-                                </button>
-                              </div>
-                            </div>
-                          ) : null}
                         </>
                       )}
+                      </div>
+                      {filteredVenues.length > 3 ? (
+                        <div className="pointer-events-none absolute bottom-3 right-6 z-20 flex justify-end">
+                          <div className="pointer-events-auto flex gap-1.5 rounded-full border border-orange-300/30 bg-black/90 p-1 shadow-[0_12px_30px_rgba(0,0,0,0.45)] backdrop-blur">
+                            <button
+                              type="button"
+                              onClick={() => scrollVenueList('up')}
+                              className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-white/75 transition hover:border-white/20 hover:bg-white/8 hover:text-white"
+                            >
+                              Up
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => scrollVenueList('down')}
+                              className="rounded-full border border-orange-300/35 bg-orange-500/20 px-2.5 py-1 text-[11px] font-semibold text-orange-50 transition hover:border-orange-200/50 hover:bg-orange-500/30"
+                            >
+                              Scroll down
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
             </section>
