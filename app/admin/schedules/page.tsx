@@ -1539,6 +1539,11 @@ export default function AdminMasterPage() {
   const [scheduleWorkspaceArmed, setScheduleWorkspaceArmed] = useState(false);
   const [adminMode, setAdminMode] = useState<'overview' | 'edit'>('overview');
   const scheduleEditorRef = useRef<HTMLDivElement | null>(null);
+  const venueListScrollRef = useRef<HTMLDivElement | null>(null);
+  const pendingAdminScrollRestoreRef = useRef<{
+    pageY: number;
+    venueListY: number;
+  } | null>(null);
 
   function requireSupabaseClient() {
     if (!supabase) {
@@ -1895,7 +1900,28 @@ export default function AdminMasterPage() {
     }
   }, [selectedVenueIds]);
 
+  useEffect(() => {
+    const pending = pendingAdminScrollRestoreRef.current;
+    if (!pending) return;
+
+    pendingAdminScrollRestoreRef.current = null;
+    window.requestAnimationFrame(() => {
+      if (venueListScrollRef.current) {
+        venueListScrollRef.current.scrollTop = pending.venueListY;
+      }
+      window.scrollTo({ top: pending.pageY, left: 0, behavior: 'auto' });
+    });
+  }, [filteredVenues.length, selectedVenueIds]);
+
+  function captureAdminScrollPosition() {
+    pendingAdminScrollRestoreRef.current = {
+      pageY: window.scrollY,
+      venueListY: venueListScrollRef.current?.scrollTop ?? 0,
+    };
+  }
+
   function toggleVenue(id: string) {
+    captureAdminScrollPosition();
     setScheduleWorkspaceArmed(false);
     setAdminMode('overview');
     setScheduleMessage(null);
@@ -1906,6 +1932,7 @@ export default function AdminMasterPage() {
   }
 
   function toggleVenueCheckbox(id: string) {
+    captureAdminScrollPosition();
     setScheduleWorkspaceArmed(false);
     setAdminMode('overview');
     setScheduleMessage(null);
@@ -1918,6 +1945,7 @@ export default function AdminMasterPage() {
   }
 
   function selectAllFiltered() {
+    captureAdminScrollPosition();
     const filteredIds = filteredVenues.map((venue) => venue.id);
     setScheduleWorkspaceArmed(false);
     setAdminMode('overview');
@@ -1930,6 +1958,7 @@ export default function AdminMasterPage() {
   }
 
   function clearFiltered() {
+    captureAdminScrollPosition();
     const filteredIds = new Set(filteredVenues.map((venue) => venue.id));
     setScheduleWorkspaceArmed(false);
     setAdminMode('overview');
@@ -2014,6 +2043,15 @@ export default function AdminMasterPage() {
     setScheduleMessage(
       `Loaded ${sourceType === 'opening' ? 'opening' : 'kitchen'} hours for ${formatActivityDays(selectedDays)}. Review and save when ready.`
     );
+  }
+
+  function scrollVenueList(direction: 'up' | 'down') {
+    const list = venueListScrollRef.current;
+    if (!list) return;
+    list.scrollBy({
+      top: direction === 'down' ? Math.max(220, list.clientHeight * 0.72) : -Math.max(220, list.clientHeight * 0.72),
+      behavior: 'smooth',
+    });
   }
 
   function applyDealItemHoursTemplate(
@@ -4213,7 +4251,10 @@ export default function AdminMasterPage() {
                       </div>
                     </div>
 
-                    <div className="dark-scrollbar mt-4 max-h-[34rem] space-y-2 overflow-y-auto rounded-2xl border border-white/8 bg-black/10 p-2 pr-1.5">
+                    <div
+                      ref={venueListScrollRef}
+                      className="admin-scrollbar-rail dark-scrollbar mt-4 max-h-[34rem] space-y-2 overflow-y-auto rounded-2xl border border-white/8 bg-black/10 p-2 pr-4"
+                    >
                       {loadingVenues ? (
                         <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-6 text-sm text-white/60">
                           Loading...
@@ -4223,10 +4264,11 @@ export default function AdminMasterPage() {
                           No venues match this search.
                         </div>
                       ) : (
-                        filteredVenues.map((venue) => {
-                          const isSelected = selectedVenueIds.includes(venue.id);
-                          const guardrails = venueGuardrailsById.get(venue.id);
-                          return (
+                        <>
+                          {filteredVenues.map((venue) => {
+                            const isSelected = selectedVenueIds.includes(venue.id);
+                            const guardrails = venueGuardrailsById.get(venue.id);
+                            return (
                             <button
                               type="button"
                               key={venue.id}
@@ -4322,8 +4364,29 @@ export default function AdminMasterPage() {
                                 </button>
                               </div>
                             </button>
-                          );
-                        })
+                            );
+                          })}
+                          {filteredVenues.length > 3 ? (
+                            <div className="pointer-events-none sticky bottom-2 z-20 flex justify-end">
+                              <div className="pointer-events-auto flex gap-1.5 rounded-full border border-orange-300/25 bg-black/80 p-1 shadow-[0_12px_30px_rgba(0,0,0,0.35)] backdrop-blur">
+                                <button
+                                  type="button"
+                                  onClick={() => scrollVenueList('up')}
+                                  className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-white/75 transition hover:border-white/20 hover:bg-white/8 hover:text-white"
+                                >
+                                  Up
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => scrollVenueList('down')}
+                                  className="rounded-full border border-orange-300/30 bg-orange-500/15 px-2.5 py-1 text-[11px] font-semibold text-orange-50 transition hover:border-orange-200/45 hover:bg-orange-500/24"
+                                >
+                                  Scroll down
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </>
                       )}
                     </div>
                   </div>
