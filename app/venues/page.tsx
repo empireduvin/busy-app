@@ -1865,17 +1865,17 @@ function VenuesPageContent() {
                       >
                         <div className="flex items-start gap-3 sm:gap-4">
                           <div className="min-w-0 flex-1 space-y-2">
-                          <div className="text-[19px] font-semibold leading-6 text-white sm:text-[22px] sm:leading-7">
-                            {venueMainReason}
-                          </div>
-                          <div className="text-[25px] font-semibold leading-tight tracking-tight text-white/90 sm:text-[28px]">
+                          <div className="text-[27px] font-semibold leading-tight tracking-tight text-white sm:text-[30px]">
                             {v.name ?? 'Unnamed venue'}
+                          </div>
+                          <div className="text-[15px] font-medium leading-5 text-white/76 sm:text-[16px] sm:leading-6">
+                            {venueMainReason}
                           </div>
 
                           <div className="flex flex-wrap gap-2 text-xs sm:text-sm">
-                            {v.suburb ? <MetaChip>{v.suburb.toUpperCase()}</MetaChip> : null}
+                            {v.suburb ? <MetaChip>{v.suburb}</MetaChip> : null}
                             {venueTypeLabel ? (
-                              <MetaChip>{venueTypeLabel.toUpperCase()}</MetaChip>
+                              <MetaChip>{venueTypeLabel}</MetaChip>
                             ) : null}
                             {ratingText ? (
                               <MetaChip>
@@ -2506,7 +2506,7 @@ function HappyHourRuleCard({
     <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
-          {dayLabel ? `${dayLabel} | Happy Hour` : 'Happy Hour'}
+          {dayLabel ? `${dayLabel} • Happy Hour` : 'Happy Hour'}
         </div>
         <div className="rounded-full border border-pink-400/20 bg-pink-400/10 px-2.5 py-0.5 text-[11px] font-semibold text-pink-200">
           {formatRuleTime(rule.start_time)} - {formatRuleTime(rule.end_time)}
@@ -2588,7 +2588,7 @@ function HappyHourRuleCard({
 
       {!hasStructuredItems && getScheduleRuleDisplayParts(rule).length > 0 ? (
         <div className="mt-2.5 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/80">
-          {getScheduleRuleDisplayParts(rule).slice(0, 2).join(' | ')}
+          {getScheduleRuleDisplayParts(rule).slice(0, 2).join(' • ')}
         </div>
       ) : null}
 
@@ -2630,7 +2630,7 @@ function SpecialRuleCard({
             </span>
           ) : null}
           <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
-            {dayLabel ? `${dayLabel} | ` : ''}
+            {dayLabel ? `${dayLabel} • ` : ''}
             {formatRuleTime(rule.start_time)} - {formatRuleTime(rule.end_time)}
           </span>
         </div>
@@ -2682,7 +2682,7 @@ function EventRuleCard({
         </div>
 
         <span className="rounded-full border border-violet-300/25 bg-violet-400/10 px-2 py-0.5 text-[11px] font-semibold text-violet-100">
-          {dayLabel ? `${dayLabel} | ` : ''}
+          {dayLabel ? `${dayLabel} • ` : ''}
           {formatRuleTime(rule.start_time)} - {formatRuleTime(rule.end_time)}
         </span>
       </div>
@@ -2756,7 +2756,7 @@ function formatEventRuleSummary(
     primaryText ? normalizeComparisonText(value) !== normalizeComparisonText(primaryText) : true
   );
 
-  if (parts.length > 0) return parts.join(' | ');
+  if (parts.length > 0) return parts.join(' • ');
   return null;
 }
 
@@ -2862,5 +2862,4 @@ function VenueSocialSignal({
     </div>
   );
 }
-
 

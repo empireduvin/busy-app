@@ -118,29 +118,32 @@ export default function PublicVenueCard({
           <div className="flex items-start gap-2.5 sm:gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
+                <h2 className="min-w-0 flex-1 line-clamp-2 text-[20px] font-semibold leading-[1.04] tracking-tight text-white sm:text-[22px]">
+                  {venue.name || 'Untitled venue'}
+                </h2>
                 {heroBadge ? <div className="shrink-0">{heroBadge}</div> : null}
               </div>
+              <VenueIntentBadge venueId={venue.id} />
 
               {summary ? (
-                <div className="min-w-0 text-[15px] font-semibold leading-5 text-white sm:text-[16px]">
+                <div className="mt-1 min-w-0 text-[13px] font-medium leading-4.5 text-white/78 sm:text-[14px] sm:leading-5">
                   {summary}
                 </div>
               ) : (
-                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-200/88">
+                <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-200/72">
                   {eyebrow}
                 </div>
               )}
 
-              <h2 className="mt-1 line-clamp-2 text-[18px] font-semibold leading-[1.04] tracking-tight text-white/88 sm:mt-1.5 sm:text-[21px]">
-                {venue.name || 'Untitled venue'}
-              </h2>
-              <VenueIntentBadge venueId={venue.id} />
-
-              <div className="mt-0.5 min-w-0 break-words text-[11px] leading-4 text-white/68 sm:mt-1 sm:text-[12px] sm:leading-5">
+              <div className="mt-1 min-w-0 break-words text-[11px] leading-4 text-white/62 sm:text-[12px] sm:leading-5">
                 <span>{venue.suburb ?? 'Suburb TBC'}</span>
-                {venueTypeLabel ? <span>{` | ${venueTypeLabel}`}</span> : null}
-                {details ? <span>{` | `}{details}</span> : null}
+                {venueTypeLabel ? <span>{` • ${venueTypeLabel}`}</span> : null}
               </div>
+              {details ? (
+                <div className="mt-0.5 min-w-0 break-words text-[11px] leading-4 text-white/52 sm:text-[12px] sm:leading-5">
+                  {details}
+                </div>
+              ) : null}
               {hasSocialSignal ? (
                 <VenueSocialSignal
                   label={venue.social_freshness_label}
@@ -209,35 +212,34 @@ export default function PublicVenueCard({
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,122,40,0.10),transparent_32%)]" />
 
       <div className="relative">
-        <div className="flex items-start justify-end gap-3">
-          {heroBadge ? <div className="shrink-0">{heroBadge}</div> : null}
-        </div>
-
-        <div className="mt-2 flex items-start gap-3 sm:mt-2.5 sm:gap-4">
+        <div className="flex items-start gap-3 sm:gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-start justify-between gap-2.5 sm:gap-3">
               <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-2.5">
+                  <h2
+                    className={[
+                      compact ? 'text-[20px] sm:text-[26px]' : 'text-[25px] sm:text-[30px]',
+                    'min-w-0 flex-1 break-words font-semibold leading-[1.04] text-white',
+                    ].join(' ')}
+                  >
+                    {venue.name || 'Untitled venue'}
+                  </h2>
+                  {heroBadge ? <div className="shrink-0">{heroBadge}</div> : null}
+                </div>
+                <VenueIntentBadge venueId={venue.id} />
                 {summary ? (
-                  <div className="mb-1.5 text-[18px] font-semibold leading-6 text-white sm:text-[21px] sm:leading-7">
+                  <div className="mt-1.5 text-[15px] font-medium leading-5 text-white/76 sm:text-[16px] sm:leading-6">
                     {summary}
                   </div>
                 ) : null}
-                <h2
-                  className={[
-                    compact ? 'text-[20px] sm:text-[26px]' : 'text-[22px] sm:text-[26px]',
-                    'break-words font-semibold leading-[1.05] text-white/88',
-                  ].join(' ')}
-                >
-                  {venue.name || 'Untitled venue'}
-                </h2>
-                <VenueIntentBadge venueId={venue.id} />
                 <div className="mt-1.5 inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-300/78">
                   <span className="h-1.5 w-1.5 rounded-full bg-orange-400 shadow-[0_0_10px_rgba(255,138,61,0.75)]" />
                   {eyebrow}
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px] text-white/58 sm:mt-2 sm:gap-2 sm:text-xs sm:text-white/72">
-                  {venue.suburb ? <MetaPill>{venue.suburb.toUpperCase()}</MetaPill> : null}
-                  {venueTypeLabel ? <MetaPill>{venueTypeLabel.toUpperCase()}</MetaPill> : null}
+                  {venue.suburb ? <MetaPill>{venue.suburb}</MetaPill> : null}
+                  {venueTypeLabel ? <MetaPill>{venueTypeLabel}</MetaPill> : null}
                 </div>
               </div>
 
@@ -273,7 +275,11 @@ export default function PublicVenueCard({
               </div>
             ) : null}
 
-            {details ? <div className="mt-3.5 space-y-2.5 sm:mt-4 sm:space-y-3">{details}</div> : null}
+            {details ? (
+              <div className="mt-2.5 text-[13px] leading-5 text-white/58 sm:text-sm sm:leading-6">
+                {details}
+              </div>
+            ) : null}
           </div>
 
           <VenuePrimaryImage

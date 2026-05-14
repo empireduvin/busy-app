@@ -1032,7 +1032,7 @@ function buildSecondaryLine(row: LiveNowRow) {
     .map((rule) => (rule ? getCompactVenueRuleSignal(rule) : null))
     .filter(Boolean)
     .slice(0, 2)
-    .join(' | ');
+    .join(' • ');
   const parts = [
     categorySummary,
     specialSummary,
@@ -1043,7 +1043,7 @@ function buildSecondaryLine(row: LiveNowRow) {
     row.openLate ? 'Open late' : null,
   ].filter((part): part is string => Boolean(part && normalizeDisplayText(part) !== primaryReason));
 
-  return dedupeDisplayParts(parts).slice(0, 3).join(' | ') || 'Happening now';
+  return dedupeDisplayParts(parts).slice(0, 3).join(' • ') || 'Happening now';
 }
 
 function getHappyHourOfferLine(rule: VenueScheduleRule | undefined) {
@@ -1101,7 +1101,7 @@ function buildHappyHourCategorySummary(rules: VenueScheduleRule[]) {
     rules.some((rule) => getDisplayHappyHourItems(rule.detail_json, category.key).length > 0)
   ).map((category) => category.label.replace(/^[^\s]+\s/, ''));
 
-  return categories.slice(0, 3).join(' | ');
+  return categories.slice(0, 3).join(' • ');
 }
 
 

@@ -153,7 +153,7 @@ export default function PublicHappyHourRuleCard({
 
       {!discoverySummary && !hasStructuredItems && fallbackParts.length > 0 ? (
         <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-[13px] text-white/85 sm:text-sm">
-          {fallbackParts.slice(0, 2).join(' | ')}
+          {fallbackParts.slice(0, 2).join(' • ')}
         </div>
       ) : null}
 

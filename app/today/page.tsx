@@ -979,12 +979,12 @@ function buildSecondaryLine(
     .map((rule) => (rule ? getCompactVenueRuleSignal(rule) : null))
     .filter(Boolean)
     .slice(0, 2)
-    .join(' | ');
+    .join(' • ');
 
-  if (specialSummary && supportiveSignals) return `${specialSummary} | ${supportiveSignals}`;
-  if (specialSummary && firstTiming) return `${specialSummary} | ${firstTiming}`;
-  if (categorySummary && firstTiming) return `${categorySummary} | ${firstTiming}`;
-  if (supportiveSignals && firstTiming) return `${supportiveSignals} | ${firstTiming}`;
+  if (specialSummary && supportiveSignals) return `${specialSummary} • ${supportiveSignals}`;
+  if (specialSummary && firstTiming) return `${specialSummary} • ${firstTiming}`;
+  if (categorySummary && firstTiming) return `${categorySummary} • ${firstTiming}`;
+  if (supportiveSignals && firstTiming) return `${supportiveSignals} • ${firstTiming}`;
   if (supportiveSignals) return supportiveSignals;
   if (specialSummary) return specialSummary;
   if (categorySummary) return categorySummary;
@@ -1023,7 +1023,7 @@ function buildHappyHourCategorySummary(rules: VenueScheduleRule[]) {
     rules.some((rule) => getDisplayHappyHourItems(rule.detail_json, category.key).length > 0)
   ).map((category) => category.label.replace(/^[^\s]+\s/, ''));
 
-  return categories.slice(0, 3).join(' | ');
+  return categories.slice(0, 3).join(' • ');
 }
 
 
