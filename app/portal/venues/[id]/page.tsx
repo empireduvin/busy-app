@@ -3294,7 +3294,7 @@ function PortalSelect<T extends string>({
       {open ? (
         <div className="portal-surface absolute left-0 right-0 top-[calc(100%+0.35rem)] z-30 overflow-hidden rounded-2xl border shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
           {groups?.length ? (
-            <div className="max-h-80 overflow-y-auto py-2">
+            <div className="dark-scrollbar max-h-80 overflow-y-auto py-2 pr-1">
               {groups.map((group) => (
                 <div key={group.label}>
                   <div className="px-4 pb-2 pt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-300/75">

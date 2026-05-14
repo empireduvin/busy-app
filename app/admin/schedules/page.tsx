@@ -4070,7 +4070,7 @@ export default function AdminMasterPage() {
           </div>
           <div className={`grid transition-[grid-template-rows,opacity] duration-200 ${showActivityLog ? 'mt-3 grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
             <div className="min-h-0 overflow-hidden">
-              <div className="max-h-[420px] space-y-3 overflow-y-auto">
+              <div className="dark-scrollbar max-h-[420px] space-y-3 overflow-y-auto pr-1">
               {activityLog.length === 0 ? (
                 <div className="text-sm text-neutral-500">No admin activity logged yet.</div>
               ) : (
@@ -4198,7 +4198,7 @@ export default function AdminMasterPage() {
                       </div>
                     </div>
 
-                    <div className="mt-4 max-h-[34rem] space-y-2 overflow-y-auto rounded-2xl border border-white/8 bg-black/10 p-2">
+                    <div className="dark-scrollbar mt-4 max-h-[34rem] space-y-2 overflow-y-auto rounded-2xl border border-white/8 bg-black/10 p-2 pr-1.5">
                       {loadingVenues ? (
                         <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-6 text-sm text-white/60">
                           Loading...
@@ -5441,7 +5441,7 @@ export default function AdminMasterPage() {
                   {googleError}
                 </div>
               )}
-              <div className="mt-4 max-h-[65vh] overflow-y-auto">
+              <div className="dark-scrollbar mt-4 max-h-[65vh] overflow-y-auto pr-1">
                 {googleResults.map((result) => (
                   <div key={result.place_id} className="admin-surface-subtle mb-3 rounded-xl border p-3">
                     <div className="font-medium">{result.name}</div>
@@ -6180,7 +6180,7 @@ export default function AdminMasterPage() {
                   )}
                 </div>
 
-                <div className="mt-4 max-h-64 overflow-y-auto rounded-xl border border-neutral-200">
+                <div className="dark-scrollbar mt-4 max-h-64 overflow-y-auto rounded-xl border border-neutral-200">
                   <div className="grid gap-2 p-3">
                     {filteredVenues.map((venue) => {
                       const active = globalVenueAccessVenueIds.includes(venue.id);

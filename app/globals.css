@@ -30,6 +30,35 @@ body {
   display: none;
 }
 
+.dark-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(251, 146, 60, 0.58) rgba(17, 22, 28, 0.95);
+}
+
+.dark-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.dark-scrollbar::-webkit-scrollbar-track {
+  background: rgba(17, 22, 28, 0.95);
+  border-radius: 999px;
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(251, 146, 60, 0.7), rgba(148, 163, 184, 0.62));
+  border: 2px solid rgba(17, 22, 28, 0.95);
+  border-radius: 999px;
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(251, 146, 60, 0.95), rgba(203, 213, 225, 0.78));
+}
+
+.dark-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .admin-shell {
   background: #0d0f12;
   color: #f5f7fa;
