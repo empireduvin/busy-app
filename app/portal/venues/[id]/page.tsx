@@ -20,7 +20,7 @@ import {
   type VenueRuleKind,
 } from '@/lib/schedule-rules';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
-import { normalizeInstagramUrl } from '@/lib/social-links';
+import { normalizeInstagramHandle, normalizeInstagramUrl } from '@/lib/social-links';
 import {
   type HappyHourDetailItem,
   type HappyHourDetailJson,
@@ -311,10 +311,24 @@ function updateVenueFlags<K extends keyof VenueFormState>(
   field: K,
   value: VenueFormState[K]
 ) {
+  const previousAutoHandle = normalizeInstagramHandle(current.instagram_url);
+  const nextAutoHandle =
+    field === 'instagram_url' && typeof value === 'string'
+      ? normalizeInstagramHandle(value)
+      : null;
   const next = {
     ...current,
     [field]: value,
   };
+
+  if (
+    field === 'instagram_url' &&
+    nextAutoHandle &&
+    (!current.instagram_handle.trim() ||
+      current.instagram_handle.trim() === previousAutoHandle)
+  ) {
+    next.instagram_handle = nextAutoHandle;
+  }
 
   if (field === 'shows_sport' && value === false) {
     next.plays_with_sound = false;

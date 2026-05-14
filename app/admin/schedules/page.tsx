@@ -25,6 +25,7 @@ import {
   getEffectiveKitchenHours,
   isRestaurantOrCafeVenueType,
 } from '@/lib/venue-type-rules';
+import { normalizeInstagramHandle } from '@/lib/social-links';
 import {
   DAY_OPTIONS,
   EVENT_SCHEDULE_TYPES,
@@ -2438,10 +2439,24 @@ export default function AdminMasterPage() {
     value: VenueFormState[K]
   ) {
     setVenueForm((current) => {
+      const previousAutoHandle = normalizeInstagramHandle(current.instagram_url);
+      const nextAutoHandle =
+        field === 'instagram_url' && typeof value === 'string'
+          ? normalizeInstagramHandle(value)
+          : null;
       const next = {
         ...current,
         [field]: value,
       };
+
+      if (
+        field === 'instagram_url' &&
+        nextAutoHandle &&
+        (!current.instagram_handle.trim() ||
+          current.instagram_handle.trim() === previousAutoHandle)
+      ) {
+        next.instagram_handle = nextAutoHandle;
+      }
 
       if (field === 'shows_sport' && value === false) {
         next.plays_with_sound = false;
