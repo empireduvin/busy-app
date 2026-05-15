@@ -74,7 +74,9 @@ export default function VenuePrimaryImage({
               ? '(min-width: 1024px) 1024px, 100vw'
               : isPreview
                 ? '(min-width: 1024px) 360px, 100vw'
-                : '(min-width: 1024px) 180px, 110px'
+                : variant === 'compact-card'
+                  ? '(min-width: 640px) 154px, 126px'
+                  : '(min-width: 1024px) 280px, (min-width: 640px) 32vw, 146px'
           }
           className="object-cover"
           onError={() => setFailed(true)}

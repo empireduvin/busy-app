@@ -115,7 +115,7 @@ export default function PublicVenueCard({
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,122,40,0.10),transparent_30%)]" />
 
         <div className="relative">
-          <div className="flex items-start gap-2.5 sm:gap-3">
+          <div className="flex items-start gap-2.5 sm:gap-3.5">
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
                 <h2 className="min-w-0 flex-1 line-clamp-2 text-[20px] font-semibold leading-[1.04] tracking-tight text-white sm:text-[22px]">
@@ -157,7 +157,7 @@ export default function PublicVenueCard({
             <VenuePrimaryImage
               venue={venue}
               variant="compact-card"
-              className="w-[112px] shrink-0 sm:w-[132px]"
+              className="w-[126px] shrink-0 sm:w-[154px]"
             />
           </div>
 
@@ -197,7 +197,7 @@ export default function PublicVenueCard({
       className={[
         'relative overflow-hidden rounded-[28px] border shadow-[0_20px_60px_rgba(0,0,0,0.28)] transition hover:border-white/18 hover:bg-white/[0.06]',
         toneClasses,
-        'p-4 sm:p-5',
+        'p-3.5 sm:p-4',
       ].join(' ')}
       role="link"
       tabIndex={0}
@@ -212,7 +212,7 @@ export default function PublicVenueCard({
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,122,40,0.10),transparent_32%)]" />
 
       <div className="relative">
-        <div className="flex items-start gap-3 sm:gap-4">
+        <div className="flex items-start gap-3 sm:gap-4 lg:gap-5">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-start justify-between gap-2.5 sm:gap-3">
               <div className="min-w-0 flex-1">
@@ -285,7 +285,7 @@ export default function PublicVenueCard({
           <VenuePrimaryImage
             venue={venue}
             variant="card"
-            className="w-[128px] shrink-0 sm:w-[38%] sm:max-w-[210px]"
+            className="w-[146px] shrink-0 sm:w-[32%] sm:min-w-[220px] sm:max-w-[280px]"
           />
         </div>
 

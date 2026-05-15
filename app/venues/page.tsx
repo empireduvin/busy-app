@@ -1871,9 +1871,9 @@ function VenuesPageContent() {
                       <div
                         id={`venue-${v.id}`}
                         key={v.id}
-                        className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5"
+                        className="rounded-2xl border border-white/10 bg-white/5 p-3.5 sm:p-4"
                       >
-                        <div className="flex items-start gap-3 sm:gap-4">
+                        <div className="flex items-start gap-3 sm:gap-4 lg:gap-5">
                           <div className="min-w-0 flex-1 space-y-2">
                           <div className="text-[27px] font-semibold leading-tight tracking-tight text-white sm:text-[30px]">
                             {v.name ?? 'Unnamed venue'}
@@ -1993,7 +1993,7 @@ function VenuesPageContent() {
                           <VenuePrimaryImage
                             venue={v}
                             variant="card"
-                            className="w-[122px] shrink-0 sm:w-[38%] sm:max-w-[220px]"
+                            className="w-[142px] shrink-0 sm:w-[32%] sm:min-w-[220px] sm:max-w-[280px]"
                           />
                         </div>
 
