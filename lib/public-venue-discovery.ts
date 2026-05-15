@@ -754,7 +754,10 @@ export async function fetchPublicVenues(
   }
 ) {
   const buildQuery = (selectText: string) => {
-    let query = supabase.from('venues').select(selectText);
+    let query = supabase
+      .from('venues')
+      .select(selectText)
+      .or('status.is.null,status.eq.active');
 
     if (options?.venueId) {
       query = query.eq('id', options.venueId);

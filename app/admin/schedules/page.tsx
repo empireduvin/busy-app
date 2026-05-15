@@ -41,6 +41,8 @@ import {
 } from '@/lib/schedule-rules';
 
 type AdminTab = 'schedules' | 'venues';
+type VenueStatusFilter = 'all' | 'active' | 'inactive';
+type VenueVisibilityStatus = 'active' | 'inactive';
 
 type OpeningPeriod = {
   open: string;
@@ -212,6 +214,7 @@ type GoogleSearchResponse = {
 type VenueFormState = {
   id?: string | null;
   name: string;
+  status: string;
   suburb: string;
   venue_type_id: string;
   google_place_id: string;
@@ -358,6 +361,14 @@ function requiresTitle(type: ScheduleType) {
 
 function normalizeText(value: string | null | undefined) {
   return (value ?? '').toLowerCase().replace(/[_-]/g, ' ').trim();
+}
+
+function getVenueVisibilityStatus(venue: Pick<Venue, 'status'> | null | undefined): VenueVisibilityStatus {
+  return normalizeText(venue?.status) === 'inactive' ? 'inactive' : 'active';
+}
+
+function getVenueStatusLabel(venue: Pick<Venue, 'status'> | null | undefined) {
+  return getVenueVisibilityStatus(venue) === 'inactive' ? 'Inactive' : 'Active';
 }
 
 function mergeVenueTypeOptions(types: VenueType[]) {
@@ -1081,6 +1092,7 @@ function blankVenueForm(): VenueFormState {
   return {
     id: null,
     name: '',
+    status: 'active',
     suburb: '',
     venue_type_id: '',
     google_place_id: '',
@@ -1482,6 +1494,7 @@ export default function AdminMasterPage() {
   const [loadingVenueTypes, setLoadingVenueTypes] = useState(true);
   const [venuesError, setVenuesError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [venueStatusFilter, setVenueStatusFilter] = useState<VenueStatusFilter>('all');
   const [selectedVenueIds, setSelectedVenueIds] = useState<string[]>([]);
   const [scheduleType, setScheduleType] = useState<ScheduleType>('opening');
   const [selectedDays, setSelectedDays] = useState<DayOfWeek[]>([]);
@@ -1518,6 +1531,7 @@ export default function AdminMasterPage() {
   const [remoteActivityLogEnabled, setRemoteActivityLogEnabled] = useState(false);
   const [venueForm, setVenueForm] = useState<VenueFormState>(blankVenueForm());
   const [savingVenue, setSavingVenue] = useState(false);
+  const [updatingVenueStatus, setUpdatingVenueStatus] = useState(false);
   const [uploadingVenueImage, setUploadingVenueImage] = useState(false);
   const [venueMessage, setVenueMessage] = useState<string | null>(null);
   const [venueErrorMessage, setVenueErrorMessage] = useState<string | null>(null);
@@ -1844,8 +1858,14 @@ export default function AdminMasterPage() {
 
   const filteredVenues = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return venues;
     return venues.filter((venue) => {
+      const visibilityStatus = getVenueVisibilityStatus(venue);
+      if (venueStatusFilter !== 'all' && visibilityStatus !== venueStatusFilter) {
+        return false;
+      }
+
+      if (!term) return true;
+
       const venueTypeName = venue.venue_type_id
         ? venueTypeNameById.get(venue.venue_type_id) ?? ''
         : '';
@@ -1860,7 +1880,7 @@ export default function AdminMasterPage() {
         .toLowerCase();
       return haystack.includes(term);
     });
-  }, [venues, search, venueTypeNameById]);
+  }, [venues, search, venueStatusFilter, venueTypeNameById]);
 
   const venueGuardrailsById = useMemo(
     () =>
@@ -2706,6 +2726,7 @@ export default function AdminMasterPage() {
     setVenueForm({
       id: venue.id ?? null,
       name: venue.name ?? '',
+      status: getVenueVisibilityStatus(venue),
       suburb: normalizeVenueSuburb(venue.suburb) ?? '',
       venue_type_id: venue.venue_type_id ?? '',
       google_place_id: venue.google_place_id ?? '',
@@ -2844,6 +2865,7 @@ export default function AdminMasterPage() {
       setVenueForm({
         id: existingMatch?.id ?? null,
         name: place.displayName?.text ?? '',
+        status: getVenueVisibilityStatus(existingMatch),
         suburb: normalizeVenueSuburb(extractSuburbFromAddress(place.formattedAddress ?? '')) ?? '',
         venue_type_id: guessedVenueTypeId ?? '',
         google_place_id: place.id ?? '',
@@ -3003,6 +3025,7 @@ export default function AdminMasterPage() {
           ...current,
           id: String(result.venue?.id ?? result.id ?? current.id ?? ''),
           name: String(result.venue?.name ?? current.name ?? ''),
+          status: String(result.venue?.status ?? current.status ?? 'active'),
           suburb: String(result.venue?.suburb ?? current.suburb ?? ''),
           venue_type_id: String(result.venue?.venue_type_id ?? current.venue_type_id ?? ''),
           google_place_id: String(
@@ -3134,6 +3157,72 @@ export default function AdminMasterPage() {
       });
     } finally {
       setSavingVenue(false);
+    }
+  }
+
+  async function handleUpdateVenueStatus(venueIds: string[], nextStatus: VenueVisibilityStatus) {
+    const uniqueVenueIds = Array.from(new Set(venueIds.filter(Boolean)));
+    if (!uniqueVenueIds.length) {
+      setVenueErrorMessage('Select at least one venue first.');
+      return;
+    }
+
+    setUpdatingVenueStatus(true);
+    setVenueMessage(null);
+    setVenueErrorMessage(null);
+
+    try {
+      const result = await adminAuthedFetch<{
+        venues?: Array<{ id: string; status: string | null; name?: string | null }>;
+        updatedCount?: number;
+      }>('/api/admin/venues', {
+        method: 'PATCH',
+        body: JSON.stringify({ venueIds: uniqueVenueIds, status: nextStatus }),
+      });
+
+      const updatedStatusById = new Map(
+        (result.venues ?? []).map((venue) => [venue.id, venue.status ?? nextStatus])
+      );
+
+      setVenues((current) =>
+        current.map((venue) =>
+          updatedStatusById.has(venue.id)
+            ? { ...venue, status: updatedStatusById.get(venue.id) ?? nextStatus }
+            : venue
+        )
+      );
+
+      setVenueForm((current) =>
+        current.id && uniqueVenueIds.includes(current.id)
+          ? { ...current, status: nextStatus }
+          : current
+      );
+
+      const updatedCount = result.updatedCount ?? updatedStatusById.size;
+      const statusLabel = nextStatus === 'inactive' ? 'inactive' : 'active';
+      setVenueMessage(
+        `${updatedCount} venue${updatedCount === 1 ? '' : 's'} marked ${statusLabel}.`
+      );
+      appendActivityLog({
+        area: 'venues',
+        action: nextStatus === 'inactive' ? 'Mark inactive' : 'Mark active',
+        status: 'success',
+        target: getVenueTargetLabel(uniqueVenueIds),
+        details: `Updated website visibility to ${statusLabel}. Venue data was not deleted.`,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to update venue status.';
+      setVenueErrorMessage(message);
+      appendActivityLog({
+        area: 'venues',
+        action: nextStatus === 'inactive' ? 'Mark inactive' : 'Mark active',
+        status: 'failure',
+        target: getVenueTargetLabel(uniqueVenueIds),
+        details: message,
+      });
+    } finally {
+      setUpdatingVenueStatus(false);
     }
   }
 
@@ -3968,6 +4057,8 @@ export default function AdminMasterPage() {
     ? 'Deleting schedule rows'
     : savingVenue
     ? 'Saving venue details'
+    : updatingVenueStatus
+    ? 'Updating venue visibility'
     : savingVenueAccess
     ? 'Updating venue access'
     : savingGlobalVenueAccess
@@ -4225,6 +4316,25 @@ export default function AdminMasterPage() {
                         className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-white/20 focus:bg-black/30"
                       />
                       <div className="flex flex-wrap gap-2">
+                        {(['all', 'active', 'inactive'] as const).map((filter) => {
+                          const active = venueStatusFilter === filter;
+                          return (
+                            <button
+                              key={filter}
+                              type="button"
+                              onClick={() => setVenueStatusFilter(filter)}
+                              className={`rounded-2xl border px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] transition ${
+                                active
+                                  ? 'border-orange-300/45 bg-orange-500/18 text-orange-50'
+                                  : 'border-white/10 text-white/62 hover:border-white/20 hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              {filter === 'all' ? 'All' : filter}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
                           className="rounded-2xl border border-white/10 px-3 py-2 text-sm font-medium text-white/85 transition hover:border-white/20 hover:bg-white/5"
@@ -4240,6 +4350,23 @@ export default function AdminMasterPage() {
                           {search.trim() ? "Clear filtered" : "Clear selection"}
                         </button>
                         {selectedCount > 0 ? (
+                          <>
+                          <button
+                            type="button"
+                            className="rounded-2xl border border-emerald-300/25 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-50 transition hover:border-emerald-200/45 hover:bg-emerald-500/16 disabled:cursor-not-allowed disabled:opacity-50"
+                            onClick={() => void handleUpdateVenueStatus(selectedVenueIds, 'active')}
+                            disabled={updatingVenueStatus}
+                          >
+                            Mark active
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-2xl border border-rose-300/25 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-50 transition hover:border-rose-200/45 hover:bg-rose-500/16 disabled:cursor-not-allowed disabled:opacity-50"
+                            onClick={() => void handleUpdateVenueStatus(selectedVenueIds, 'inactive')}
+                            disabled={updatingVenueStatus}
+                          >
+                            Mark inactive
+                          </button>
                           <button
                             type="button"
                             className="rounded-2xl border border-white/10 px-3 py-2 text-sm font-medium text-white/85 transition hover:border-white/20 hover:bg-white/5 sm:hidden"
@@ -4247,6 +4374,7 @@ export default function AdminMasterPage() {
                           >
                             Back to edit
                           </button>
+                          </>
                         ) : null}
                       </div>
                     </div>
@@ -4269,6 +4397,7 @@ export default function AdminMasterPage() {
                           {filteredVenues.map((venue) => {
                             const isSelected = selectedVenueIds.includes(venue.id);
                             const guardrails = venueGuardrailsById.get(venue.id);
+                            const visibilityStatus = getVenueVisibilityStatus(venue);
                             return (
                             <button
                               type="button"
@@ -4304,6 +4433,15 @@ export default function AdminMasterPage() {
                                     <div className="mt-2 flex flex-wrap gap-1.5">
                                       <span
                                         className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                                          visibilityStatus === 'active'
+                                            ? 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100'
+                                            : 'border-rose-400/35 bg-rose-500/12 text-rose-100'
+                                        }`}
+                                      >
+                                        {visibilityStatus === 'active' ? 'Active' : 'Inactive'}
+                                      </span>
+                                      <span
+                                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
                                           guardrails.isPublishReady
                                             ? 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100'
                                             : 'border-amber-400/35 bg-amber-500/12 text-amber-100'
@@ -4336,7 +4474,7 @@ export default function AdminMasterPage() {
                                     </div>
                                   ) : null}
                                   <div className="mt-2 text-[11px] text-white/45">
-                                    {venue.status ? `Status: ${venue.status}` : 'Status: active'}
+                                    Website visibility: {getVenueStatusLabel(venue)}
                                     {' | '}
                                     Updated {formatVenueUpdatedAt(venue.updated_at)}
                                   </div>
@@ -5560,10 +5698,41 @@ export default function AdminMasterPage() {
                 <div className="mt-3 grid gap-3 text-sm text-neutral-700 md:grid-cols-2">
                   <div><span className="font-medium">Editing:</span> {venueForm.id ? 'Existing venue' : 'New venue draft'}</div>
                   <div><span className="font-medium">Venue type list:</span> {loadingVenueTypes ? 'Loading…' : `${venueTypes.length} available`}</div>
+                  <div><span className="font-medium">Website visibility:</span> {venueForm.status === 'inactive' ? 'Inactive' : 'Active'}</div>
                   <div><span className="font-medium">Name:</span> {venueForm.name.trim() || 'Not entered yet'}</div>
                   <div><span className="font-medium">Suburb:</span> {venueForm.suburb.trim() || 'Not entered yet'}</div>
                 </div>
               </div>
+              {venueForm.id ? (
+                <div className="mb-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-3.5 sm:p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-neutral-900">Website visibility</div>
+                      <div className="mt-1 text-xs leading-5 text-neutral-600">
+                        Inactive venues stay in admin but are hidden from public pages, maps, search, and direct venue detail loading.
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleUpdateVenueStatus([venueForm.id!], 'active')}
+                        disabled={updatingVenueStatus || venueForm.status !== 'inactive'}
+                        className="rounded-xl border border-emerald-300/45 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-500/16 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Mark active
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleUpdateVenueStatus([venueForm.id!], 'inactive')}
+                        disabled={updatingVenueStatus || venueForm.status === 'inactive'}
+                        className="rounded-xl border border-rose-300/45 bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-800 transition hover:bg-rose-500/16 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Mark inactive
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               <div className="mb-3">
                 <label className="mb-1 block text-sm font-medium">Venue name</label>
                 <input

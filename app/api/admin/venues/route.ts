@@ -73,6 +73,12 @@ function normalizeSocialFreshnessLabel(value: string | null | undefined) {
   return allowed.includes(trimmed) ? trimmed : null;
 }
 
+function normalizeVenueStatus(value: string | null | undefined) {
+  const status = String(value ?? '').trim().toLowerCase();
+  if (status === 'active' || status === 'inactive') return status;
+  throw new Error('Venue status must be active or inactive.');
+}
+
 function isMissingPrimaryImageColumnError(error: { message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? '';
   return (
@@ -386,7 +392,7 @@ export async function POST(request: Request) {
         .update(payload)
         .eq('id', existingVenueId)
         .select(
-          'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_handle, instagram_url, featured_instagram_url, social_freshness_label, social_note, social_last_updated_at, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
+          'id, name, suburb, venue_type_id, status, google_place_id, address, lat, lng, phone, website_url, instagram_handle, instagram_url, featured_instagram_url, social_freshness_label, social_note, social_last_updated_at, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
         )
         .single();
 
@@ -399,7 +405,7 @@ export async function POST(request: Request) {
           .update(fallbackPayload)
           .eq('id', existingVenueId)
           .select(
-            'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
+            'id, name, suburb, venue_type_id, status, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
           )
           .single();
         data = fallback.data as typeof data;
@@ -419,7 +425,7 @@ export async function POST(request: Request) {
       .from('venues')
       .insert(payload)
       .select(
-        'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_handle, instagram_url, featured_instagram_url, social_freshness_label, social_note, social_last_updated_at, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
+        'id, name, suburb, venue_type_id, status, google_place_id, address, lat, lng, phone, website_url, instagram_handle, instagram_url, featured_instagram_url, social_freshness_label, social_note, social_last_updated_at, primary_image_url, primary_image_source, primary_image_attribution, primary_image_alt, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
       )
       .single();
 
@@ -431,7 +437,7 @@ export async function POST(request: Request) {
         .from('venues')
         .insert(fallbackPayload)
         .select(
-          'id, name, suburb, venue_type_id, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
+          'id, name, suburb, venue_type_id, status, google_place_id, address, lat, lng, phone, website_url, instagram_url, google_rating, price_level, shows_sport, plays_with_sound, sport_types, sport_notes, dog_friendly, dog_friendly_notes, kid_friendly, kid_friendly_notes, opening_hours'
         )
         .single();
       data = fallback.data as typeof data;
@@ -445,6 +451,44 @@ export async function POST(request: Request) {
       id: data?.id ?? null,
       mode: 'insert',
       venue: data,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { status: getErrorStatus(error) }
+    );
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const { supabase } = await requireAdminRequest(request);
+    const body = await request.json();
+    const status = normalizeVenueStatus(body?.status);
+    const venueIds = Array.isArray(body?.venueIds)
+      ? body.venueIds.map((id: unknown) => String(id ?? '').trim()).filter(Boolean)
+      : [];
+
+    if (venueIds.length === 0) {
+      return NextResponse.json(
+        { ok: false, error: 'Select one or more venues to update.' },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabase
+      .from('venues')
+      .update({ status })
+      .in('id', venueIds)
+      .select('id, status, name');
+
+    if (error) throw new Error(error.message);
+
+    return NextResponse.json({
+      ok: true,
+      venues: data ?? [],
+      status,
+      updatedCount: data?.length ?? 0,
     });
   } catch (error) {
     return NextResponse.json(
