@@ -446,9 +446,98 @@ function buildHappyHourDealSummary(form: HappyHourFormState): string | null {
   return parts.length ? parts.join(' | ') : null;
 }
 
+type HappyHourCopyRow = Pick<
+  PortalExistingSchedulePreviewRow,
+  | 'day_of_week'
+  | 'start_time'
+  | 'end_time'
+  | 'sort_order'
+  | 'title'
+  | 'description'
+  | 'deal_text'
+  | 'notes'
+  | 'detail_json'
+>;
+
+type HappyHourCopySourceOption = {
+  day: DayOfWeek;
+  label: string;
+  rows: HappyHourCopyRow[];
+};
+
+function sortHappyHourCopyRows<T extends HappyHourCopyRow>(rows: T[]) {
+  return [...rows].sort((a, b) => {
+    const dayDiff =
+      DAY_OPTIONS.findIndex((option) => option.value === a.day_of_week) -
+      DAY_OPTIONS.findIndex((option) => option.value === b.day_of_week);
+    if (dayDiff !== 0) return dayDiff;
+
+    const sortDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    if (sortDiff !== 0) return sortDiff;
+
+    const startDiff = a.start_time.localeCompare(b.start_time);
+    if (startDiff !== 0) return startDiff;
+
+    return a.end_time.localeCompare(b.end_time);
+  });
+}
+
+function buildHappyHourCopyDraft(rows: HappyHourCopyRow[]) {
+  const sortedRows = sortHappyHourCopyRows(rows);
+  const firstRow = sortedRows[0];
+  const detailJson = normalizeScheduleRuleDetailJson(
+    sortedRows.find((row) => row.detail_json)?.detail_json ?? null
+  );
+  const happyHourForm: HappyHourFormState = {
+    beer: parseDetailCategoryToItems(detailJson?.beer),
+    wine: parseDetailCategoryToItems(detailJson?.wine),
+    spirits: parseDetailCategoryToItems(detailJson?.spirits),
+    cocktails: parseDetailCategoryToItems(detailJson?.cocktails),
+    food: parseDetailCategoryToItems(detailJson?.food),
+    notes: detailJson?.notes ?? firstRow?.notes ?? '',
+  };
+  const generatedSummary = buildHappyHourDealSummary(happyHourForm);
+
+  return {
+    title: firstRow?.title ?? '',
+    description: firstRow?.description ?? '',
+    dealText: firstRow?.deal_text ?? generatedSummary ?? '',
+    notes: firstRow?.notes ?? detailJson?.notes ?? '',
+    happyHourForm,
+    timeBlocks: Array.from(
+      new Map(
+        sortedRows.map((row) => [
+          `${row.start_time}-${row.end_time}`,
+          { start_time: row.start_time, end_time: row.end_time },
+        ])
+      ).values()
+    ),
+  };
+}
+
+function getHappyHourCopySummary(rows: HappyHourCopyRow[]) {
+  const draft = buildHappyHourCopyDraft(rows);
+  const timeSummary = draft.timeBlocks
+    .map((block) => `${block.start_time}-${block.end_time}`)
+    .join(', ');
+  const summary =
+    draft.title ||
+    draft.dealText ||
+    draft.description ||
+    draft.notes ||
+    timeSummary ||
+    'Happy hour details';
+
+  return summary.length > 64 ? `${summary.slice(0, 61)}...` : summary;
+}
+
 function formatPeriods(periods: OpeningPeriod[] = []) {
   if (!periods.length) return 'None';
   return periods.map((period) => `${period.open}-${period.close}`).join(', ');
+}
+
+function getDayLabel(day: DayOfWeek) {
+  return DAY_OPTIONS.find((option) => option.value === day)?.label ?? day;
 }
 
 function getLiveRules(venue: PortalVenueDetail | null, scheduleType: PortalScheduleType) {
@@ -733,6 +822,8 @@ export default function PortalVenueDetailPage() {
   const [venueRuleAvailabilityMode, setVenueRuleAvailabilityMode] =
     useState<VenueRuleAvailabilityMode>('always');
   const [happyHourForm, setHappyHourForm] = useState<HappyHourFormState>(blankHappyHourForm());
+  const [happyHourCopySourceDay, setHappyHourCopySourceDay] = useState<DayOfWeek | ''>('');
+  const [copyHappyHourTimeBlocks, setCopyHappyHourTimeBlocks] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [clearingSchedule, setClearingSchedule] = useState(false);
   const [scheduleMessage, setScheduleMessage] = useState<string | null>(null);
@@ -1104,6 +1195,44 @@ export default function PortalVenueDetailPage() {
     );
   }
 
+  function applyHappyHourCopySource() {
+    if (scheduleType !== 'happy_hour') return;
+
+    if (!selectedDays.length) {
+      setScheduleError('Select the day or days to edit before copying happy hour details.');
+      return;
+    }
+
+    const source = happyHourCopySourceOptions.find(
+      (option) => option.day === happyHourCopySourceDay
+    );
+
+    if (!source) {
+      setScheduleError('Choose an existing happy hour day to copy from.');
+      return;
+    }
+
+    const draft = buildHappyHourCopyDraft(source.rows);
+    setTitle(draft.title);
+    setDescription(draft.description);
+    setDealText(draft.dealText);
+    setNotes(draft.notes);
+    setHappyHourForm(draft.happyHourForm);
+
+    if (copyHappyHourTimeBlocks) {
+      setTimeBlocks(
+        draft.timeBlocks.length
+          ? draft.timeBlocks
+          : [{ start_time: '', end_time: '' }]
+      );
+    }
+
+    setScheduleError(null);
+    setScheduleMessage(
+      `Copied happy hour details from ${getDayLabel(source.day)}${copyHappyHourTimeBlocks ? ' including time blocks' : ''}. Review and save the selected days when ready.`
+    );
+  }
+
   function applyDealItemHoursTemplate(itemId: string, sourceType: 'opening' | 'kitchen') {
     const item = dealItems.find((candidate) => candidate.id === itemId);
 
@@ -1358,6 +1487,8 @@ export default function PortalVenueDetailPage() {
       options?.preserveVenueRuleAvailabilityMode ? venueRuleAvailabilityMode : 'always'
     );
     setHappyHourForm(blankHappyHourForm());
+    setHappyHourCopySourceDay('');
+    setCopyHappyHourTimeBlocks(false);
     setScheduleMessage(null);
     setScheduleError(null);
   }
@@ -1929,6 +2060,53 @@ export default function PortalVenueDetailPage() {
       ),
     [venue, scheduleType, selectedDays, venueRuleKind]
   );
+  const happyHourCopySourceOptions = useMemo<HappyHourCopySourceOption[]>(() => {
+    const rows = getLiveRules(venue, 'happy_hour')
+      .map((rule, index) => ({
+        day_of_week: rule.day_of_week,
+        start_time: rule.start_time?.slice(0, 5) ?? '',
+        end_time: rule.end_time?.slice(0, 5) ?? '',
+        sort_order: rule.sort_order ?? index,
+        title: rule.title ?? null,
+        description: rule.description ?? null,
+        deal_text: rule.deal_text ?? null,
+        notes: rule.notes ?? null,
+        detail_json: normalizeScheduleRuleDetailJson(rule.detail_json),
+      }))
+      .filter(
+        (row) =>
+          row.start_time &&
+          row.end_time &&
+          Boolean(
+            row.title?.trim() ||
+              row.deal_text?.trim() ||
+              row.description?.trim() ||
+              row.notes?.trim() ||
+              row.detail_json
+          )
+      );
+    const rowsByDay = new Map<DayOfWeek, HappyHourCopyRow[]>();
+
+    rows.forEach((row) => {
+      const current = rowsByDay.get(row.day_of_week) ?? [];
+      current.push(row);
+      rowsByDay.set(row.day_of_week, current);
+    });
+
+    return DAY_OPTIONS.flatMap((day) => {
+      const dayRows = rowsByDay.get(day.value) ?? [];
+      if (!dayRows.length) return [];
+
+      return [
+        {
+          day: day.value,
+          label: `${day.label} - ${getHappyHourCopySummary(dayRows)}`,
+          rows: dayRows,
+        },
+      ];
+    });
+  }, [venue]);
+
   useEffect(() => {
     if (!isDealScheduleType(scheduleType)) return;
     if (!selectedDays.length) {
@@ -2895,6 +3073,57 @@ export default function PortalVenueDetailPage() {
                   ) : null}
                   {isVenueRuleScheduleType(scheduleType) ? (
                     <div className="mt-4"><label className="mb-1 block text-sm font-medium text-white/82">Public summary</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder={venueRuleAvailabilityMode === 'always' ? venueRuleKind === 'kid' ? 'e.g. Kids welcome' : 'e.g. Dogs welcome in the beer garden' : venueRuleKind === 'kid' ? 'e.g. Kids until 8pm' : 'e.g. Dogs front bar only'} className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
+                  ) : null}
+                  {scheduleType === 'happy_hour' ? (
+                    <div className="portal-surface-subtle mt-4 rounded-2xl border border-orange-300/20 p-4 sm:mt-5">
+                      <div className="text-sm font-semibold text-white">Reuse happy hour details</div>
+                      <div className="mt-1 text-xs text-white/62">
+                        Copy an existing happy hour deal into the selected day form. Times stay unchanged unless you choose to copy them.
+                      </div>
+                      <div className="mt-3 grid gap-2.5 md:grid-cols-[minmax(0,1fr)_auto]">
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-white/60">
+                            Copy details from
+                          </span>
+                          <select
+                            value={happyHourCopySourceDay}
+                            onChange={(event) =>
+                              setHappyHourCopySourceDay(event.target.value as DayOfWeek | '')
+                            }
+                            className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40"
+                          >
+                            <option value="">Choose a saved happy hour day</option>
+                            {happyHourCopySourceOptions.map((option) => (
+                              <option key={option.day} value={option.day}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={applyHappyHourCopySource}
+                          disabled={!happyHourCopySourceOptions.length}
+                          className="portal-ghost-button self-end rounded-xl border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Copy deal details
+                        </button>
+                      </div>
+                      <label className="mt-3 flex items-center gap-2 text-sm text-white/72">
+                        <input
+                          type="checkbox"
+                          checked={copyHappyHourTimeBlocks}
+                          onChange={(event) => setCopyHappyHourTimeBlocks(event.target.checked)}
+                          className="h-4 w-4 rounded border-white/20 bg-black/25"
+                        />
+                        Also copy time blocks
+                      </label>
+                      {!happyHourCopySourceOptions.length ? (
+                        <div className="mt-2 text-xs text-white/56">
+                          No saved happy hour details are available to copy yet.
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
                   {scheduleType === 'happy_hour' ? (
                     <div className="mt-4"><label className="mb-1 block text-sm font-medium text-white/82">Deal text / summary</label><input type="text" value={dealText} onChange={(event) => setDealText(event.target.value)} placeholder="e.g. $7 schooners / $15 burgers" className="w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-orange-300/40" /></div>
