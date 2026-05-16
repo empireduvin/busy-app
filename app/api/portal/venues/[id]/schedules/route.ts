@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requirePortalVenueRequest } from '@/lib/portal-server';
 import { getErrorStatus } from '@/lib/authz';
+import { convertGoogleOpeningHours } from '@/lib/convert-google-hours';
 import {
   DAY_OPTIONS,
   isValidDayOfWeek,
@@ -124,10 +125,36 @@ function buildHoursJsonFromRows(
   return Object.keys(output).length > 0 ? output : null;
 }
 
+function mergeSelectedDaysIntoHours(
+  existingHours: OpeningHours | null,
+  selectedDays: DayOfWeek[],
+  selectedRows: Array<{
+    day_of_week: DayOfWeek;
+    start_time: string;
+    end_time: string;
+    sort_order?: number | null;
+  }>
+): OpeningHours | null {
+  const nextHours: OpeningHours = { ...(existingHours ?? {}) };
+  const selectedHours = buildHoursJsonFromRows(selectedRows) ?? {};
+
+  for (const day of selectedDays) {
+    const periods = selectedHours[day] ?? [];
+    if (periods.length > 0) {
+      nextHours[day] = periods;
+    } else {
+      delete nextHours[day];
+    }
+  }
+
+  return Object.keys(nextHours).length > 0 ? nextHours : null;
+}
+
 async function syncVenueHoursColumn(
   supabase: ReturnType<typeof import('@/lib/supabaseServer').supabaseServer>,
   venueId: string,
-  scheduleType: ScheduleType
+  scheduleType: ScheduleType,
+  selectedDays?: DayOfWeek[]
 ) {
   const columnMap: Partial<
     Record<
@@ -142,6 +169,14 @@ async function syncVenueHoursColumn(
 
   const targetColumn = columnMap[scheduleType];
   if (!targetColumn) return;
+
+  const { data: venueRow, error: venueError } = await supabase
+    .from('venues')
+    .select(targetColumn)
+    .eq('id', venueId)
+    .maybeSingle();
+
+  if (venueError) throw new Error(venueError.message);
 
   const { data, error } = await supabase
     .from('venue_schedule_rules')
@@ -168,7 +203,13 @@ async function syncVenueHoursColumn(
     return !['draft', 'archived', 'deleted'].includes(status);
   });
 
-  const hoursJson = buildHoursJsonFromRows(liveRows);
+  const hoursJson = selectedDays?.length
+    ? mergeSelectedDaysIntoHours(
+        convertGoogleOpeningHours((venueRow as Record<string, unknown> | null)?.[targetColumn]),
+        selectedDays,
+        liveRows.filter((row) => selectedDays.includes(row.day_of_week))
+      )
+    : buildHoursJsonFromRows(liveRows);
   const { error: updateError } = await supabase
     .from('venues')
     .update({ [targetColumn]: hoursJson })
@@ -204,9 +245,17 @@ export async function POST(
 
       const rows = sanitizeScheduleRows(body?.rows, id, scheduleType);
 
-      if (replaceExistingRows && !selectedDays.length) {
+      if (!selectedDays.length) {
         return NextResponse.json(
-          { ok: false, error: 'Choose at least one day to overwrite.' },
+          { ok: false, error: 'Select at least one day before saving.' },
+          { status: 400 }
+        );
+      }
+
+      const selectedDaySet = new Set(selectedDays);
+      if (rows.some((row) => !selectedDaySet.has(row.day_of_week))) {
+        return NextResponse.json(
+          { ok: false, error: 'Schedule rows must only include selected days.' },
           { status: 400 }
         );
       }
@@ -231,7 +280,7 @@ export async function POST(
       const { error: insertError } = await supabase.from('venue_schedule_rules').insert(rows);
       if (insertError) throw new Error(insertError.message);
 
-      await syncVenueHoursColumn(supabase, id, scheduleType);
+      await syncVenueHoursColumn(supabase, id, scheduleType, selectedDays);
       return NextResponse.json({ ok: true });
     }
 
@@ -270,7 +319,7 @@ export async function POST(
 
       if (error) throw new Error(error.message);
 
-      await syncVenueHoursColumn(supabase, id, scheduleType);
+      await syncVenueHoursColumn(supabase, id, scheduleType, selectedDays);
       return NextResponse.json({ ok: true });
     }
 
