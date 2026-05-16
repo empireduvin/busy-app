@@ -2850,6 +2850,7 @@ export default function AdminMasterPage() {
   function populateVenueFormFromExistingVenue(venue: Venue) {
     setScheduleWorkspaceArmed(false);
     setAdminMode('overview');
+    setSelectedVenueIds([venue.id]);
     setVenueForm({
       id: venue.id ?? null,
       name: venue.name ?? '',
@@ -2891,6 +2892,44 @@ export default function AdminMasterPage() {
     setVenueAccessMessage(null);
     setVenueAccessError(null);
     void loadVenueAccess(venue.id);
+  }
+
+  function returnToSelectedVenueOverview() {
+    setTab('schedules');
+    setScheduleWorkspaceArmed(false);
+    setAdminMode('overview');
+    setScheduleErrorMessage(null);
+    setScheduleMessage(null);
+    window.setTimeout(() => {
+      scheduleEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  }
+
+  function clearAdminVenueSelection() {
+    captureAdminScrollPosition();
+    setSelectedVenueIds([]);
+    setScheduleWorkspaceArmed(false);
+    setAdminMode('overview');
+    setScheduleMessage(null);
+    setScheduleErrorMessage(null);
+  }
+
+  function editVenueFormSchedule() {
+    if (!venueForm.id) {
+      setTab('schedules');
+      return;
+    }
+
+    const venue = venues.find((candidate) => candidate.id === venueForm.id);
+    if (venue) {
+      focusVenueInScheduleEditor(venue);
+      return;
+    }
+
+    setSelectedVenueIds([venueForm.id]);
+    setTab('schedules');
+    setScheduleWorkspaceArmed(true);
+    setAdminMode('edit');
   }
 
   function focusVenueInScheduleEditor(venue: Venue) {
@@ -4106,6 +4145,11 @@ export default function AdminMasterPage() {
       : selectedCount === 1
       ? '1 venue selected'
       : `${selectedCount} venues selected`;
+  const focusedAdminVenueName =
+    focusedOverviewVenue?.name ??
+    selectedVenuesForSummary[0]?.name ??
+    selectedVenueSummary;
+  const venueFormAdminName = venueForm.name.trim() || 'Venue details';
   const selectedDaySummary =
     selectedDays.length === 0
       ? 'No days selected yet'
@@ -4715,6 +4759,75 @@ export default function AdminMasterPage() {
                 </div>
               </div>
               {selectedCount > 0 ? (
+                <div className="admin-surface-subtle mb-4 rounded-2xl border p-3">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600">
+                        <span>Admin</span>
+                        <span>/</span>
+                        <span>Schedules</span>
+                        <span>/</span>
+                        <span className="font-semibold text-neutral-900">{focusedAdminVenueName}</span>
+                        {isScheduleWorkspaceActive ? (
+                          <>
+                            <span>/</span>
+                            <span className="font-semibold text-orange-700">Edit schedule</span>
+                          </>
+                        ) : null}
+                      </div>
+                      <div className="mt-1 text-xs text-neutral-500">
+                        {isScheduleWorkspaceActive
+                          ? 'Editing selected venue schedule. Save changes, then return to overview when ready.'
+                          : 'Read-only venue overview. Choose schedule or venue details when you are ready to edit.'}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {isScheduleWorkspaceActive ? (
+                        <button
+                          type="button"
+                          onClick={returnToSelectedVenueOverview}
+                          className="admin-ghost-button rounded-xl border px-3 py-2 text-xs font-semibold sm:text-sm"
+                        >
+                          Back to overview
+                        </button>
+                      ) : null}
+                      {!isScheduleWorkspaceActive ? (
+                        <button
+                          type="button"
+                          onClick={openScheduleEditor}
+                          className="admin-primary-button rounded-xl border px-3 py-2 text-xs font-semibold sm:text-sm"
+                        >
+                          Edit schedule
+                        </button>
+                      ) : null}
+                      {focusedOverviewVenue ? (
+                        <button
+                          type="button"
+                          onClick={() => populateVenueFormFromExistingVenue(focusedOverviewVenue)}
+                          className="admin-ghost-button rounded-xl border px-3 py-2 text-xs font-semibold sm:text-sm"
+                        >
+                          Edit venue details
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => setShowVenuePickerMobile(true)}
+                        className="admin-ghost-button rounded-xl border px-3 py-2 text-xs font-semibold sm:hidden"
+                      >
+                        Venue list
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearAdminVenueSelection}
+                        className="admin-ghost-button rounded-xl border px-3 py-2 text-xs font-semibold sm:text-sm"
+                      >
+                        Clear selection
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              {selectedCount > 0 ? (
                 <div className="admin-surface-subtle mb-4 rounded-2xl border p-3 sm:hidden">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -5190,8 +5303,7 @@ export default function AdminMasterPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            setAdminMode('overview');
-                            setScheduleWorkspaceArmed(false);
+                            returnToSelectedVenueOverview();
                           }}
                           className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
                         >
@@ -5204,10 +5316,21 @@ export default function AdminMasterPage() {
                           Editing: {getScheduleTypePickerLabel(scheduleType, venueRuleKind)}
                         </div>
                       </div>
-                      <div className="admin-surface rounded-xl border px-3 py-2 text-xs text-neutral-700">
-                        {selectedCount === 1
-                          ? 'Focused edit mode'
-                          : `${selectedVenueSummary} in edit mode`}
+                      <div className="flex flex-wrap gap-2">
+                        {focusedOverviewVenue ? (
+                          <button
+                            type="button"
+                            onClick={() => populateVenueFormFromExistingVenue(focusedOverviewVenue)}
+                            className="admin-ghost-button rounded-xl border px-3 py-2 text-sm font-medium"
+                          >
+                            Edit venue details
+                          </button>
+                        ) : null}
+                        <div className="admin-surface rounded-xl border px-3 py-2 text-xs text-neutral-700">
+                          {selectedCount === 1
+                            ? 'Focused edit mode'
+                            : `${selectedVenueSummary} in edit mode`}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -5896,7 +6019,50 @@ export default function AdminMasterPage() {
             </section>
 
             <section className="admin-surface rounded-2xl border p-3.5 sm:p-4">
-              <h2 className="mb-3 text-lg font-semibold">Venue setup</h2>
+              <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold">Venue setup</h2>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-neutral-600">
+                    <span>Admin</span>
+                    <span>/</span>
+                    <span>Venues</span>
+                    <span>/</span>
+                    <span className="font-semibold text-neutral-900">{venueFormAdminName}</span>
+                    <span>/</span>
+                    <span className="font-semibold text-orange-700">
+                      {venueForm.id ? 'Edit venue' : 'New venue draft'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {venueForm.id ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={returnToSelectedVenueOverview}
+                        className="admin-ghost-button rounded-xl border px-3 py-2 text-xs font-semibold sm:text-sm"
+                      >
+                        Back to overview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={editVenueFormSchedule}
+                        className="admin-primary-button rounded-xl border px-3 py-2 text-xs font-semibold sm:text-sm"
+                      >
+                        Edit schedule
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setTab('schedules')}
+                      className="admin-ghost-button rounded-xl border px-3 py-2 text-xs font-semibold sm:text-sm"
+                    >
+                      Back to schedules
+                    </button>
+                  )}
+                </div>
+              </div>
               {venueMessage && (
                 <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
                   {venueMessage}
