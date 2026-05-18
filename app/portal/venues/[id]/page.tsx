@@ -83,6 +83,13 @@ type HappyHourFormState = {
   notes: string;
 };
 type HappyHourCategoryKey = keyof Omit<HappyHourFormState, 'notes'>;
+const HAPPY_HOUR_CATEGORY_KEYS: HappyHourCategoryKey[] = [
+  'beer',
+  'wine',
+  'spirits',
+  'cocktails',
+  'food',
+];
 type PortalVenueDetail = {
   id: string;
   name: string | null;
@@ -344,6 +351,36 @@ function updateVenueFlags<K extends keyof VenueFormState>(
 function parseDetailCategoryToItems(
   value?: HappyHourDetailItem[] | string | null
 ): HappyHourItemForm[] {
+  if (typeof value === 'string') {
+    const text = value.trim();
+    if (!text) return [];
+
+    const priceMatches = Array.from(text.matchAll(/\$?\d+(?:\.\d{1,2})?/g));
+    const prices =
+      priceMatches.length > 0
+        ? priceMatches.map((match) => ({
+            id: makeId(),
+            label: '',
+            amount: match[0].replace(/^\$/, ''),
+          }))
+        : [blankPriceForm()];
+    const name =
+      text
+        .replace(/\$?\d+(?:\.\d{1,2})?/g, '')
+        .replace(/[:\-–—/|,]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim() || text;
+
+    return [
+      {
+        id: makeId(),
+        name,
+        description: priceMatches.length > 1 ? text : '',
+        prices,
+      },
+    ];
+  }
+
   const normalized = normalizeHappyHourDetailCategory(
     Array.isArray(value) ? value : null
   );
@@ -446,6 +483,35 @@ function buildHappyHourDealSummary(form: HappyHourFormState): string | null {
   return parts.length ? parts.join(' | ') : null;
 }
 
+function getRawHappyHourCategory(
+  detailJson: ScheduleRuleDetailJson | null | undefined,
+  category: HappyHourCategoryKey
+) {
+  const value = detailJson
+    ? (detailJson as Record<string, unknown>)[category]
+    : null;
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value as HappyHourDetailItem[];
+  return null;
+}
+
+function dedupeHappyHourItems(items: HappyHourItemForm[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = JSON.stringify({
+      name: item.name.trim().toLowerCase(),
+      description: item.description.trim().toLowerCase(),
+      prices: item.prices.map((price) => [
+        price.label.trim().toLowerCase(),
+        price.amount.trim(),
+      ]),
+    });
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 type HappyHourCopyRow = Pick<
   PortalExistingSchedulePreviewRow,
   | 'day_of_week'
@@ -485,24 +551,35 @@ function sortHappyHourCopyRows<T extends HappyHourCopyRow>(rows: T[]) {
 function buildHappyHourCopyDraft(rows: HappyHourCopyRow[]) {
   const sortedRows = sortHappyHourCopyRows(rows);
   const firstRow = sortedRows[0];
-  const detailJson = normalizeScheduleRuleDetailJson(
-    sortedRows.find((row) => row.detail_json)?.detail_json ?? null
-  );
-  const happyHourForm: HappyHourFormState = {
-    beer: parseDetailCategoryToItems(detailJson?.beer),
-    wine: parseDetailCategoryToItems(detailJson?.wine),
-    spirits: parseDetailCategoryToItems(detailJson?.spirits),
-    cocktails: parseDetailCategoryToItems(detailJson?.cocktails),
-    food: parseDetailCategoryToItems(detailJson?.food),
-    notes: detailJson?.notes ?? firstRow?.notes ?? '',
-  };
+  const happyHourForm = blankHappyHourForm();
+
+  sortedRows.forEach((row) => {
+    const normalizedDetailJson = normalizeScheduleRuleDetailJson(row.detail_json);
+    HAPPY_HOUR_CATEGORY_KEYS.forEach((category) => {
+      happyHourForm[category].push(
+        ...parseDetailCategoryToItems(
+          getRawHappyHourCategory(row.detail_json, category) ??
+            normalizedDetailJson?.[category]
+        )
+      );
+    });
+
+    if (!happyHourForm.notes.trim()) {
+      happyHourForm.notes = normalizedDetailJson?.notes ?? row.notes ?? '';
+    }
+  });
+
+  HAPPY_HOUR_CATEGORY_KEYS.forEach((category) => {
+    happyHourForm[category] = dedupeHappyHourItems(happyHourForm[category]);
+  });
+
   const generatedSummary = buildHappyHourDealSummary(happyHourForm);
 
   return {
     title: firstRow?.title ?? '',
     description: firstRow?.description ?? '',
     dealText: firstRow?.deal_text ?? generatedSummary ?? '',
-    notes: firstRow?.notes ?? detailJson?.notes ?? '',
+    notes: firstRow?.notes ?? happyHourForm.notes ?? '',
     happyHourForm,
     timeBlocks: Array.from(
       new Map(
@@ -513,6 +590,16 @@ function buildHappyHourCopyDraft(rows: HappyHourCopyRow[]) {
       ).values()
     ),
   };
+}
+
+function happyHourCopyDraftHasDetails(draft: ReturnType<typeof buildHappyHourCopyDraft>) {
+  return Boolean(
+    draft.title.trim() ||
+      draft.description.trim() ||
+      draft.dealText.trim() ||
+      draft.notes.trim() ||
+      HAPPY_HOUR_CATEGORY_KEYS.some((category) => draft.happyHourForm[category].length > 0)
+  );
 }
 
 function getHappyHourCopySummary(rows: HappyHourCopyRow[]) {
@@ -1213,6 +1300,11 @@ export default function PortalVenueDetailPage() {
     }
 
     const draft = buildHappyHourCopyDraft(source.rows);
+    if (!happyHourCopyDraftHasDetails(draft)) {
+      setScheduleError('No happy hour details found for that day.');
+      return;
+    }
+
     setTitle(draft.title);
     setDescription(draft.description);
     setDealText(draft.dealText);
@@ -2071,20 +2163,9 @@ export default function PortalVenueDetailPage() {
         description: rule.description ?? null,
         deal_text: rule.deal_text ?? null,
         notes: rule.notes ?? null,
-        detail_json: normalizeScheduleRuleDetailJson(rule.detail_json),
+        detail_json: rule.detail_json as ScheduleRuleDetailJson | null,
       }))
-      .filter(
-        (row) =>
-          row.start_time &&
-          row.end_time &&
-          Boolean(
-            row.title?.trim() ||
-              row.deal_text?.trim() ||
-              row.description?.trim() ||
-              row.notes?.trim() ||
-              row.detail_json
-          )
-      );
+      .filter((row) => row.start_time && row.end_time);
     const rowsByDay = new Map<DayOfWeek, HappyHourCopyRow[]>();
 
     rows.forEach((row) => {
@@ -2096,6 +2177,7 @@ export default function PortalVenueDetailPage() {
     return DAY_OPTIONS.flatMap((day) => {
       const dayRows = rowsByDay.get(day.value) ?? [];
       if (!dayRows.length) return [];
+      if (!happyHourCopyDraftHasDetails(buildHappyHourCopyDraft(dayRows))) return [];
 
       return [
         {
@@ -3103,7 +3185,7 @@ export default function PortalVenueDetailPage() {
                         <button
                           type="button"
                           onClick={applyHappyHourCopySource}
-                          disabled={!happyHourCopySourceOptions.length}
+                          disabled={!happyHourCopySourceOptions.length || !happyHourCopySourceDay}
                           className="portal-ghost-button self-end rounded-xl border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Copy deal details
@@ -3120,7 +3202,7 @@ export default function PortalVenueDetailPage() {
                       </label>
                       {!happyHourCopySourceOptions.length ? (
                         <div className="mt-2 text-xs text-white/56">
-                          No saved happy hour details are available to copy yet.
+                          Save one happy hour first, then reuse its details on other days.
                         </div>
                       ) : null}
                     </div>
