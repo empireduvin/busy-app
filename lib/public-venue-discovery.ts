@@ -278,6 +278,39 @@ function withoutSocialColumns(selectText: string) {
 
 export const DAY_ORDER: DayOfWeek[] = DAY_OPTIONS.map((option) => option.value);
 
+export function scheduleTimeToMinutes(value: string | null | undefined) {
+  const [hoursRaw, minutesRaw] = (value ?? '').slice(0, 5).split(':');
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  return hours * 60 + minutes;
+}
+
+export function compareScheduleRulesByTime(
+  a: Pick<VenueScheduleRule, 'day_of_week' | 'start_time' | 'end_time' | 'sort_order' | 'title' | 'deal_text'>,
+  b: Pick<VenueScheduleRule, 'day_of_week' | 'start_time' | 'end_time' | 'sort_order' | 'title' | 'deal_text'>
+) {
+  const dayDiff = DAY_ORDER.indexOf(a.day_of_week) - DAY_ORDER.indexOf(b.day_of_week);
+  if (dayDiff !== 0) return dayDiff;
+
+  const startDiff = scheduleTimeToMinutes(a.start_time) - scheduleTimeToMinutes(b.start_time);
+  if (startDiff !== 0) return startDiff;
+
+  const endDiff = scheduleTimeToMinutes(a.end_time) - scheduleTimeToMinutes(b.end_time);
+  if (endDiff !== 0) return endDiff;
+
+  const sortDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+  if (sortDiff !== 0) return sortDiff;
+
+  return (a.title ?? a.deal_text ?? '').localeCompare(b.title ?? b.deal_text ?? '', undefined, {
+    sensitivity: 'base',
+  });
+}
+
 export const DAY_LABELS: Record<DayOfWeek, string> = {
   monday: 'Mon',
   tuesday: 'Tue',
@@ -357,15 +390,7 @@ export function getVenueTypeLabel(venue: Venue): string | null {
 }
 
 export function sortScheduleRules(rules: VenueScheduleRule[]): VenueScheduleRule[] {
-  return [...rules].sort((a, b) => {
-    const dayDiff = DAY_ORDER.indexOf(a.day_of_week) - DAY_ORDER.indexOf(b.day_of_week);
-    if (dayDiff !== 0) return dayDiff;
-
-    const sortDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
-    if (sortDiff !== 0) return sortDiff;
-
-    return (a.start_time ?? '').localeCompare(b.start_time ?? '');
-  });
+  return [...rules].sort(compareScheduleRulesByTime);
 }
 
 export function getPublishedRulesByType(venue: Venue, scheduleType: ScheduleType): VenueScheduleRule[] {
@@ -489,7 +514,7 @@ export function getDayOfWeekForOffset(timezone: string, offsetDays = 0) {
 
 export function getTodayRulesForType(rules: VenueScheduleRule[], timezone: string) {
   const today = getTodayDayOfWeek(timezone);
-  return rules.filter((rule) => rule.day_of_week === today);
+  return sortScheduleRules(rules.filter((rule) => rule.day_of_week === today));
 }
 
 function normalizeDiscoveryText(value: string | null | undefined) {
@@ -580,7 +605,7 @@ export function getLunchSpecialEligibleRules<
 }
 
 export function getRulesForDay(rules: VenueScheduleRule[], day: DayOfWeek) {
-  return rules.filter((rule) => rule.day_of_week === day);
+  return sortScheduleRules(rules.filter((rule) => rule.day_of_week === day));
 }
 
 export function getVenueRuleKind(rule: Pick<VenueScheduleRule, 'detail_json'>): VenueRuleKind | null {

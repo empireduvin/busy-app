@@ -898,7 +898,7 @@ function groupRowsByTime(rows: WeekRow[], kind: SectionKind) {
       label: formatTimeHeading(minutes),
       rows: groupedRows.sort(
         (a, b) =>
-          a.primaryStartMinutes - b.primaryStartMinutes ||
+          getGroupMinutes(a, kind) - getGroupMinutes(b, kind) ||
           (a.venue.name ?? '').localeCompare(b.venue.name ?? '')
       ),
     }));

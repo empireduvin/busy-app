@@ -19,6 +19,7 @@ import {
 } from '@/lib/opening-hours';
 import {
   HAPPY_HOUR_CATEGORIES,
+  compareScheduleRulesByTime,
   getCompactSpecialLine,
   getCompactVenueRuleSignal,
   getDisplayHappyHourItems,
@@ -976,41 +977,48 @@ export default function PublicVenueDetailPage() {
               bottleShopHours={detail.effectiveBottleShopHours}
               timezone={detail.timezone}
               renderDayExtras={(dayKey) => {
-                const daySpecialRules = detail.specialRules.filter((rule) => rule.day_of_week === dayKey);
-                const dayHappyHourRules = detail.happyHourRules.filter(
-                  (rule) => rule.day_of_week === dayKey
-                );
-                const dayEventRules = detail.eventRules.filter(
-                  (rule) => rule.day_of_week === dayKey
-                );
+                const dayRules = [
+                  ...detail.specialRules,
+                  ...detail.happyHourRules,
+                  ...detail.eventRules,
+                ]
+                  .filter((rule) => rule.day_of_week === dayKey)
+                  .sort(compareScheduleRulesByTime);
 
-                if (daySpecialRules.length === 0 && dayHappyHourRules.length === 0 && dayEventRules.length === 0) {
+                if (dayRules.length === 0) {
                   return null;
                 }
 
                 return (
                   <div className="space-y-2">
-                    {daySpecialRules.map((rule) => (
-                      <CompactNowRow
-                        key={rule.id}
-                        label={rule.schedule_type === 'lunch_special' ? 'Lunch special' : 'Daily special'}
-                        title={getCompactSpecialLine(rule)}
-                        detail={
-                          [
-                            getScheduleRuleSecondaryLine(rule),
-                            `${formatTimeForUi(rule.start_time.slice(0, 5))} - ${formatTimeForUi(rule.end_time.slice(0, 5))}`,
-                          ]
-                            .filter(Boolean)
-                            .join(' | ')
-                        }
-                      />
-                    ))}
-                    {dayHappyHourRules.map((rule) => (
-                      <PublicHappyHourRuleCard key={rule.id} rule={rule} compact />
-                    ))}
-                    {dayEventRules.map((rule) => (
-                      <PublicEventRuleCard key={rule.id} rule={rule} compact />
-                    ))}
+                    {dayRules.map((rule) => {
+                      if (rule.schedule_type === 'happy_hour') {
+                        return <PublicHappyHourRuleCard key={rule.id} rule={rule} compact />;
+                      }
+
+                      if (
+                        rule.schedule_type === 'daily_special' ||
+                        rule.schedule_type === 'lunch_special'
+                      ) {
+                        return (
+                          <CompactNowRow
+                            key={rule.id}
+                            label={rule.schedule_type === 'lunch_special' ? 'Lunch special' : 'Daily special'}
+                            title={getCompactSpecialLine(rule)}
+                            detail={
+                              [
+                                getScheduleRuleSecondaryLine(rule),
+                                `${formatTimeForUi(rule.start_time.slice(0, 5))} - ${formatTimeForUi(rule.end_time.slice(0, 5))}`,
+                              ]
+                                .filter(Boolean)
+                                .join(' | ')
+                            }
+                          />
+                        );
+                      }
+
+                      return <PublicEventRuleCard key={rule.id} rule={rule} compact />;
+                    })}
                   </div>
                 );
               }}

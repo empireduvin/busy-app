@@ -111,7 +111,7 @@ export default function LiveNowPage() {
         id: 'live-matches',
         title: getFilterHeading(activeFilter),
         description: getFilterDescription(activeFilter),
-        rows: liveRows,
+        rows: sortLiveRowsForFilter(liveRows, activeFilter),
       },
     ];
   }, [activeFilter, liveRows]);
@@ -807,10 +807,10 @@ function matchesSearchText(row: LiveNowRow, searchTerm: string) {
 function buildLiveSections(rows: LiveNowRow[]) {
   const seen = new Set<string>();
 
-  const take = (predicate: (row: LiveNowRow) => boolean) => {
+  const take = (predicate: (row: LiveNowRow) => boolean, kind: LiveSectionKind) => {
     const matching = rows.filter((row) => predicate(row) && !seen.has(row.venue.id));
     matching.forEach((row) => seen.add(row.venue.id));
-    return matching;
+    return sortLiveRowsForSection(matching, kind);
   };
 
   return [
@@ -818,27 +818,82 @@ function buildLiveSections(rows: LiveNowRow[]) {
       id: 'happy-hour-live',
       title: 'Happy hour now',
       description: 'Drink-led deals already running right now.',
-      rows: take((row) => row.liveHappyHourRules.length > 0),
+      rows: take((row) => row.liveHappyHourRules.length > 0, 'happy_hour'),
     },
     {
       id: 'specials-live',
       title: 'Specials now',
       description: 'Active daily, lunch, food, and promotional offers running right now.',
-      rows: take((row) => row.liveSpecialRules.length > 0),
+      rows: take((row) => row.liveSpecialRules.length > 0, 'specials'),
     },
     {
       id: 'events-live',
       title: 'Events now',
       description: 'Trivia, music, sport, comedy, and social reasons already underway.',
-      rows: take((row) => row.liveEventRules.length > 0),
+      rows: take((row) => row.liveEventRules.length > 0, 'events'),
     },
     {
       id: 'starting-soon',
       title: 'Starting soon',
       description: 'Worth moving for in the next 30 minutes.',
-      rows: take((row) => row.startsSoon),
+      rows: take((row) => row.startsSoon, 'starting_soon'),
     },
   ].filter((section) => section.rows.length > 0);
+}
+
+type LiveSectionKind = 'happy_hour' | 'specials' | 'events' | 'starting_soon';
+
+function sortLiveRowsForFilter(rows: LiveNowRow[], filter: LiveNowFilter) {
+  const sectionKind = getFilterSectionKind(filter);
+  return sectionKind ? sortLiveRowsForSection(rows, sectionKind) : rows;
+}
+
+function getFilterSectionKind(filter: LiveNowFilter): LiveSectionKind | null {
+  if (filter === 'happy_hour') return 'happy_hour';
+  if (filter === 'specials_now' || filter === 'food_deals_now') return 'specials';
+  if (filter === 'events' || filter === 'trivia' || filter === 'live_music' || filter === 'sport') {
+    return 'events';
+  }
+  if (filter === 'starts_soon') return 'starting_soon';
+  return null;
+}
+
+function sortLiveRowsForSection(rows: LiveNowRow[], kind: LiveSectionKind) {
+  return [...rows].sort((a, b) => {
+    if (kind === 'starting_soon') {
+      return (
+        getSoonestStartMinutes(a.upcomingRules) - getSoonestStartMinutes(b.upcomingRules) ||
+        (a.venue.name ?? '').localeCompare(b.venue.name ?? '', undefined, { sensitivity: 'base' })
+      );
+    }
+
+    return (
+      Number(b.endsSoon) - Number(a.endsSoon) ||
+      getSoonestEndMinutes(getRulesForLiveSection(a, kind)) -
+        getSoonestEndMinutes(getRulesForLiveSection(b, kind)) ||
+      getSoonestStartMinutes(getRulesForLiveSection(a, kind)) -
+        getSoonestStartMinutes(getRulesForLiveSection(b, kind)) ||
+      (a.venue.name ?? '').localeCompare(b.venue.name ?? '', undefined, { sensitivity: 'base' })
+    );
+  });
+}
+
+function getRulesForLiveSection(row: LiveNowRow, kind: Exclude<LiveSectionKind, 'starting_soon'>) {
+  if (kind === 'happy_hour') return row.liveHappyHourRules;
+  if (kind === 'specials') return row.liveSpecialRules;
+  return row.liveEventRules;
+}
+
+function getSoonestStartMinutes(rules: VenueScheduleRule[]) {
+  return rules.length
+    ? Math.min(...rules.map((rule) => clockToMinutes(rule.start_time)))
+    : Number.MAX_SAFE_INTEGER;
+}
+
+function getSoonestEndMinutes(rules: VenueScheduleRule[]) {
+  return rules.length
+    ? Math.min(...rules.map((rule) => clockToMinutes(rule.end_time)))
+    : Number.MAX_SAFE_INTEGER;
 }
 
 function getLiveReasonPriority({
